@@ -154,19 +154,24 @@ func CreateUser(ctx context.Context, req *api.CreateUserRequest) (*api.User, err
 }
 
 func Login(ctx context.Context, req *api.LoginRequest) (*api.LoginResponse, error) {
+	// Find user by email under read lock and copy needed data
 	dbMu.RLock()
-	defer dbMu.RUnlock()
-
-	// Find user by email
-	var user *api.User
+	var userCopy *api.User
 	for _, u := range users {
 		if u.Email == req.Email {
-			user = u
+			// Copy user data to avoid holding reference after unlock
+			userCopy = &api.User{
+				ID:        u.ID,
+				Username:  u.Username,
+				Email:     u.Email,
+				CreatedAt: u.CreatedAt,
+			}
 			break
 		}
 	}
+	dbMu.RUnlock()
 
-	if user == nil {
+	if userCopy == nil {
 		return nil, tygor.NewError(tygor.CodeUnauthenticated, "invalid credentials")
 	}
 
@@ -176,15 +181,14 @@ func Login(ctx context.Context, req *api.LoginRequest) (*api.LoginResponse, erro
 	rand.Read(tokenBytes)
 	token := hex.EncodeToString(tokenBytes)
 
-	dbMu.RUnlock()
+	// Store token under write lock
 	dbMu.Lock()
-	tokens[token] = user.ID
+	tokens[token] = userCopy.ID
 	dbMu.Unlock()
-	dbMu.RLock()
 
 	return &api.LoginResponse{
 		Token: token,
-		User:  user,
+		User:  userCopy,
 	}, nil
 }
 

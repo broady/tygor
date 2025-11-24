@@ -272,8 +272,8 @@ func TestGetHandler_CacheControl_CDNPattern(t *testing.T) {
 	}
 
 	handler := UnaryGet(fn).CacheControl(CacheConfig{
-		MaxAge:               1 * time.Minute,  // Browser: 1 minute
-		SMaxAge:              1 * time.Hour,    // CDN: 1 hour
+		MaxAge:               1 * time.Minute, // Browser: 1 minute
+		SMaxAge:              1 * time.Hour,   // CDN: 1 hour
 		StaleWhileRevalidate: 5 * time.Minute, // Background revalidation window
 		Public:               true,
 	})

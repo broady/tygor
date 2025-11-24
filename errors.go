@@ -16,14 +16,16 @@ import (
 type ErrorCode string
 
 const (
-	CodeInvalidArgument  ErrorCode = "invalid_argument"
-	CodeUnauthenticated  ErrorCode = "unauthenticated"
-	CodePermissionDenied ErrorCode = "permission_denied"
-	CodeNotFound         ErrorCode = "not_found"
-	CodeMethodNotAllowed ErrorCode = "method_not_allowed"
-	CodeUnavailable      ErrorCode = "unavailable"
-	CodeInternal         ErrorCode = "internal"
-	CodeCanceled         ErrorCode = "canceled"
+	CodeInvalidArgument   ErrorCode = "invalid_argument"
+	CodeUnauthenticated   ErrorCode = "unauthenticated"
+	CodePermissionDenied  ErrorCode = "permission_denied"
+	CodeNotFound          ErrorCode = "not_found"
+	CodeMethodNotAllowed  ErrorCode = "method_not_allowed"
+	CodeAlreadyExists     ErrorCode = "already_exists"
+	CodeResourceExhausted ErrorCode = "resource_exhausted"
+	CodeUnavailable       ErrorCode = "unavailable"
+	CodeInternal          ErrorCode = "internal"
+	CodeCanceled          ErrorCode = "canceled"
 )
 
 // Error is the standard JSON error envelope.
@@ -128,6 +130,10 @@ func HTTPStatusFromCode(code ErrorCode) int {
 		return http.StatusNotFound
 	case CodeMethodNotAllowed:
 		return http.StatusMethodNotAllowed
+	case CodeAlreadyExists:
+		return http.StatusConflict
+	case CodeResourceExhausted:
+		return http.StatusTooManyRequests
 	case CodeUnavailable:
 		return http.StatusServiceUnavailable
 	case CodeCanceled:

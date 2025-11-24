@@ -31,6 +31,7 @@ type HandlerConfig struct {
 	MaskInternalErrors bool
 	Interceptors       []UnaryInterceptor
 	Logger             *slog.Logger
+	MaxBodySize        int64
 }
 
 // RPCMethod is the interface for registered handlers.
@@ -59,6 +60,7 @@ type Handler[Req any, Res any] struct {
 	interceptors      []UnaryInterceptor
 	skipValidation    bool
 	strictQueryParams bool
+	maxBodySize       *int64 // nil means use registry default
 }
 
 // Unary creates a new POST handler from a generic function for unary (non-streaming) RPCs.
@@ -208,6 +210,16 @@ func (h *Handler[Req, Res]) WithSkipValidation() *Handler[Req, Res] {
 // Only affects GET requests; has no effect on POST/PUT/PATCH requests.
 func (h *Handler[Req, Res]) WithStrictQueryParams() *Handler[Req, Res] {
 	h.strictQueryParams = true
+	return h
+}
+
+// WithMaxBodySize sets the maximum request body size for this handler.
+// This overrides the registry-level default.
+// A value of 0 means no limit. Negative values are invalid and will be ignored.
+func (h *Handler[Req, Res]) WithMaxBodySize(size int64) *Handler[Req, Res] {
+	if size >= 0 {
+		h.maxBodySize = &size
+	}
 	return h
 }
 
@@ -363,7 +375,7 @@ func (h *Handler[Req, Res]) serveHTTPWithCache(w http.ResponseWriter, r *http.Re
 
 			// We need to instantiate the underlying struct.
 			reqType := reflect.TypeOf(req)
-			if reqType.Kind() == reflect.Ptr {
+			if reqType.Kind() == reflect.Pointer {
 				// Instantiate the element
 				val := reflect.New(reqType.Elem())
 				// val is *Elem.
@@ -381,6 +393,18 @@ func (h *Handler[Req, Res]) serveHTTPWithCache(w http.ResponseWriter, r *http.Re
 			}
 		} else {
 			if r.Body != nil {
+				// Determine effective body size limit
+				effectiveLimit := config.MaxBodySize
+				if h.maxBodySize != nil {
+					effectiveLimit = *h.maxBodySize
+				}
+
+				// Apply body size limit if > 0
+				// 0 means unlimited for backwards compatibility
+				if effectiveLimit > 0 {
+					r.Body = http.MaxBytesReader(w, r.Body, effectiveLimit)
+				}
+
 				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 					return Errorf(CodeInvalidArgument, "failed to decode body: %v", err)
 				}
@@ -432,7 +456,7 @@ func (h *Handler[Req, Res]) serveHTTPWithCache(w http.ResponseWriter, r *http.Re
 		w.Header().Set("Cache-Control", cacheControl)
 	}
 
-	if err := json.NewEncoder(w).Encode(res); err != nil{
+	if err := json.NewEncoder(w).Encode(res); err != nil {
 		// Response may be partially written, nothing we can do. Log for debugging.
 		logger := config.Logger
 		if logger == nil {

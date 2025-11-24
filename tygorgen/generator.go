@@ -2,6 +2,7 @@ package tygorgen
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -74,9 +75,7 @@ func Generate(reg *tygor.Registry, cfg *Config) error {
 	}
 
 	// Merge user mappings
-	for k, v := range cfg.TypeMappings {
-		tygoConfig.TypeMappings[k] = v
-	}
+	maps.Copy(tygoConfig.TypeMappings, cfg.TypeMappings)
 
 	sortedPkgs := make([]string, 0, len(pkgPaths))
 	for p := range pkgPaths {
@@ -107,10 +106,12 @@ func Generate(reg *tygor.Registry, cfg *Config) error {
 		generatedFiles = append(generatedFiles, filename)
 	}
 
-	// 3. Run Tygo
-	gen := tygo.New(tygoConfig)
-	if err := gen.Generate(); err != nil {
-		return fmt.Errorf("tygo generation failed: %w", err)
+	// 3. Run Tygo (only if there are packages to generate)
+	if len(tygoConfig.Packages) > 0 {
+		gen := tygo.New(tygoConfig)
+		if err := gen.Generate(); err != nil {
+			return fmt.Errorf("tygo generation failed: %w", err)
+		}
 	}
 
 	// 4. Generate index.ts (types.ts) that exports everything
@@ -140,7 +141,7 @@ func addPkg(set map[string]bool, t reflect.Type) {
 		return
 	}
 	// Handle pointers/slices/maps
-	for t.Kind() == reflect.Ptr || t.Kind() == reflect.Slice || t.Kind() == reflect.Map || t.Kind() == reflect.Array {
+	for t.Kind() == reflect.Pointer || t.Kind() == reflect.Slice || t.Kind() == reflect.Map || t.Kind() == reflect.Array {
 		t = t.Elem()
 	}
 	if pkg := t.PkgPath(); pkg != "" {
@@ -213,7 +214,7 @@ func getTypeName(t reflect.Type) string {
 		return "any"
 	}
 	switch t.Kind() {
-	case reflect.Ptr:
+	case reflect.Pointer:
 		return getTypeName(t.Elem())
 	case reflect.Slice, reflect.Array:
 		return getTypeName(t.Elem()) + "[]"
@@ -237,10 +238,14 @@ func getTypeName(t reflect.Type) string {
 	switch name {
 	case "string":
 		return "string"
-	case "int", "int32", "int64", "float32", "float64":
-		return "number"
 	case "bool":
 		return "boolean"
+	case "int", "int8", "int16", "int32", "int64",
+		"uint", "uint8", "uint16", "uint32", "uint64",
+		"float32", "float64", "byte", "rune", "uintptr":
+		return "number"
+	case "complex64", "complex128":
+		return "any" // Complex numbers have no direct TypeScript equivalent
 	}
 
 	return name

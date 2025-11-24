@@ -87,9 +87,19 @@ func CORS(cfg *CORSConfig) func(http.Handler) http.Handler {
 			}
 
 			if allowed {
+				// CORS spec forbids using Access-Control-Allow-Origin: * with
+				// Access-Control-Allow-Credentials: true. When credentials are enabled
+				// and wildcard origins are configured, echo back the specific requesting
+				// origin instead of "*". This effectively allows all origins while
+				// remaining spec-compliant.
 				if origin != "" && !contains(allowedOrigins, "*") {
+					// Specific origins configured: echo back the matched origin
+					w.Header().Set("Access-Control-Allow-Origin", origin)
+				} else if origin != "" && cfg.AllowCredentials {
+					// Wildcard with credentials: echo back the requesting origin
 					w.Header().Set("Access-Control-Allow-Origin", origin)
 				} else {
+					// Wildcard without credentials: use "*"
 					w.Header().Set("Access-Control-Allow-Origin", "*")
 				}
 

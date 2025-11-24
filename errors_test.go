@@ -153,6 +153,8 @@ func TestHTTPStatusFromCode(t *testing.T) {
 		{CodePermissionDenied, http.StatusForbidden},
 		{CodeNotFound, http.StatusNotFound},
 		{CodeMethodNotAllowed, http.StatusMethodNotAllowed},
+		{CodeAlreadyExists, http.StatusConflict},
+		{CodeResourceExhausted, http.StatusTooManyRequests},
 		{CodeUnavailable, http.StatusServiceUnavailable},
 		{CodeCanceled, 499},
 		{CodeInternal, http.StatusInternalServerError},

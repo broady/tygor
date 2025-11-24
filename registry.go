@@ -19,11 +19,13 @@ type Registry struct {
 	interceptors       []UnaryInterceptor
 	middlewares        []func(http.Handler) http.Handler
 	logger             *slog.Logger
+	maxBodySize        int64
 }
 
 func NewRegistry() *Registry {
 	return &Registry{
-		routes: make(map[string]RPCMethod),
+		routes:      make(map[string]RPCMethod),
+		maxBodySize: 1 << 20, // 1MB default
 	}
 }
 
@@ -69,6 +71,17 @@ func (r *Registry) WithMiddleware(mw func(http.Handler) http.Handler) *Registry 
 // If not set, slog.Default() will be used.
 func (r *Registry) WithLogger(logger *slog.Logger) *Registry {
 	r.logger = logger
+	return r
+}
+
+// WithMaxBodySize sets the default maximum request body size for all handlers.
+// Individual handlers can override this with Handler.WithMaxBodySize.
+// A value of 0 means no limit. Negative values are invalid and will be ignored.
+// Default is 1MB (1 << 20).
+func (r *Registry) WithMaxBodySize(size int64) *Registry {
+	if size >= 0 {
+		r.maxBodySize = size
+	}
 	return r
 }
 
@@ -153,6 +166,7 @@ func (r *Registry) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		MaskInternalErrors: r.maskInternalErrors,
 		Interceptors:       r.interceptors,
 		Logger:             r.logger,
+		MaxBodySize:        r.maxBodySize,
 	}
 
 	// Execute handler

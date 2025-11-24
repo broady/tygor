@@ -355,6 +355,91 @@ func TestCORS_AllowedOriginNotWildcard(t *testing.T) {
 	}
 }
 
+func TestCORS_WildcardWithCredentials(t *testing.T) {
+	// This test verifies that when AllowedOrigins is ["*"] AND AllowCredentials is true,
+	// the middleware echoes back the specific requesting origin instead of "*".
+	// This is required by the CORS spec, which forbids using Access-Control-Allow-Origin: *
+	// with Access-Control-Allow-Credentials: true.
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	cfg := &CORSConfig{
+		AllowedOrigins:   []string{"*"},
+		AllowedMethods:   []string{"GET", "POST"},
+		AllowedHeaders:   []string{"Content-Type", "Authorization"},
+		AllowCredentials: true,
+	}
+
+	corsHandler := CORS(cfg)(handler)
+
+	tests := []struct {
+		name           string
+		origin         string
+		expectedOrigin string
+	}{
+		{
+			name:           "with origin header",
+			origin:         "http://example.com",
+			expectedOrigin: "http://example.com",
+		},
+		{
+			name:           "different origin",
+			origin:         "https://another-domain.com",
+			expectedOrigin: "https://another-domain.com",
+		},
+		{
+			name:           "no origin header",
+			origin:         "",
+			expectedOrigin: "*",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/test", nil)
+			if tt.origin != "" {
+				req.Header.Set("Origin", tt.origin)
+			}
+			w := httptest.NewRecorder()
+
+			corsHandler.ServeHTTP(w, req)
+
+			gotOrigin := w.Header().Get("Access-Control-Allow-Origin")
+			if gotOrigin != tt.expectedOrigin {
+				t.Errorf("expected origin %s, got %s", tt.expectedOrigin, gotOrigin)
+			}
+
+			// When an origin is present, credentials header should always be set
+			if tt.origin != "" {
+				gotCredentials := w.Header().Get("Access-Control-Allow-Credentials")
+				if gotCredentials != "true" {
+					t.Errorf("expected credentials 'true', got %s", gotCredentials)
+				}
+			}
+		})
+	}
+
+	// Also test preflight requests to ensure the behavior is consistent
+	t.Run("preflight with origin", func(t *testing.T) {
+		req := httptest.NewRequest("OPTIONS", "/test", nil)
+		req.Header.Set("Origin", "http://preflight-test.com")
+		w := httptest.NewRecorder()
+
+		corsHandler.ServeHTTP(w, req)
+
+		gotOrigin := w.Header().Get("Access-Control-Allow-Origin")
+		if gotOrigin != "http://preflight-test.com" {
+			t.Errorf("expected origin http://preflight-test.com, got %s", gotOrigin)
+		}
+
+		gotCredentials := w.Header().Get("Access-Control-Allow-Credentials")
+		if gotCredentials != "true" {
+			t.Errorf("expected credentials 'true', got %s", gotCredentials)
+		}
+	})
+}
+
 func TestContains(t *testing.T) {
 	tests := []struct {
 		name     string
