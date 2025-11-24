@@ -48,7 +48,9 @@ export function createClient<Manifest extends Record<string, any>>(
 
                 if (usesQueryParams) {
                   const params = new URLSearchParams();
-                  Object.keys(req || {}).forEach((key) => {
+                  // Sort keys for consistent URL generation (important for caching)
+                  const sortedKeys = Object.keys(req || {}).sort();
+                  sortedKeys.forEach((key) => {
                     const value = req[key];
                     if (Array.isArray(value)) {
                       value.forEach((v) => params.append(key, String(v)));

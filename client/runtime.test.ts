@@ -502,4 +502,46 @@ describe("createClient", () => {
     expect(call[1].headers["Content-Type"]).toBeUndefined();
     expect(call[1].body).toBeUndefined();
   });
+
+  test("GET request query parameters are sorted for consistent caching", async () => {
+    const mockFetch = mock(async () => ({
+      ok: true,
+      json: async () => ({ data: "success" }),
+    }));
+    global.fetch = mockFetch as any;
+
+    const metadata = {
+      "Test.Search": { method: "GET", path: "/test/search" },
+    };
+
+    type SearchManifest = {
+      "Test.Search": {
+        req: { name: string; id: string; limit: number };
+        res: { data: string };
+      };
+    };
+
+    const client = createClient<SearchManifest>(
+      { baseUrl: "http://localhost:8080" },
+      metadata
+    );
+
+    // Call with properties in different orders
+    await client.Test.Search({ name: "test", id: "123", limit: 10 });
+    const url1 = mockFetch.mock.calls[0][0];
+    mockFetch.mockClear();
+
+    await client.Test.Search({ limit: 10, id: "123", name: "test" });
+    const url2 = mockFetch.mock.calls[0][0];
+    mockFetch.mockClear();
+
+    await client.Test.Search({ id: "123", limit: 10, name: "test" });
+    const url3 = mockFetch.mock.calls[0][0];
+
+    // All three calls should produce the same URL for consistent caching
+    expect(url1).toBe(url2);
+    expect(url2).toBe(url3);
+    // Verify the URL has sorted parameters
+    expect(url1).toBe("http://localhost:8080/test/search?id=123&limit=10&name=test");
+  });
 });
