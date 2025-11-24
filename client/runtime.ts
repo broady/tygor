@@ -43,7 +43,10 @@ export function createClient<Manifest extends Record<string, any>>(
                   },
                 };
 
-                if (meta.method === "GET") {
+                // Methods that use query parameters (no body)
+                const usesQueryParams = meta.method === "GET" || meta.method === "HEAD";
+
+                if (usesQueryParams) {
                   const params = new URLSearchParams();
                   Object.keys(req || {}).forEach((key) => {
                     const value = req[key];

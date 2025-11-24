@@ -24,11 +24,17 @@ describe("createClient", () => {
   const mockMetadata = {
     "Test.Get": { method: "GET", path: "/test/get" },
     "Test.Post": { method: "POST", path: "/test/post" },
+    "Test.Put": { method: "PUT", path: "/test/put" },
+    "Test.Patch": { method: "PATCH", path: "/test/patch" },
+    "Test.Delete": { method: "DELETE", path: "/test/delete" },
   };
 
   type TestManifest = {
     "Test.Get": { req: { id: string }; res: { data: string } };
     "Test.Post": { req: { name: string }; res: { created: boolean } };
+    "Test.Put": { req: { id: string; name: string }; res: { updated: boolean } };
+    "Test.Patch": { req: { id: string; name?: string }; res: { updated: boolean } };
+    "Test.Delete": { req: { id: string }; res: { deleted: boolean } };
   };
 
   test("successful GET request", async () => {
@@ -348,5 +354,152 @@ describe("createClient", () => {
       "http://localhost:8080/test/query?id=123",
       expect.any(Object)
     );
+  });
+
+  test("POST request with custom headers preserves Authorization header", async () => {
+    const mockFetch = mock(async () => ({
+      ok: true,
+      json: async () => ({ created: true }),
+    }));
+    global.fetch = mockFetch as any;
+
+    const client = createClient<TestManifest>(
+      {
+        baseUrl: "http://localhost:8080",
+        headers: () => ({ Authorization: "Bearer token123" }),
+      },
+      mockMetadata
+    );
+
+    await client.Test.Post({ name: "test" });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://localhost:8080/test/post",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: "Bearer token123",
+          "Content-Type": "application/json",
+        }),
+        body: JSON.stringify({ name: "test" }),
+      })
+    );
+  });
+
+  test("successful PUT request", async () => {
+    const mockFetch = mock(async () => ({
+      ok: true,
+      json: async () => ({ updated: true }),
+    }));
+    global.fetch = mockFetch as any;
+
+    const client = createClient<TestManifest>(
+      { baseUrl: "http://localhost:8080" },
+      mockMetadata
+    );
+
+    const result = await client.Test.Put({ id: "123", name: "updated" });
+
+    expect(result).toEqual({ updated: true });
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://localhost:8080/test/put",
+      expect.objectContaining({
+        method: "PUT",
+        headers: expect.objectContaining({
+          "Content-Type": "application/json",
+        }),
+        body: JSON.stringify({ id: "123", name: "updated" }),
+      })
+    );
+  });
+
+  test("successful PATCH request", async () => {
+    const mockFetch = mock(async () => ({
+      ok: true,
+      json: async () => ({ updated: true }),
+    }));
+    global.fetch = mockFetch as any;
+
+    const client = createClient<TestManifest>(
+      { baseUrl: "http://localhost:8080" },
+      mockMetadata
+    );
+
+    const result = await client.Test.Patch({ id: "123", name: "patched" });
+
+    expect(result).toEqual({ updated: true });
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://localhost:8080/test/patch",
+      expect.objectContaining({
+        method: "PATCH",
+        headers: expect.objectContaining({
+          "Content-Type": "application/json",
+        }),
+        body: JSON.stringify({ id: "123", name: "patched" }),
+      })
+    );
+  });
+
+  test("successful DELETE request", async () => {
+    const mockFetch = mock(async () => ({
+      ok: true,
+      json: async () => ({ deleted: true }),
+    }));
+    global.fetch = mockFetch as any;
+
+    const client = createClient<TestManifest>(
+      { baseUrl: "http://localhost:8080" },
+      mockMetadata
+    );
+
+    const result = await client.Test.Delete({ id: "123" });
+
+    expect(result).toEqual({ deleted: true });
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://localhost:8080/test/delete",
+      expect.objectContaining({
+        method: "DELETE",
+        headers: expect.objectContaining({
+          "Content-Type": "application/json",
+        }),
+        body: JSON.stringify({ id: "123" }),
+      })
+    );
+  });
+
+  test("HEAD request should use query parameters like GET", async () => {
+    const mockFetch = mock(async () => ({
+      ok: true,
+      json: async () => ({ exists: true }),
+    }));
+    global.fetch = mockFetch as any;
+
+    const metadata = {
+      "Test.Head": { method: "HEAD", path: "/test/head" },
+    };
+
+    type HeadManifest = {
+      "Test.Head": { req: { id: string }; res: { exists: boolean } };
+    };
+
+    const client = createClient<HeadManifest>(
+      { baseUrl: "http://localhost:8080" },
+      metadata
+    );
+
+    const result = await client.Test.Head({ id: "123" });
+
+    expect(result).toEqual({ exists: true });
+    // HEAD should use query params, not body
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://localhost:8080/test/head?id=123",
+      expect.objectContaining({
+        method: "HEAD",
+      })
+    );
+    // HEAD should NOT have Content-Type or body
+    const call = mockFetch.mock.calls[0];
+    expect(call[1].headers["Content-Type"]).toBeUndefined();
+    expect(call[1].body).toBeUndefined();
   });
 });
