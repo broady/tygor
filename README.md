@@ -165,15 +165,21 @@ const created = await client.News.Create({
 });
 // created: News
 
-// Errors are properly typed
+// Errors are properly typed with a hierarchy:
+// - TygorError (base class)
+//   - RPCError: application errors from the server (has code, message, details)
+//   - TransportError: network/proxy errors (has httpStatus, rawBody)
 try {
   await client.News.Create({ title: "x" }); // Validation error
 } catch (err) {
   if (err instanceof RPCError) {
     console.error(err.code, err.message); // "invalid_argument", "validation failed"
     console.error(err.details);           // Additional error context
+  } else if (err instanceof TransportError) {
+    console.error("Transport error:", err.httpStatus);
   }
 }
+// See doc/TYPESCRIPT-CLIENT.md for detailed error handling patterns.
 ```
 
 The client uses JavaScript Proxies to provide method access without code generation bloat. Your bundle only includes the types and a small runtime, regardless of how many RPC methods you have.
