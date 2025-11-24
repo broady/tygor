@@ -12,7 +12,7 @@ import (
 
 	"github.com/broady/tygor"
 	"github.com/broady/tygor/examples/newsserver/api"
-	"github.com/broady/tygor/generator"
+	"github.com/broady/tygor/tygorgen"
 	"github.com/broady/tygor/middleware"
 )
 
@@ -87,7 +87,7 @@ func main() {
 		if err := os.MkdirAll(*outDir, 0755); err != nil {
 			log.Fatal(err)
 		}
-		if err := generator.Generate(reg, &generator.Config{
+		if err := tygorgen.Generate(reg, &tygorgen.Config{
 			OutDir:           *outDir,
 			PreserveComments: "default",
 			EnumStyle:        "union",
