@@ -74,6 +74,10 @@ export function createClient<Manifest extends Record<string, any>>(
                   } catch {
                     throw new RPCError("internal", res.statusText);
                   }
+                  // Handle null or malformed error responses
+                  if (!errorData || typeof errorData !== 'object') {
+                    throw new RPCError("unknown", res.statusText);
+                  }
                   throw new RPCError(
                     errorData.code || "unknown",
                     errorData.message || "Unknown error",

@@ -1,0 +1,352 @@
+import { describe, test, expect, mock } from "bun:test";
+import { createClient, RPCError } from "./runtime";
+
+describe("RPCError", () => {
+  test("creates error with code and message", () => {
+    const error = new RPCError("not_found", "Resource not found");
+    expect(error.name).toBe("RPCError");
+    expect(error.code).toBe("not_found");
+    expect(error.message).toBe("Resource not found");
+    expect(error.details).toBeUndefined();
+  });
+
+  test("creates error with details", () => {
+    const error = new RPCError("validation_error", "Invalid input", {
+      field: "email",
+      reason: "invalid format",
+    });
+    expect(error.code).toBe("validation_error");
+    expect(error.details).toEqual({ field: "email", reason: "invalid format" });
+  });
+});
+
+describe("createClient", () => {
+  const mockMetadata = {
+    "Test.Get": { method: "GET", path: "/test/get" },
+    "Test.Post": { method: "POST", path: "/test/post" },
+  };
+
+  type TestManifest = {
+    "Test.Get": { req: { id: string }; res: { data: string } };
+    "Test.Post": { req: { name: string }; res: { created: boolean } };
+  };
+
+  test("successful GET request", async () => {
+    const mockFetch = mock(async () => ({
+      ok: true,
+      json: async () => ({ data: "success" }),
+    }));
+    global.fetch = mockFetch as any;
+
+    const client = createClient<TestManifest>(
+      { baseUrl: "http://localhost:8080" },
+      mockMetadata
+    );
+
+    const result = await client.Test.Get({ id: "123" });
+
+    expect(result).toEqual({ data: "success" });
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://localhost:8080/test/get?id=123",
+      expect.objectContaining({
+        method: "GET",
+      })
+    );
+  });
+
+  test("successful POST request", async () => {
+    const mockFetch = mock(async () => ({
+      ok: true,
+      json: async () => ({ created: true }),
+    }));
+    global.fetch = mockFetch as any;
+
+    const client = createClient<TestManifest>(
+      { baseUrl: "http://localhost:8080" },
+      mockMetadata
+    );
+
+    const result = await client.Test.Post({ name: "test" });
+
+    expect(result).toEqual({ created: true });
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://localhost:8080/test/post",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          "Content-Type": "application/json",
+        }),
+        body: JSON.stringify({ name: "test" }),
+      })
+    );
+  });
+
+  test("GET request with custom headers", async () => {
+    const mockFetch = mock(async () => ({
+      ok: true,
+      json: async () => ({ data: "success" }),
+    }));
+    global.fetch = mockFetch as any;
+
+    const client = createClient<TestManifest>(
+      {
+        baseUrl: "http://localhost:8080",
+        headers: () => ({ Authorization: "Bearer token123" }),
+      },
+      mockMetadata
+    );
+
+    await client.Test.Get({ id: "123" });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer token123",
+        }),
+      })
+    );
+  });
+
+  test("error response with valid JSON error object", async () => {
+    const mockFetch = mock(async () => ({
+      ok: false,
+      statusText: "Bad Request",
+      json: async () => ({
+        code: "invalid_input",
+        message: "Email is required",
+        details: { field: "email" },
+      }),
+    }));
+    global.fetch = mockFetch as any;
+
+    const client = createClient<TestManifest>(
+      { baseUrl: "http://localhost:8080" },
+      mockMetadata
+    );
+
+    try {
+      await client.Test.Get({ id: "123" });
+      expect.unreachable("Should have thrown an error");
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(RPCError);
+      expect(e.code).toBe("invalid_input");
+      expect(e.message).toBe("Email is required");
+      expect(e.details).toEqual({ field: "email" });
+    }
+  });
+
+  test("error response with null body (empty response)", async () => {
+    const mockFetch = mock(async () => ({
+      ok: false,
+      statusText: "Not Found",
+      json: async () => null,
+    }));
+    global.fetch = mockFetch as any;
+
+    const client = createClient<TestManifest>(
+      { baseUrl: "http://localhost:8080" },
+      mockMetadata
+    );
+
+    try {
+      await client.Test.Get({ id: "123" });
+      expect.unreachable("Should have thrown an error");
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(RPCError);
+      expect(e.code).toBe("unknown");
+      expect(e.message).toBe("Not Found");
+    }
+  });
+
+  test("error response with undefined body", async () => {
+    const mockFetch = mock(async () => ({
+      ok: false,
+      statusText: "Internal Server Error",
+      json: async () => undefined,
+    }));
+    global.fetch = mockFetch as any;
+
+    const client = createClient<TestManifest>(
+      { baseUrl: "http://localhost:8080" },
+      mockMetadata
+    );
+
+    try {
+      await client.Test.Get({ id: "123" });
+      expect.unreachable("Should have thrown an error");
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(RPCError);
+      expect(e.code).toBe("unknown");
+      expect(e.message).toBe("Internal Server Error");
+    }
+  });
+
+  test("error response with non-object body", async () => {
+    const mockFetch = mock(async () => ({
+      ok: false,
+      statusText: "Bad Gateway",
+      json: async () => "some string error",
+    }));
+    global.fetch = mockFetch as any;
+
+    const client = createClient<TestManifest>(
+      { baseUrl: "http://localhost:8080" },
+      mockMetadata
+    );
+
+    try {
+      await client.Test.Get({ id: "123" });
+      expect.unreachable("Should have thrown an error");
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(RPCError);
+      expect(e.code).toBe("unknown");
+      expect(e.message).toBe("Bad Gateway");
+    }
+  });
+
+  test("error response with invalid JSON", async () => {
+    const mockFetch = mock(async () => ({
+      ok: false,
+      statusText: "Service Unavailable",
+      json: async () => {
+        throw new Error("Invalid JSON");
+      },
+    }));
+    global.fetch = mockFetch as any;
+
+    const client = createClient<TestManifest>(
+      { baseUrl: "http://localhost:8080" },
+      mockMetadata
+    );
+
+    try {
+      await client.Test.Get({ id: "123" });
+      expect.unreachable("Should have thrown an error");
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(RPCError);
+      expect(e.code).toBe("internal");
+      expect(e.message).toBe("Service Unavailable");
+    }
+  });
+
+  test("error response with partial error object (missing code)", async () => {
+    const mockFetch = mock(async () => ({
+      ok: false,
+      statusText: "Bad Request",
+      json: async () => ({
+        message: "Something went wrong",
+      }),
+    }));
+    global.fetch = mockFetch as any;
+
+    const client = createClient<TestManifest>(
+      { baseUrl: "http://localhost:8080" },
+      mockMetadata
+    );
+
+    try {
+      await client.Test.Get({ id: "123" });
+      expect.unreachable("Should have thrown an error");
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(RPCError);
+      expect(e.code).toBe("unknown");
+      expect(e.message).toBe("Something went wrong");
+    }
+  });
+
+  test("error response with partial error object (missing message)", async () => {
+    const mockFetch = mock(async () => ({
+      ok: false,
+      statusText: "Forbidden",
+      json: async () => ({
+        code: "forbidden",
+      }),
+    }));
+    global.fetch = mockFetch as any;
+
+    const client = createClient<TestManifest>(
+      { baseUrl: "http://localhost:8080" },
+      mockMetadata
+    );
+
+    try {
+      await client.Test.Get({ id: "123" });
+      expect.unreachable("Should have thrown an error");
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(RPCError);
+      expect(e.code).toBe("forbidden");
+      expect(e.message).toBe("Unknown error");
+    }
+  });
+
+  test("throws error for unknown RPC method", () => {
+    const client = createClient<TestManifest>(
+      { baseUrl: "http://localhost:8080" },
+      mockMetadata
+    );
+
+    expect(() => {
+      (client as any).Unknown.Method({ test: true });
+    }).toThrow("Unknown RPC method: Unknown.Method");
+  });
+
+  test("GET request handles array parameters", async () => {
+    const mockFetch = mock(async () => ({
+      ok: true,
+      json: async () => ({ data: "success" }),
+    }));
+    global.fetch = mockFetch as any;
+
+    const metadata = {
+      "Test.Search": { method: "GET", path: "/test/search" },
+    };
+
+    type SearchManifest = {
+      "Test.Search": { req: { tags: string[] }; res: { data: string } };
+    };
+
+    const client = createClient<SearchManifest>(
+      { baseUrl: "http://localhost:8080" },
+      metadata
+    );
+
+    await client.Test.Search({ tags: ["foo", "bar"] });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://localhost:8080/test/search?tags=foo&tags=bar",
+      expect.any(Object)
+    );
+  });
+
+  test("GET request omits null and undefined parameters", async () => {
+    const mockFetch = mock(async () => ({
+      ok: true,
+      json: async () => ({ data: "success" }),
+    }));
+    global.fetch = mockFetch as any;
+
+    const metadata = {
+      "Test.Query": { method: "GET", path: "/test/query" },
+    };
+
+    type QueryManifest = {
+      "Test.Query": {
+        req: { id: string; optional?: string; nullable: string | null };
+        res: { data: string };
+      };
+    };
+
+    const client = createClient<QueryManifest>(
+      { baseUrl: "http://localhost:8080" },
+      metadata
+    );
+
+    await client.Test.Query({ id: "123", optional: undefined, nullable: null });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://localhost:8080/test/query?id=123",
+      expect.any(Object)
+    );
+  });
+});
