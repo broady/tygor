@@ -453,7 +453,7 @@ func (h *Handler[Req, Res]) serveHTTPWithCache(w http.ResponseWriter, r *http.Re
 		w.Header().Set("Cache-Control", cacheControl)
 	}
 
-	if err := json.NewEncoder(w).Encode(res); err != nil {
+	if err := encodeResponse(w, res); err != nil {
 		// Response may be partially written, nothing we can do. Log for debugging.
 		logger := config.Logger
 		if logger == nil {

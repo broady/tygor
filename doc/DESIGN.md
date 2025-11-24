@@ -86,12 +86,18 @@ Type-safe RPC calls
 - `GET`: Read operations. Parameters in query string (arrays: `?ids=1&ids=2`)
 - `POST`: Mutations. Parameters in JSON body
 
-**Error envelope:**
+**Response envelope:**
 ```json
+// Success
+{ "result": { ... } }
+
+// Error
 {
-  "code": "invalid_argument",
-  "message": "human-readable error",
-  "details": { "field": "name", "constraint": "required" }
+  "error": {
+    "code": "invalid_argument",
+    "message": "human-readable error",
+    "details": { "field": "name", "constraint": "required" }
+  }
 }
 ```
 
@@ -168,7 +174,11 @@ try {
   await client.News.Create(params);
 } catch (error) {
   if (error instanceof RPCError) {
-    console.log(error.code, error.message, error.details);
+    // Application-level error from server
+    console.log(error.code, error.message, error.httpStatus, error.details);
+  } else if (error instanceof TransportError) {
+    // Transport-level error (proxy, network, malformed response)
+    console.log(error.message, error.httpStatus, error.rawBody);
   }
 }
 ```

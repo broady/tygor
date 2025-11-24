@@ -143,13 +143,39 @@ export interface ClientConfig {
   baseURL: string;
   fetch?: typeof fetch;
   headers?: Record<string, string>;
-  onError?: (error: RPCError) => void;
+  onError?: (error: TygorError) => void;
 }
 
-export interface RPCError {
+export abstract class TygorError extends Error {
+  abstract readonly kind: "rpc" | "transport";
+}
+
+export class RPCError extends TygorError {
+  readonly kind = "rpc" as const;
   code: string;
-  message: string;
   details?: Record<string, any>;
+  httpStatus: number;
+
+  constructor(code: string, message: string, httpStatus: number, details?: Record<string, any>) {
+    super(message);
+    this.name = "RPCError";
+    this.code = code;
+    this.httpStatus = httpStatus;
+    this.details = details;
+  }
+}
+
+export class TransportError extends TygorError {
+  readonly kind = "transport" as const;
+  httpStatus: number;
+  rawBody?: string;
+
+  constructor(message: string, httpStatus: number, rawBody?: string) {
+    super(message);
+    this.name = "TransportError";
+    this.httpStatus = httpStatus;
+    this.rawBody = rawBody;
+  }
 }
 
 export function createClient(config: ClientConfig): RPCClient {
@@ -198,32 +224,60 @@ export function createClient(config: ClientConfig): RPCClient {
 
             const response = await customFetch(url.toString(), options);
 
-            if (!response.ok) {
-              const error: RPCError = await response.json();
+            // Try to parse as JSON
+            let rawBody: string | undefined;
+            let envelope: any;
+            try {
+              rawBody = await response.clone().text();
+              envelope = JSON.parse(rawBody);
+            } catch {
+              // JSON parse failed - this is a transport error (proxy HTML page, etc.)
+              throw new TransportError(
+                response.statusText || "Failed to parse response",
+                response.status,
+                rawBody?.slice(0, 1000) // Truncate for sanity
+              );
+            }
+
+            // Handle malformed or null envelope
+            if (!envelope || typeof envelope !== "object") {
+              throw new TransportError(
+                "Invalid response format",
+                response.status,
+                rawBody?.slice(0, 1000)
+              );
+            }
+
+            // Validate envelope has expected structure
+            if (!("result" in envelope) && !("error" in envelope)) {
+              throw new TransportError(
+                "Invalid response format: missing result or error field",
+                response.status,
+                rawBody?.slice(0, 1000)
+              );
+            }
+
+            // Check for error in envelope - this is an application-level error
+            if (envelope.error) {
+              const error = new RPCError(
+                envelope.error.code || "unknown",
+                envelope.error.message || "Unknown error",
+                response.status,
+                envelope.error.details
+              );
               if (config.onError) {
                 config.onError(error);
               }
-              throw new RPCErrorClass(error);
+              throw error;
             }
 
-            return response.json();
+            // Return the unwrapped result
+            return envelope.result;
           };
         },
       });
     },
   }) as RPCClient;
-}
-
-class RPCErrorClass extends Error implements RPCError {
-  code: string;
-  details?: Record<string, any>;
-
-  constructor(error: RPCError) {
-    super(error.message);
-    this.name = 'RPCError';
-    this.code = error.code;
-    this.details = error.details;
-  }
 }
 ```
 
@@ -238,6 +292,71 @@ The client MUST:
 - ✅ Parse error responses and throw structured errors
 - ✅ Support custom `fetch` implementation (for Node.js, testing, etc.)
 - ✅ Support custom headers (authentication, etc.)
+- ✅ Distinguish between application-level errors (RPCError) and transport-level errors (TransportError)
+
+### 4.3 Error Types
+
+The client defines a type hierarchy for errors:
+
+#### 4.3.1 TygorError (Base Class)
+
+All errors thrown by the tygor client extend `TygorError`:
+
+```typescript
+abstract class TygorError extends Error {
+  abstract readonly kind: "rpc" | "transport";
+}
+```
+
+The `kind` property is a discriminant that allows type narrowing.
+
+#### 4.3.2 RPCError (Application-Level Errors)
+
+Thrown when the server returns a valid error envelope: `{"error": {...}}`.
+
+```typescript
+class RPCError extends TygorError {
+  readonly kind = "rpc" as const;
+  code: string;           // Error code (e.g., "invalid_argument", "not_found")
+  message: string;        // Human-readable error message
+  httpStatus: number;     // HTTP status code (e.g., 400, 404)
+  details?: Record<string, any>; // Optional structured details
+}
+```
+
+**When RPCError is thrown:**
+- Server returned `{"error": {"code": "...", "message": "..."}}`
+- The response is a valid tygor error envelope
+- This represents an application-level error (validation, authorization, business logic)
+
+#### 4.3.3 TransportError (Transport-Level Errors)
+
+Thrown when the response is not a valid tygor envelope:
+
+```typescript
+class TransportError extends TygorError {
+  readonly kind = "transport" as const;
+  message: string;        // Error description
+  httpStatus: number;     // HTTP status code
+  rawBody?: string;       // First 1000 chars of response body (for debugging)
+}
+```
+
+**When TransportError is thrown:**
+- JSON parse failed (e.g., HTML error page from proxy)
+- Response is null or not an object
+- Response missing both `result` and `error` fields
+- This represents infrastructure/network issues, not application logic
+
+#### 4.3.4 Error Classification Examples
+
+| Response | Error Type | Reason |
+|----------|-----------|--------|
+| `{"error": {"code": "not_found", "message": "User not found"}}` | RPCError | Valid error envelope |
+| `<html><body>502 Bad Gateway</body></html>` | TransportError | Invalid JSON (proxy HTML) |
+| `{"status": "error", "msg": "Failed"}` | TransportError | Missing `result`/`error` fields |
+| `null` | TransportError | Null response |
+| Network timeout | Native Error | Not a tygor error |
 
 ---
 
@@ -278,18 +397,76 @@ const client = createClient({
 
 ### 5.3 Error Handling
 
+The client throws two types of errors, both extending `TygorError`:
+
+#### 5.3.1 RPCError (Application-Level Errors)
+
+These are errors returned by the tygor server in the `{"error": {...}}` envelope. They have a structured error code, message, and optional details.
+
 ```typescript
-import { RPCError } from './client';
+import { TygorError, RPCError, TransportError } from './client';
 
 try {
   await client.News.Create({ title: '', body: '' });
 } catch (error) {
-  if (error instanceof RPCErrorClass) {
+  // Type narrowing with instanceof
+  if (error instanceof RPCError) {
     console.error('RPC Error:', error.code, error.message);
+    console.error('HTTP Status:', error.httpStatus);
     console.error('Details:', error.details);
 
     if (error.code === 'invalid_argument') {
       // Handle validation error
+    } else if (error.code === 'unauthenticated') {
+      // Redirect to login
+    }
+  } else if (error instanceof TransportError) {
+    console.error('Transport Error:', error.message);
+    console.error('HTTP Status:', error.httpStatus);
+    console.error('Raw Body:', error.rawBody);
+  }
+}
+```
+
+#### 5.3.2 TransportError (Transport-Level Errors)
+
+These occur when the response is not a valid tygor envelope:
+- Invalid JSON (e.g., HTML error pages from proxies)
+- Null or non-object responses
+- Missing `result`/`error` fields
+
+```typescript
+try {
+  await client.News.List({ limit: 10 });
+} catch (error) {
+  if (error instanceof TransportError) {
+    // Proxy returned HTML, network error, malformed response, etc.
+    console.error('Transport error:', error.message);
+    console.error('Status code:', error.httpStatus);
+
+    // rawBody is truncated to 1000 chars for debugging
+    if (error.rawBody) {
+      console.error('Response preview:', error.rawBody);
+    }
+  }
+}
+```
+
+#### 5.3.3 Using the `kind` Discriminant
+
+You can also use the `kind` property to discriminate between error types:
+
+```typescript
+try {
+  await client.News.Create(params);
+} catch (error) {
+  if (error instanceof TygorError) {
+    if (error.kind === "rpc") {
+      // TypeScript narrows to RPCError
+      console.log('RPC error code:', error.code);
+    } else {
+      // TypeScript narrows to TransportError
+      console.log('Transport error body:', error.rawBody);
     }
   }
 }
@@ -297,16 +474,31 @@ try {
 
 ### 5.4 Custom Error Handler
 
+The `onError` callback is invoked for all errors (both RPCError and TransportError) before they are thrown. This is useful for logging, analytics, or showing toast notifications.
+
 ```typescript
 const client = createClient({
   baseURL: 'https://api.example.com',
-  onError: (error) => {
+  onError: (error: TygorError) => {
     // Log to monitoring service
-    console.error('[RPC Error]', error.code, error.message);
+    if (error instanceof RPCError) {
+      console.error('[RPC Error]', error.code, error.message, error.details);
 
-    // Show toast notification
-    if (error.code === 'unauthenticated') {
-      redirectToLogin();
+      // Show toast notification for specific error codes
+      if (error.code === 'unauthenticated') {
+        redirectToLogin();
+      } else if (error.code === 'permission_denied') {
+        showToast('You do not have permission to perform this action');
+      }
+    } else if (error instanceof TransportError) {
+      console.error('[Transport Error]', error.message, error.httpStatus);
+
+      // Log to error tracking service with raw body for debugging
+      trackError('transport_error', {
+        message: error.message,
+        status: error.httpStatus,
+        preview: error.rawBody,
+      });
     }
   },
 });
@@ -662,8 +854,12 @@ A compliant TypeScript client MUST:
 - ✅ Provide type-safe `client.Service.Method(params)` syntax
 - ✅ Serialize GET requests as query parameters (with repeat arrays)
 - ✅ Serialize POST requests as JSON body
-- ✅ Parse JSON responses
-- ✅ Handle errors with structured `RPCError` type
+- ✅ Parse JSON responses and validate envelope structure
+- ✅ Throw `RPCError` for application-level errors (`{"error": {...}}` envelope)
+- ✅ Throw `TransportError` for invalid JSON, null responses, or missing result/error fields
+- ✅ Provide `TygorError` base class with `kind` discriminant
+- ✅ Include `httpStatus` in both error types
+- ✅ Truncate `rawBody` to 1000 chars in `TransportError` for debugging
 - ✅ Support custom `fetch` implementation
 - ✅ Support custom headers
 - ✅ Provide full TypeScript type definitions from manifest

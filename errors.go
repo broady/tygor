@@ -2,7 +2,6 @@ package tygor
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -151,7 +150,7 @@ func writeError(w http.ResponseWriter, rpcErr *Error, logger *slog.Logger) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(HTTPStatusFromCode(rpcErr.Code))
-	if err := json.NewEncoder(w).Encode(rpcErr); err != nil {
+	if err := encodeErrorResponse(w, rpcErr); err != nil {
 		// Headers already sent, nothing we can do. Log for debugging.
 		logger.Error("failed to encode error response",
 			slog.String("code", string(rpcErr.Code)),

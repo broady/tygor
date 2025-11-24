@@ -1,6 +1,6 @@
 # Tygor Protocol Specification
 
-**Version:** 1.0
+**Version:** 1.1
 **Status:** Draft
 
 ## 1. Introduction
@@ -100,6 +100,10 @@ Content-Type: application/json
 
 ### 3.3 Response Format
 
+All responses MUST use a discriminated envelope structure with either a `result` field (success) or an `error` field (failure), but never both. This enables clients to handle responses without relying on HTTP status codes for control flow, supporting "never throw" API patterns.
+
+**Rationale:** While HTTP status codes remain authoritative for transport-level semantics (load balancers, proxies, observability), the envelope provides a uniform structure for application-level response handling. Clients can always parse the same top-level shape and discriminate via `result`/`error` presence.
+
 #### 3.3.1 Success Responses
 
 **HTTP Status:** `200 OK`
@@ -107,25 +111,50 @@ Content-Type: application/json
 **Headers:**
 - `Content-Type: application/json`
 
-**Body:** JSON-encoded response data
+**Body:** JSON object with a `result` field containing the response data.
 
-**Example:**
+```typescript
+{
+  "result": T  // Response type, or null for void operations
+}
+```
+
+**Example (data response):**
 ```json
 {
-  "id": 123,
-  "title": "Hello World",
-  "createdAt": "2024-01-15T10:30:00Z"
+  "result": {
+    "id": 123,
+    "title": "Hello World",
+    "createdAt": "2024-01-15T10:30:00Z"
+  }
+}
+```
+
+**Example (void response):**
+```json
+{
+  "result": null
+}
+```
+
+**Example (array response):**
+```json
+{
+  "result": [
+    {"id": 1, "title": "First"},
+    {"id": 2, "title": "Second"}
+  ]
 }
 ```
 
 #### 3.3.2 Error Responses
 
-**HTTP Status:** Determined by error code (see Section 4.2)
+**HTTP Status:** Determined by error code (see Section 4.2). Servers MUST set the appropriate HTTP status code for observability and infrastructure compatibility.
 
 **Headers:**
 - `Content-Type: application/json`
 
-**Body:** JSON error envelope (see Section 4.1)
+**Body:** JSON object with an `error` field containing the error envelope (see Section 4.1).
 
 ---
 
@@ -133,13 +162,15 @@ Content-Type: application/json
 
 ### 4.1 Error Envelope Structure
 
-All errors MUST be returned as a JSON object with the following structure:
+All errors MUST be returned wrapped in an `error` field, containing a JSON object with the following structure:
 
 ```typescript
 {
-  "code": string,      // Error code (see 4.2)
-  "message": string,   // Human-readable error message
-  "details"?: object   // Optional additional error context
+  "error": {
+    "code": string,      // Error code (see 4.2)
+    "message": string,   // Human-readable error message
+    "details"?: object   // Optional additional error context
+  }
 }
 ```
 
@@ -151,12 +182,30 @@ All errors MUST be returned as a JSON object with the following structure:
 **Example:**
 ```json
 {
-  "code": "invalid_argument",
-  "message": "title field is required",
-  "details": {
-    "field": "title",
-    "reason": "missing_required_field"
+  "error": {
+    "code": "invalid_argument",
+    "message": "title field is required",
+    "details": {
+      "field": "title",
+      "reason": "missing_required_field"
+    }
   }
+}
+```
+
+**TypeScript Response Type:**
+
+The discriminated union enables type-safe response handling:
+
+```typescript
+type RPCResponse<T> =
+  | { result: T; error?: never }
+  | { result?: never; error: RPCError };
+
+interface RPCError {
+  code: string;
+  message: string;
+  details?: Record<string, unknown>;
 }
 ```
 
@@ -210,7 +259,34 @@ The protocol supports the following primitive types in request/response bodies:
 - **Array:** JSON array containing zero or more elements
 - **Null/Optional:** Fields MAY be omitted or set to `null` to indicate absence
 
-### 5.3 Type Schema
+### 5.3 Empty Type
+
+Operations that do not return meaningful data (void operations) MUST use the **Empty** type, which serializes to JSON `null`.
+
+**Go:**
+```go
+type Empty *struct{}  // nil is the zero value, serializes to JSON null
+```
+
+**TypeScript:**
+```typescript
+type Empty = null;
+```
+
+**Wire format:**
+```json
+{"result": null}
+```
+
+**Usage example (Go):**
+```go
+func DeleteUser(ctx context.Context, req *DeleteUserRequest) (tygor.Empty, error) {
+    // ... delete user
+    return nil, nil
+}
+```
+
+### 5.4 Type Schema
 
 While this protocol does not mandate a specific schema definition language, implementations SHOULD provide machine-readable type definitions for all operations (see Section 6).
 
@@ -372,10 +448,12 @@ Accept: application/json
 HTTP/1.1 200 OK
 Content-Type: application/json
 
-[
-  {"id": 1, "title": "Go 1.22 Released", "category": "tech"},
-  {"id": 2, "title": "gRPC vs REST", "category": "tech"}
-]
+{
+  "result": [
+    {"id": 1, "title": "Go 1.22 Released", "category": "tech"},
+    {"id": 2, "title": "gRPC vs REST", "category": "tech"}
+  ]
+}
 ```
 
 ### 11.2 Successful POST Request
@@ -399,13 +477,38 @@ HTTP/1.1 200 OK
 Content-Type: application/json
 
 {
-  "id": 123,
-  "title": "New Article",
-  "createdAt": "2024-01-15T10:30:00Z"
+  "result": {
+    "id": 123,
+    "title": "New Article",
+    "createdAt": "2024-01-15T10:30:00Z"
+  }
 }
 ```
 
-### 11.3 Error Response
+### 11.3 Void Response
+
+**Request:**
+```http
+POST /News/Delete HTTP/1.1
+Host: api.example.com
+Content-Type: application/json
+
+{
+  "id": 123
+}
+```
+
+**Response:**
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "result": null
+}
+```
+
+### 11.4 Error Response
 
 **Request:**
 ```http
@@ -424,11 +527,13 @@ HTTP/1.1 400 Bad Request
 Content-Type: application/json
 
 {
-  "code": "invalid_argument",
-  "message": "title is required",
-  "details": {
-    "field": "title",
-    "constraint": "required"
+  "error": {
+    "code": "invalid_argument",
+    "message": "title is required",
+    "details": {
+      "field": "title",
+      "constraint": "required"
+    }
   }
 }
 ```
@@ -443,11 +548,13 @@ An implementation is **protocol-compliant** if it:
 2. ✅ Uses GET for read-only operations with query string parameters
 3. ✅ Uses POST for state-changing operations with JSON body
 4. ✅ Serializes arrays in GET requests using the repeat format (`?id=1&id=2`)
-5. ✅ Returns errors using the standard error envelope with `code` and `message` fields
-6. ✅ Maps error codes to the specified HTTP status codes
-7. ✅ Uses `application/json` content type for requests and responses
-8. ✅ Encodes timestamps as ISO 8601 strings (RFC 3339 format)
-9. ✅ Respects HTTP caching semantics (GET cacheable, POST not cacheable)
+5. ✅ Wraps success responses in `{"result": ...}` envelope
+6. ✅ Wraps error responses in `{"error": {...}}` envelope with `code` and `message` fields
+7. ✅ Maps error codes to the specified HTTP status codes
+8. ✅ Uses `application/json` content type for requests and responses
+9. ✅ Encodes timestamps as ISO 8601 strings (RFC 3339 format)
+10. ✅ Respects HTTP caching semantics (GET cacheable, POST not cacheable)
+11. ✅ Uses `null` for void/empty response results
 
 ---
 
@@ -463,6 +570,32 @@ method-name    = 1*ALPHA *(ALPHA / DIGIT / "_")
 
 ---
 
-## Appendix B: Changelog
+## Appendix B: Future Work
 
+The following features are under consideration for future protocol versions:
+
+### B.1 Request Batching
+
+Batching multiple RPC calls in a single HTTP request would reduce latency for clients making several related calls. This would require:
+
+- An `id` field in requests and responses for correlation
+- Array-based request/response format: `[{id, method, params}, ...]` → `[{id, result/error}, ...]`
+- HTTP 207 Multi-Status for mixed success/error responses
+- Follows JSON-RPC 2.0 batching conventions
+
+### B.2 Streaming and Bidirectional Communication
+
+WebSocket support for:
+
+- Server-sent events (subscriptions, real-time updates)
+- Bidirectional streaming (chat, collaborative editing)
+- Long-lived connections with multiplexed RPCs
+
+This would extend the protocol to support `stream` and `bidi` operation types alongside the current `unary` operations.
+
+---
+
+## Appendix C: Changelog
+
+- **v1.1 (2025-01-XX)**: Added response envelope (`result`/`error` discrimination), Empty type for void operations
 - **v1.0 (2024-01-15)**: Initial protocol specification

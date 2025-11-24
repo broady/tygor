@@ -140,7 +140,14 @@ func AssertStatus(t *testing.T, w *httptest.ResponseRecorder, expectedStatus int
 	}
 }
 
+// responseEnvelope is the expected response format with result/error discrimination.
+type responseEnvelope struct {
+	Result json.RawMessage `json:"result,omitempty"`
+	Error  *ErrorResponse  `json:"error,omitempty"`
+}
+
 // AssertJSONResponse decodes the response body and compares it with expected value.
+// Expects the response to be wrapped in {"result": ...} envelope.
 func AssertJSONResponse(t *testing.T, w *httptest.ResponseRecorder, expected any) {
 	t.Helper()
 
@@ -149,14 +156,22 @@ func AssertJSONResponse(t *testing.T, w *httptest.ResponseRecorder, expected any
 		t.Errorf("expected Content-Type to contain application/json, got %s", contentType)
 	}
 
-	// Use reflection to create the same type as expected
-	expectedJSON, _ := json.Marshal(expected)
-	actualJSON := w.Body.Bytes()
+	// Decode the envelope
+	var envelope responseEnvelope
+	if err := json.Unmarshal(w.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("failed to decode response envelope: %v\nBody: %s", err, w.Body.String())
+	}
 
-	// Compare as JSON to ignore formatting differences
+	if envelope.Error != nil {
+		t.Fatalf("expected success response but got error: %s: %s", envelope.Error.Code, envelope.Error.Message)
+	}
+
+	// Compare the result field with expected
+	expectedJSON, _ := json.Marshal(expected)
+
 	var expectedData, actualData any
 	json.Unmarshal(expectedJSON, &expectedData)
-	json.Unmarshal(actualJSON, &actualData)
+	json.Unmarshal(envelope.Result, &actualData)
 
 	expectedStr, _ := json.MarshalIndent(expectedData, "", "  ")
 	actualStr, _ := json.MarshalIndent(actualData, "", "  ")
@@ -174,19 +189,24 @@ type ErrorResponse struct {
 }
 
 // AssertJSONError checks that the response contains an error with the expected code.
+// Expects the error to be wrapped in {"error": {...}} envelope.
 func AssertJSONError(t *testing.T, w *httptest.ResponseRecorder, expectedCode string) *ErrorResponse {
 	t.Helper()
 
-	var errResp ErrorResponse
-	if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
-		t.Fatalf("failed to decode error response: %v\nBody: %s", err, w.Body.String())
+	var envelope responseEnvelope
+	if err := json.Unmarshal(w.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("failed to decode error response envelope: %v\nBody: %s", err, w.Body.String())
 	}
 
-	if errResp.Code != expectedCode {
-		t.Errorf("expected error code %s, got %s (message: %s)", expectedCode, errResp.Code, errResp.Message)
+	if envelope.Error == nil {
+		t.Fatalf("expected error response but got result: %s", string(envelope.Result))
 	}
 
-	return &errResp
+	if envelope.Error.Code != expectedCode {
+		t.Errorf("expected error code %s, got %s (message: %s)", expectedCode, envelope.Error.Code, envelope.Error.Message)
+	}
+
+	return envelope.Error
 }
 
 // AssertHeader checks that a response header has the expected value.

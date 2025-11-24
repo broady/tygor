@@ -349,6 +349,11 @@ func TestHandler_ServeHTTP_InterceptorModifiesRequest(t *testing.T) {
 	testutil.AssertJSONResponse(t, w, TestResponse{Message: "Modified"})
 }
 
+// errorEnvelopeTest is used for decoding error responses in tests.
+type errorEnvelopeTest struct {
+	Error *Error `json:"error"`
+}
+
 func TestHandleError(t *testing.T) {
 	t.Run("with custom error transformer", func(t *testing.T) {
 		testErr := errors.New("test error")
@@ -365,14 +370,14 @@ func TestHandleError(t *testing.T) {
 
 		handleError(w, testErr, config)
 
-		var errResp Error
-		json.NewDecoder(w.Body).Decode(&errResp)
+		var envelope errorEnvelopeTest
+		json.NewDecoder(w.Body).Decode(&envelope)
 
-		if errResp.Code != CodeUnavailable {
-			t.Errorf("expected code %s, got %s", CodeUnavailable, errResp.Code)
+		if envelope.Error.Code != CodeUnavailable {
+			t.Errorf("expected code %s, got %s", CodeUnavailable, envelope.Error.Code)
 		}
-		if errResp.Message != "transformed" {
-			t.Errorf("expected message 'transformed', got %s", errResp.Message)
+		if envelope.Error.Message != "transformed" {
+			t.Errorf("expected message 'transformed', got %s", envelope.Error.Message)
 		}
 	})
 
@@ -389,11 +394,11 @@ func TestHandleError(t *testing.T) {
 
 		handleError(w, testErr, config)
 
-		var errResp Error
-		json.NewDecoder(w.Body).Decode(&errResp)
+		var envelope errorEnvelopeTest
+		json.NewDecoder(w.Body).Decode(&envelope)
 
-		if errResp.Code != CodeInternal {
-			t.Errorf("expected code %s, got %s", CodeInternal, errResp.Code)
+		if envelope.Error.Code != CodeInternal {
+			t.Errorf("expected code %s, got %s", CodeInternal, envelope.Error.Code)
 		}
 	})
 }
@@ -604,12 +609,8 @@ func TestHandler_ServeHTTP_EmptyStructResponse(t *testing.T) {
 		ServeHandler(handler, HandlerConfig{})
 
 	testutil.AssertStatus(t, w, http.StatusOK)
-	// Empty struct should encode as {}
-	var response map[string]any
-	testutil.DecodeJSON(t, w, &response)
-	if len(response) != 0 {
-		t.Errorf("expected empty response, got %v", response)
-	}
+	// Empty struct should encode as {"result": {}}
+	testutil.AssertJSONResponse(t, w, EmptyResponse{})
 }
 
 func TestHandler_ServeHTTP_NilPointerResponse(t *testing.T) {
@@ -625,10 +626,13 @@ func TestHandler_ServeHTTP_NilPointerResponse(t *testing.T) {
 		ServeHandler(handler, HandlerConfig{})
 
 	testutil.AssertStatus(t, w, http.StatusOK)
-	// Nil pointer should encode as null
-	body := strings.TrimSpace(w.Body.String())
-	if body != "null" {
-		t.Errorf("expected null, got %s", body)
+	// Nil pointer should encode as {"result": null}
+	var envelope struct {
+		Result *TestResponse `json:"result"`
+	}
+	testutil.DecodeJSON(t, w, &envelope)
+	if envelope.Result != nil {
+		t.Errorf("expected result to be nil, got %v", envelope.Result)
 	}
 }
 

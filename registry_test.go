@@ -528,13 +528,15 @@ func TestRegistry_WithMaskInternalErrors_Integration(t *testing.T) {
 
 	reg.ServeHTTP(w, req)
 
-	var errResp Error
-	json.NewDecoder(w.Body).Decode(&errResp)
+	var envelope struct {
+		Error *Error `json:"error"`
+	}
+	json.NewDecoder(w.Body).Decode(&envelope)
 
-	if errResp.Message == "sensitive internal error" {
+	if envelope.Error.Message == "sensitive internal error" {
 		t.Error("expected internal error to be masked")
 	}
-	if errResp.Message != "internal server error" {
-		t.Errorf("expected generic error message, got %s", errResp.Message)
+	if envelope.Error.Message != "internal server error" {
+		t.Errorf("expected generic error message, got %s", envelope.Error.Message)
 	}
 }

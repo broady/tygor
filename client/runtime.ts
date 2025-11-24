@@ -1,14 +1,67 @@
-export class RPCError extends Error {
+/**
+ * TygorError is the base class for all tygor client errors.
+ * Use instanceof to narrow to RPCError or TransportError.
+ */
+export abstract class TygorError extends Error {
+  abstract readonly kind: "rpc" | "transport";
+}
+
+/**
+ * RPCError represents an application-level error returned by the tygor server.
+ * These have a structured code, message, and optional details.
+ */
+export class RPCError extends TygorError {
+  readonly kind = "rpc" as const;
   code: string;
   details?: Record<string, any>;
+  httpStatus: number;
 
-  constructor(code: string, message: string, details?: Record<string, any>) {
+  constructor(code: string, message: string, httpStatus: number, details?: Record<string, any>) {
     super(message);
     this.name = "RPCError";
     this.code = code;
+    this.httpStatus = httpStatus;
     this.details = details;
   }
 }
+
+/**
+ * TransportError represents a transport-level error (proxy, network, malformed response).
+ * These occur when the response is not a valid tygor envelope.
+ */
+export class TransportError extends TygorError {
+  readonly kind = "transport" as const;
+  httpStatus: number;
+  rawBody?: string;
+
+  constructor(message: string, httpStatus: number, rawBody?: string) {
+    super(message);
+    this.name = "TransportError";
+    this.httpStatus = httpStatus;
+    this.rawBody = rawBody;
+  }
+}
+
+/**
+ * RPCResponse is the discriminated union type for RPC responses.
+ * Use this with the "never throw" client pattern:
+ *
+ * @example
+ * const response = await client.Users.Get.safe({ id });
+ * if (response.error) {
+ *   console.log(response.error.code);
+ * } else {
+ *   console.log(response.result.name);
+ * }
+ */
+export type RPCResponse<T> =
+  | { result: T; error?: never }
+  | { result?: never; error: { code: string; message: string; details?: Record<string, any> } };
+
+/**
+ * Empty represents a void response (null).
+ */
+export type Empty = null;
 
 export type FetchFunction = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -81,26 +134,54 @@ export function createClient<Manifest extends Record<string, any>>(
                 }
 
                 const res = await fetchFn(url, options);
-                
-                if (!res.ok) {
-                  let errorData;
-                  try {
-                    errorData = await res.json();
-                  } catch {
-                    throw new RPCError("internal", res.statusText);
-                  }
-                  // Handle null or malformed error responses
-                  if (!errorData || typeof errorData !== 'object') {
-                    throw new RPCError("unknown", res.statusText);
-                  }
-                  throw new RPCError(
-                    errorData.code || "unknown",
-                    errorData.message || "Unknown error",
-                    errorData.details
+                const httpStatus = res.status;
+
+                // Try to parse as JSON
+                let rawBody: string | undefined;
+                let envelope: RPCResponse<any>;
+                try {
+                  // Clone response so we can read body twice if needed
+                  rawBody = await res.clone().text();
+                  envelope = JSON.parse(rawBody);
+                } catch {
+                  // JSON parse failed - this is a transport error (proxy HTML page, etc.)
+                  throw new TransportError(
+                    res.statusText || "Failed to parse response",
+                    httpStatus,
+                    rawBody?.slice(0, 1000) // Truncate for sanity
                   );
                 }
 
-                return res.json();
+                // Handle malformed or null envelope
+                if (!envelope || typeof envelope !== "object") {
+                  throw new TransportError(
+                    "Invalid response format",
+                    httpStatus,
+                    rawBody?.slice(0, 1000)
+                  );
+                }
+
+                // Validate envelope has expected structure
+                if (!("result" in envelope) && !("error" in envelope)) {
+                  throw new TransportError(
+                    "Invalid response format: missing result or error field",
+                    httpStatus,
+                    rawBody?.slice(0, 1000)
+                  );
+                }
+
+                // Check for error in envelope - this is an application-level error
+                if (envelope.error) {
+                  throw new RPCError(
+                    envelope.error.code || "unknown",
+                    envelope.error.message || "Unknown error",
+                    httpStatus,
+                    envelope.error.details
+                  );
+                }
+
+                // Return the unwrapped result
+                return envelope.result;
               };
             },
           }
