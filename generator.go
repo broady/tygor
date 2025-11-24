@@ -18,7 +18,28 @@ type GenConfig struct {
 	OutDir string
 
 	// TypeMappings allows overriding type mappings for tygo.
+	// e.g. map[string]string{"time.Time": "Date", "CustomType": "string"}
 	TypeMappings map[string]string
+
+	// PreserveComments controls whether Go doc comments are preserved in TypeScript output.
+	// Supported values: "default" (preserve package and type comments), "types" (only type comments), "none".
+	// Default: "default"
+	PreserveComments string
+
+	// EnumStyle controls how Go const groups are generated in TypeScript.
+	// Supported values: "union" (type unions), "enum" (TS enums), "const" (individual consts).
+	// Default: "union"
+	EnumStyle string
+
+	// OptionalType controls how optional fields (Go pointers) are typed in TypeScript.
+	// Supported values: "undefined" (T | undefined), "null" (T | null).
+	// Default: "undefined"
+	OptionalType string
+
+	// Frontmatter is content added to the top of each generated TypeScript file.
+	// Useful for custom type definitions or imports.
+	// e.g. "export type DateTime = string & { __brand: 'DateTime' };"
+	Frontmatter string
 }
 
 // Generate generates the TypeScript types and manifest for the registered services.
@@ -26,6 +47,9 @@ func (r *Registry) Generate(cfg *GenConfig) error {
 	if cfg.OutDir == "" {
 		return fmt.Errorf("OutDir is required")
 	}
+
+	// Apply defaults
+	cfg = applyGenConfigDefaults(cfg)
 
 	// 1. Discover packages from registered handlers
 	pkgPaths := make(map[string]bool)
@@ -76,9 +100,13 @@ func (r *Registry) Generate(cfg *GenConfig) error {
 		outPath := filepath.Join(cfg.OutDir, filename)
 
 		tygoConfig.Packages = append(tygoConfig.Packages, &tygo.PackageConfig{
-			Path:         pkgPath,
-			OutputPath:   outPath,
-			FallbackType: "any",
+			Path:             pkgPath,
+			OutputPath:       outPath,
+			FallbackType:     "any",
+			PreserveComments: cfg.PreserveComments,
+			EnumStyle:        cfg.EnumStyle,
+			OptionalType:     cfg.OptionalType,
+			Frontmatter:      cfg.Frontmatter,
 		})
 		generatedFiles = append(generatedFiles, filename)
 	}
@@ -220,4 +248,22 @@ func getTypeName(t reflect.Type) string {
 	}
 
 	return name
+}
+
+// applyGenConfigDefaults applies default values to GenConfig.
+func applyGenConfigDefaults(cfg *GenConfig) *GenConfig {
+	// Make a copy to avoid mutating the input
+	result := *cfg
+
+	if result.PreserveComments == "" {
+		result.PreserveComments = "default"
+	}
+	if result.EnumStyle == "" {
+		result.EnumStyle = "union"
+	}
+	if result.OptionalType == "" {
+		result.OptionalType = "undefined"
+	}
+
+	return &result
 }

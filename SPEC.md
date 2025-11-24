@@ -125,9 +125,60 @@ The system MUST allow users to provide a `func(error) *Error` to map application
 
 ### 5.1 Type Generation
 
-The system MUST provide a `Generate(reg *Registry, config GenConfig)` function that:
+The system MUST provide a `Generate(config *GenConfig)` method on the Registry that:
 1.  **Types**: Uses `tygo` to generate TypeScript interfaces for all Request/Response structs found in the registry.
 2.  **Manifest**: Generates a `manifest.ts` file mapping Operation IDs to metadata.
+
+#### 5.1.1 Generation Configuration
+
+The `GenConfig` struct controls how TypeScript types are generated. All fields are OPTIONAL with sensible defaults.
+
+**Required Configuration:**
+- `OutDir` (string): Directory where generated files will be written (e.g., `"./client/src/rpc"`). **REQUIRED**.
+
+**Type Mapping Configuration:**
+- `TypeMappings` (map[string]string): Custom Go-to-TypeScript type mappings.
+  - Example: `map[string]string{"time.Time": "Date", "pgtype.Text": "string"}`
+  - Default: `time.Time` → `string`, `pgtype.Timestamptz` → `string | null`, `pgtype.Text` → `string`, `pgtype.Int4` → `number`
+
+**Comment Preservation:**
+- `PreserveComments` (string): Controls whether Go doc comments are preserved in TypeScript output.
+  - `"default"` (default): Preserve package-level and type-level comments
+  - `"types"`: Preserve only type-level comments
+  - `"none"`: No comments preserved
+
+**Enum Generation:**
+- `EnumStyle` (string): Controls how Go const groups are generated in TypeScript.
+  - `"union"` (default): Generates TypeScript union types (e.g., `type Status = "draft" | "published"`)
+  - `"enum"`: Generates TypeScript enum declarations
+  - `"const"`: Generates individual `export const` declarations
+
+**Optional Field Handling:**
+- `OptionalType` (string): Controls how Go pointer fields (optional values) are typed in TypeScript.
+  - `"undefined"` (default): Optional fields typed as `T | undefined`, matching JSON omission behavior
+  - `"null"`: Optional fields typed as `T | null`
+  - **IMPORTANT**: Go SHOULD use `omitempty` JSON tags for pointer fields to ensure null values are omitted from JSON output, maintaining consistency with `"undefined"` typing.
+
+**Custom Frontmatter:**
+- `Frontmatter` (string): Content added to the top of each generated TypeScript file.
+  - Useful for custom type definitions, branded types, or imports
+  - Example: `"export type DateTime = string & { __brand: 'DateTime' };"`
+
+**Example Configuration:**
+```go
+err := reg.Generate(&tygor.GenConfig{
+    OutDir:           "./client/src/rpc",
+    PreserveComments: "default",
+    EnumStyle:        "union",
+    OptionalType:     "undefined",
+    TypeMappings: map[string]string{
+        "time.Time":          "string",
+        "CustomScalar":       "string",
+    },
+    Frontmatter: `// Custom type definitions
+export type DateTime = string & { __brand: 'DateTime' };
+export type UserID = number & { __brand: 'UserID' };`,
+})
 
 ### 5.2 Manifest Format
 

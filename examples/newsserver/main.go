@@ -22,8 +22,8 @@ func ListNews(ctx context.Context, req *api.ListNewsParams) ([]*api.News, error)
 	body := "This is the body"
 	now := time.Now()
 	return []*api.News{
-		{ID: 1, Title: "News 1", Body: &body, CreatedAt: &now},
-		{ID: 2, Title: "News 2", CreatedAt: &now},
+		{ID: 1, Title: "News 1", Body: &body, Status: api.NewsStatusPublished, CreatedAt: &now},
+		{ID: 2, Title: "News 2", Status: api.NewsStatusDraft, CreatedAt: &now},
 	}, nil
 }
 
@@ -36,6 +36,7 @@ func CreateNews(ctx context.Context, req *api.CreateNewsParams) (*api.News, erro
 		ID:        123,
 		Title:     req.Title,
 		Body:      req.Body,
+		Status:    api.NewsStatusDraft, // New articles start as drafts
 		CreatedAt: &now,
 	}, nil
 }
@@ -86,7 +87,10 @@ func main() {
 			log.Fatal(err)
 		}
 		if err := reg.Generate(&tygor.GenConfig{
-			OutDir: *outDir,
+			OutDir:           *outDir,
+			PreserveComments: "default", // Preserve Go doc comments in TypeScript
+			EnumStyle:        "union",   // Generate union types for enums
+			OptionalType:     "undefined", // Use T | undefined for optional fields
 		}); err != nil {
 			log.Fatalf("Generation failed: %v", err)
 		}
