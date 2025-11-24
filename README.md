@@ -4,14 +4,41 @@ Type-safe RPC framework for Go with automatic TypeScript client generation.
 
 ## Features
 
-- **Type-safe handlers** using Go generics
-- **Automatic TypeScript generation** from Go types
-- **Lightweight TypeScript client** using proxies for minimal bundle size
-- **Zero reflection at runtime** for handler execution
-- **Request validation** with struct tags
-- **Flexible error handling** with structured error codes
-- **Middleware and interceptors** at global, service, and handler levels
-- **Built-in support for GET and POST** methods with appropriate decoding
+- Type-safe handlers using Go generics
+- Automatic TypeScript generation from Go types
+- Lightweight TypeScript client using proxies for minimal bundle size
+- Zero reflection at runtime for handler execution
+- Request validation with struct tags
+- Flexible error handling with structured error codes
+- Middleware and interceptors at global, service, and handler levels
+- Built-in support for GET and POST methods with appropriate decoding
+
+## Philosophy
+
+**tygor is for teams building tightly-coupled Go and TypeScript applications in monorepos.**
+
+If you're building a fullstack application where the Go backend and TypeScript frontend live together, tygor gives you end-to-end type safety without the ceremony of IDLs like protobuf or OpenAPI specs. You write normal Go functions, and tygor generates TypeScript types that match your actual implementation.
+
+### Who is this for?
+
+**Use tygor if you:**
+- Build fullstack apps with Go + TypeScript in a monorepo
+- Want type safety without learning protobuf/gRPC/OpenAPI
+- Value iteration speed and developer ergonomics
+- Want to write idiomatic Go handlers and get TypeScript types automatically
+- Are okay with incrementally improving types as your domain evolves
+
+**Don't use tygor if you:**
+- Need a public API with strict backward compatibility guarantees
+- Require multi-language client support (though OpenAPI generation is planned)
+- Need the guarantees of a formal IDL (protobuf, Thrift, etc.)
+- Have microservices that need to evolve independently
+
+### The tradeoff
+
+tygor isn't trying to be a perfect code generation tool like protobuf. Instead, it's optimized for the common case: a team iterating on a fullstack app where the backend and frontend are tightly coupled anyway. You can always add handwritten TypeScript definitions to improve type safety for your specific domain. This is often nicer than being forced into the constraints of an IDL.
+
+In the future, tygor may generate OpenAPI specs to enable client generation in other languages, giving you the best of both worlds: ergonomic Go + TypeScript for your core app, with optional compatibility for other ecosystems.
 
 ## Installation
 
@@ -64,8 +91,8 @@ func CreateNews(ctx context.Context, req *CreateNewsParams) (*News, error) {
 reg := tygor.NewRegistry()
 
 news := reg.Service("News")
-news.Register("List", tygor.NewHandler(ListNews).Method("GET"))
-news.Register("Create", tygor.NewHandler(CreateNews).Method("POST"))
+news.Register("List", tygor.Unary(ListNews).Method("GET"))
+news.Register("Create", tygor.Unary(CreateNews)) // POST is default
 
 http.ListenAndServe(":8080", reg.Handler())
 ```
@@ -112,7 +139,7 @@ try {
 }
 ```
 
-The client uses JavaScript Proxies to provide method access without code generation bloat—your bundle only includes the types and a small runtime, regardless of how many RPC methods you have.
+The client uses JavaScript Proxies to provide method access without code generation bloat. Your bundle only includes the types and a small runtime, regardless of how many RPC methods you have.
 
 Example `manifest.ts`:
 
@@ -150,21 +177,21 @@ type ListParams struct {
     Offset *int32 `json:"offset"`
 }
 
-tygor.NewHandler(List).Method("GET")
+tygor.Unary(List).Method("GET")
 ```
 
 Query: `/News/List?limit=10&offset=20`
 
 ### POST Requests
 
-For POST requests, the body is decoded as JSON:
+For POST requests (the default), the body is decoded as JSON:
 
 ```go
 type CreateParams struct {
     Title string `json:"title" validate:"required"`
 }
 
-tygor.NewHandler(Create).Method("POST")
+tygor.Unary(Create) // POST is default
 ```
 
 ## Error Handling
@@ -241,7 +268,7 @@ Applied to specific handlers:
 
 ```go
 news.Register("Create",
-    tygor.NewHandler(CreateNews).
+    tygor.Unary(CreateNews).
         WithInterceptor(func(ctx context.Context, req any, info *tygor.RPCInfo, handler tygor.HandlerFunc) (any, error) {
             // Custom logic
             return handler(ctx, req)
@@ -272,11 +299,11 @@ type CreateParams struct {
 
 ## Caching
 
-Set cache headers on handlers:
+Set cache headers on handlers (typically used with GET):
 
 ```go
 news.Register("List",
-    tygor.NewHandler(ListNews).
+    tygor.Unary(ListNews).
         Method("GET").
         Cache(5 * time.Minute))
 ```
