@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"strings"
 	"testing"
 	"time"
+
+	"github.com/broady/tygor/testutil"
 )
 
 type TestRequest struct {
@@ -107,35 +107,13 @@ func TestHandler_ServeHTTP_POST_Success(t *testing.T) {
 
 	handler := NewHandler(fn)
 
-	reqBody := `{"name":"John","email":"john@example.com"}`
-	req := httptest.NewRequest("POST", "/test", strings.NewReader(reqBody))
-	req.Header.Set("Content-Type", "application/json")
+	w := NewTestRequest().
+		POST("/test").
+		WithJSON(TestRequest{Name: "John", Email: "john@example.com"}).
+		ServeHandler(handler, HandlerConfig{})
 
-	// Add context with RPC info
-	info := &RPCInfo{Service: "TestService", Method: "TestMethod"}
-	w := httptest.NewRecorder()
-	ctx := newContext(req.Context(), w, req, info)
-	req = req.WithContext(ctx)
-
-	config := HandlerConfig{}
-
-	handler.ServeHTTP(w, req, config)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-
-	var response TestResponse
-	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
-	if response.Message != "hello John" {
-		t.Errorf("expected message 'hello John', got %s", response.Message)
-	}
-	if response.ID != 123 {
-		t.Errorf("expected ID 123, got %d", response.ID)
-	}
+	testutil.AssertStatus(t, w, http.StatusOK)
+	testutil.AssertJSONResponse(t, w, TestResponse{Message: "hello John", ID: 123})
 }
 
 func TestHandler_ServeHTTP_POST_ValidationError(t *testing.T) {
@@ -146,31 +124,13 @@ func TestHandler_ServeHTTP_POST_ValidationError(t *testing.T) {
 	handler := NewHandler(fn)
 
 	// Invalid email and name too short
-	reqBody := `{"name":"Jo","email":"invalid"}`
-	req := httptest.NewRequest("POST", "/test", strings.NewReader(reqBody))
-	req.Header.Set("Content-Type", "application/json")
+	w := NewTestRequest().
+		POST("/test").
+		WithJSON(map[string]string{"name": "Jo", "email": "invalid"}).
+		ServeHandler(handler, HandlerConfig{})
 
-	info := &RPCInfo{Service: "TestService", Method: "TestMethod"}
-	w := httptest.NewRecorder()
-	ctx := newContext(req.Context(), w, req, info)
-	req = req.WithContext(ctx)
-
-	config := HandlerConfig{}
-
-	handler.ServeHTTP(w, req, config)
-
-	if w.Code == http.StatusOK {
-		t.Error("expected non-OK status for validation error")
-	}
-
-	var errResp Error
-	if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
-		t.Fatalf("failed to decode error response: %v", err)
-	}
-
-	if errResp.Code != CodeInvalidArgument {
-		t.Errorf("expected error code %s, got %s", CodeInvalidArgument, errResp.Code)
-	}
+	testutil.AssertStatus(t, w, http.StatusBadRequest)
+	testutil.AssertJSONError(t, w, string(CodeInvalidArgument))
 }
 
 func TestHandler_ServeHTTP_POST_InvalidJSON(t *testing.T) {
@@ -180,31 +140,13 @@ func TestHandler_ServeHTTP_POST_InvalidJSON(t *testing.T) {
 
 	handler := NewHandler(fn)
 
-	reqBody := `{invalid json}`
-	req := httptest.NewRequest("POST", "/test", strings.NewReader(reqBody))
-	req.Header.Set("Content-Type", "application/json")
+	w := NewTestRequest().
+		POST("/test").
+		WithBody(`{invalid json}`).
+		ServeHandler(handler, HandlerConfig{})
 
-	info := &RPCInfo{Service: "TestService", Method: "TestMethod"}
-	w := httptest.NewRecorder()
-	ctx := newContext(req.Context(), w, req, info)
-	req = req.WithContext(ctx)
-
-	config := HandlerConfig{}
-
-	handler.ServeHTTP(w, req, config)
-
-	if w.Code == http.StatusOK {
-		t.Error("expected non-OK status for invalid JSON")
-	}
-
-	var errResp Error
-	if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
-		t.Fatalf("failed to decode error response: %v", err)
-	}
-
-	if errResp.Code != CodeInvalidArgument {
-		t.Errorf("expected error code %s, got %s", CodeInvalidArgument, errResp.Code)
-	}
+	testutil.AssertStatus(t, w, http.StatusBadRequest)
+	testutil.AssertJSONError(t, w, string(CodeInvalidArgument))
 }
 
 func TestHandler_ServeHTTP_GET_WithQueryParams(t *testing.T) {
@@ -219,29 +161,14 @@ func TestHandler_ServeHTTP_GET_WithQueryParams(t *testing.T) {
 
 	handler := NewHandler(fn).Method("GET")
 
-	req := httptest.NewRequest("GET", "/test?name=John&email=john@example.com", nil)
+	w := NewTestRequest().
+		GET("/test").
+		WithQuery("name", "John").
+		WithQuery("email", "john@example.com").
+		ServeHandler(handler, HandlerConfig{})
 
-	info := &RPCInfo{Service: "TestService", Method: "TestMethod"}
-	w := httptest.NewRecorder()
-	ctx := newContext(req.Context(), w, req, info)
-	req = req.WithContext(ctx)
-
-	config := HandlerConfig{}
-
-	handler.ServeHTTP(w, req, config)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-
-	var response TestResponse
-	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
-	if response.Message != "hello John" {
-		t.Errorf("expected message 'hello John', got %s", response.Message)
-	}
+	testutil.AssertStatus(t, w, http.StatusOK)
+	testutil.AssertJSONResponse(t, w, TestResponse{Message: "hello John"})
 }
 
 func TestHandler_ServeHTTP_HandlerError(t *testing.T) {
@@ -252,31 +179,14 @@ func TestHandler_ServeHTTP_HandlerError(t *testing.T) {
 
 	handler := NewHandler(fn)
 
-	reqBody := `{"name":"John","email":"john@example.com"}`
-	req := httptest.NewRequest("POST", "/test", strings.NewReader(reqBody))
-	req.Header.Set("Content-Type", "application/json")
+	w := NewTestRequest().
+		POST("/test").
+		WithJSON(TestRequest{Name: "John", Email: "john@example.com"}).
+		ServeHandler(handler, HandlerConfig{})
 
-	info := &RPCInfo{Service: "TestService", Method: "TestMethod"}
-	w := httptest.NewRecorder()
-	ctx := newContext(req.Context(), w, req, info)
-	req = req.WithContext(ctx)
+	testutil.AssertStatus(t, w, http.StatusNotFound)
+	errResp := testutil.AssertJSONError(t, w, string(CodeNotFound))
 
-	config := HandlerConfig{}
-
-	handler.ServeHTTP(w, req, config)
-
-	if w.Code != http.StatusNotFound {
-		t.Errorf("expected status %d, got %d", http.StatusNotFound, w.Code)
-	}
-
-	var errResp Error
-	if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
-		t.Fatalf("failed to decode error response: %v", err)
-	}
-
-	if errResp.Code != CodeNotFound {
-		t.Errorf("expected error code %s, got %s", CodeNotFound, errResp.Code)
-	}
 	if errResp.Message != "resource not found" {
 		t.Errorf("expected message 'resource not found', got %s", errResp.Message)
 	}
@@ -289,27 +199,13 @@ func TestHandler_ServeHTTP_WithCache(t *testing.T) {
 
 	handler := NewHandler(fn).Cache(60 * time.Second)
 
-	reqBody := `{"name":"John","email":"john@example.com"}`
-	req := httptest.NewRequest("POST", "/test", strings.NewReader(reqBody))
-	req.Header.Set("Content-Type", "application/json")
+	w := NewTestRequest().
+		POST("/test").
+		WithJSON(TestRequest{Name: "John", Email: "john@example.com"}).
+		ServeHandler(handler, HandlerConfig{})
 
-	info := &RPCInfo{Service: "TestService", Method: "TestMethod"}
-	w := httptest.NewRecorder()
-	ctx := newContext(req.Context(), w, req, info)
-	req = req.WithContext(ctx)
-
-	config := HandlerConfig{}
-
-	handler.ServeHTTP(w, req, config)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-
-	cacheControl := w.Header().Get("Cache-Control")
-	if cacheControl != "max-age=60" {
-		t.Errorf("expected Cache-Control 'max-age=60', got %s", cacheControl)
-	}
+	testutil.AssertStatus(t, w, http.StatusOK)
+	testutil.AssertHeader(t, w, "Cache-Control", "max-age=60")
 }
 
 func TestHandler_ServeHTTP_WithInterceptor(t *testing.T) {
@@ -326,18 +222,10 @@ func TestHandler_ServeHTTP_WithInterceptor(t *testing.T) {
 
 	handler := NewHandler(fn).WithInterceptor(interceptor)
 
-	reqBody := `{"name":"John","email":"john@example.com"}`
-	req := httptest.NewRequest("POST", "/test", strings.NewReader(reqBody))
-	req.Header.Set("Content-Type", "application/json")
-
-	info := &RPCInfo{Service: "TestService", Method: "TestMethod"}
-	w := httptest.NewRecorder()
-	ctx := newContext(req.Context(), w, req, info)
-	req = req.WithContext(ctx)
-
-	config := HandlerConfig{}
-
-	handler.ServeHTTP(w, req, config)
+	NewTestRequest().
+		POST("/test").
+		WithJSON(TestRequest{Name: "John", Email: "john@example.com"}).
+		ServeHandler(handler, HandlerConfig{})
 
 	if !interceptorCalled {
 		t.Error("expected interceptor to be called")
@@ -351,25 +239,14 @@ func TestHandler_ServeHTTP_MaskInternalErrors(t *testing.T) {
 
 	handler := NewHandler(fn)
 
-	reqBody := `{"name":"John","email":"john@example.com"}`
-	req := httptest.NewRequest("POST", "/test", strings.NewReader(reqBody))
-	req.Header.Set("Content-Type", "application/json")
+	w := NewTestRequest().
+		POST("/test").
+		WithJSON(TestRequest{Name: "John", Email: "john@example.com"}).
+		ServeHandler(handler, HandlerConfig{
+			MaskInternalErrors: true,
+		})
 
-	info := &RPCInfo{Service: "TestService", Method: "TestMethod"}
-	w := httptest.NewRecorder()
-	ctx := newContext(req.Context(), w, req, info)
-	req = req.WithContext(ctx)
-
-	config := HandlerConfig{
-		MaskInternalErrors: true,
-	}
-
-	handler.ServeHTTP(w, req, config)
-
-	var errResp Error
-	if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
-		t.Fatalf("failed to decode error response: %v", err)
-	}
+	errResp := testutil.AssertJSONError(t, w, string(CodeInternal))
 
 	if errResp.Message == "internal database error" {
 		t.Error("expected internal error message to be masked")
@@ -387,34 +264,20 @@ func TestHandler_ServeHTTP_CustomErrorTransformer(t *testing.T) {
 
 	handler := NewHandler(fn)
 
-	reqBody := `{"name":"John","email":"john@example.com"}`
-	req := httptest.NewRequest("POST", "/test", strings.NewReader(reqBody))
-	req.Header.Set("Content-Type", "application/json")
+	w := NewTestRequest().
+		POST("/test").
+		WithJSON(TestRequest{Name: "John", Email: "john@example.com"}).
+		ServeHandler(handler, HandlerConfig{
+			ErrorTransformer: func(err error) *Error {
+				if err == customErr {
+					return NewError(CodeUnavailable, "custom mapped error")
+				}
+				return nil
+			},
+		})
 
-	info := &RPCInfo{Service: "TestService", Method: "TestMethod"}
-	w := httptest.NewRecorder()
-	ctx := newContext(req.Context(), w, req, info)
-	req = req.WithContext(ctx)
+	errResp := testutil.AssertJSONError(t, w, string(CodeUnavailable))
 
-	config := HandlerConfig{
-		ErrorTransformer: func(err error) *Error {
-			if err == customErr {
-				return NewError(CodeUnavailable, "custom mapped error")
-			}
-			return nil
-		},
-	}
-
-	handler.ServeHTTP(w, req, config)
-
-	var errResp Error
-	if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
-		t.Fatalf("failed to decode error response: %v", err)
-	}
-
-	if errResp.Code != CodeUnavailable {
-		t.Errorf("expected error code %s, got %s", CodeUnavailable, errResp.Code)
-	}
 	if errResp.Message != "custom mapped error" {
 		t.Errorf("expected message 'custom mapped error', got %s", errResp.Message)
 	}
@@ -430,21 +293,12 @@ func TestHandler_ServeHTTP_EmptyBody(t *testing.T) {
 	handler := NewHandler(fn)
 
 	// Send empty JSON object instead of nil body
-	req := httptest.NewRequest("POST", "/test", strings.NewReader("{}"))
-	req.Header.Set("Content-Type", "application/json")
+	w := NewTestRequest().
+		POST("/test").
+		WithBody("{}").
+		ServeHandler(handler, HandlerConfig{})
 
-	info := &RPCInfo{Service: "TestService", Method: "TestMethod"}
-	w := httptest.NewRecorder()
-	ctx := newContext(req.Context(), w, req, info)
-	req = req.WithContext(ctx)
-
-	config := HandlerConfig{}
-
-	handler.ServeHTTP(w, req, config)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d: %s", w.Code, w.Body.String())
-	}
+	testutil.AssertStatus(t, w, http.StatusOK)
 }
 
 func TestHandler_ServeHTTP_PointerRequest(t *testing.T) {
@@ -457,31 +311,13 @@ func TestHandler_ServeHTTP_PointerRequest(t *testing.T) {
 
 	handler := NewHandler(fn)
 
-	reqBody := `{"name":"John","email":"john@example.com"}`
-	req := httptest.NewRequest("POST", "/test", strings.NewReader(reqBody))
-	req.Header.Set("Content-Type", "application/json")
+	w := NewTestRequest().
+		POST("/test").
+		WithJSON(TestRequest{Name: "John", Email: "john@example.com"}).
+		ServeHandler(handler, HandlerConfig{})
 
-	info := &RPCInfo{Service: "TestService", Method: "TestMethod"}
-	w := httptest.NewRecorder()
-	ctx := newContext(req.Context(), w, req, info)
-	req = req.WithContext(ctx)
-
-	config := HandlerConfig{}
-
-	handler.ServeHTTP(w, req, config)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d: %s", w.Code, w.Body.String())
-	}
-
-	var response TestResponse
-	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
-	if response.Message != "hello John" {
-		t.Errorf("expected message 'hello John', got %s", response.Message)
-	}
+	testutil.AssertStatus(t, w, http.StatusOK)
+	testutil.AssertJSONResponse(t, w, TestResponse{Message: "hello John"})
 }
 
 func TestHandler_ServeHTTP_InterceptorModifiesRequest(t *testing.T) {
@@ -498,25 +334,12 @@ func TestHandler_ServeHTTP_InterceptorModifiesRequest(t *testing.T) {
 
 	handler := NewHandler(fn).WithInterceptor(interceptor)
 
-	reqBody := `{"name":"Original","email":"test@example.com"}`
-	req := httptest.NewRequest("POST", "/test", strings.NewReader(reqBody))
-	req.Header.Set("Content-Type", "application/json")
+	w := NewTestRequest().
+		POST("/test").
+		WithJSON(TestRequest{Name: "Original", Email: "test@example.com"}).
+		ServeHandler(handler, HandlerConfig{})
 
-	info := &RPCInfo{Service: "TestService", Method: "TestMethod"}
-	w := httptest.NewRecorder()
-	ctx := newContext(req.Context(), w, req, info)
-	req = req.WithContext(ctx)
-
-	config := HandlerConfig{}
-
-	handler.ServeHTTP(w, req, config)
-
-	var response TestResponse
-	json.NewDecoder(w.Body).Decode(&response)
-
-	if response.Message != "Modified" {
-		t.Errorf("expected message 'Modified', got %s", response.Message)
-	}
+	testutil.AssertJSONResponse(t, w, TestResponse{Message: "Modified"})
 }
 
 func TestHandleError(t *testing.T) {
@@ -592,15 +415,6 @@ func TestHandler_ChainedInterceptors(t *testing.T) {
 
 	handler := NewHandler(fn).WithInterceptor(interceptor1).WithInterceptor(interceptor2)
 
-	reqBody := `{"name":"John","email":"john@example.com"}`
-	req := httptest.NewRequest("POST", "/test", strings.NewReader(reqBody))
-	req.Header.Set("Content-Type", "application/json")
-
-	info := &RPCInfo{Service: "TestService", Method: "TestMethod"}
-	w := httptest.NewRecorder()
-	ctx := newContext(req.Context(), w, req, info)
-	req = req.WithContext(ctx)
-
 	// Add config interceptor as well
 	configInterceptor := func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error) {
 		callOrder = append(callOrder, "config-before")
@@ -609,11 +423,12 @@ func TestHandler_ChainedInterceptors(t *testing.T) {
 		return res, err
 	}
 
-	config := HandlerConfig{
-		Interceptors: []Interceptor{configInterceptor},
-	}
-
-	handler.ServeHTTP(w, req, config)
+	NewTestRequest().
+		POST("/test").
+		WithJSON(TestRequest{Name: "John", Email: "john@example.com"}).
+		ServeHandler(handler, HandlerConfig{
+			Interceptors: []Interceptor{configInterceptor},
+		})
 
 	// Expected order: config -> interceptor1 -> interceptor2 -> handler -> interceptor2 -> interceptor1 -> config
 	expectedOrder := []string{
@@ -651,24 +466,13 @@ func TestHandler_ServeHTTP_GET_PointerRequest(t *testing.T) {
 
 	handler := NewHandler(fn).Method("GET")
 
-	req := httptest.NewRequest("GET", "/test?name=John", nil)
+	w := NewTestRequest().
+		GET("/test").
+		WithQuery("name", "John").
+		ServeHandler(handler, HandlerConfig{})
 
-	info := &RPCInfo{Service: "TestService", Method: "TestMethod"}
-	w := httptest.NewRecorder()
-	ctx := newContext(req.Context(), w, req, info)
-	req = req.WithContext(ctx)
-
-	config := HandlerConfig{}
-
-	handler.ServeHTTP(w, req, config)
-
-	if w.Code != http.StatusOK {
-		body, _ := io.ReadAll(w.Body)
-		t.Errorf("expected status 200, got %d: %s", w.Code, string(body))
-	}
-
-	w.Body = httptest.NewRecorder().Body
-	json.NewEncoder(w.Body).Encode(TestResponse{Message: "hello John"})
+	testutil.AssertStatus(t, w, http.StatusOK)
+	testutil.AssertJSONResponse(t, w, TestResponse{Message: "hello John"})
 }
 
 func TestHandler_ServeHTTP_ResponseEncodingError(t *testing.T) {
@@ -681,23 +485,15 @@ func TestHandler_ServeHTTP_ResponseEncodingError(t *testing.T) {
 
 	handler := NewHandler(fn)
 
-	reqBody := `{"name":"John","email":"john@example.com"}`
-	req := httptest.NewRequest("POST", "/test", strings.NewReader(reqBody))
-	req.Header.Set("Content-Type", "application/json")
-
-	info := &RPCInfo{Service: "TestService", Method: "TestMethod"}
-	w := httptest.NewRecorder()
-	ctx := newContext(req.Context(), w, req, info)
-	req = req.WithContext(ctx)
-
-	config := HandlerConfig{}
-
-	// Capture stderr
+	// Capture stderr to verify error logging
 	oldStderr := os.Stderr
 	r, fakeStderr, _ := os.Pipe()
 	os.Stderr = fakeStderr
 
-	handler.ServeHTTP(w, req, config)
+	NewTestRequest().
+		POST("/test").
+		WithJSON(TestRequest{Name: "John", Email: "john@example.com"}).
+		ServeHandler(handler, HandlerConfig{})
 
 	// Restore stderr
 	fakeStderr.Close()
@@ -707,8 +503,8 @@ func TestHandler_ServeHTTP_ResponseEncodingError(t *testing.T) {
 	n, _ := r.Read(stderrOutput)
 	r.Close()
 
-	// Should have written error to stderr
-	if n > 0 && !strings.Contains(string(stderrOutput[:n]), "FATAL") {
-		t.Logf("stderr output: %s", string(stderrOutput[:n]))
+	// Should have written error to stderr (or slog output)
+	if n > 0 {
+		t.Logf("stderr/slog output: %s", string(stderrOutput[:n]))
 	}
 }

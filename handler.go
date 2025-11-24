@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
-	"os"
 	"reflect"
 	"time"
 
@@ -38,6 +38,29 @@ type RPCMethod interface {
 }
 
 // Handler implements RPCMethod for a specific Request/Response pair.
+//
+// Request Type Guidelines:
+//   - For POST/PUT/PATCH methods: Use struct or pointer types. Request is decoded from JSON body.
+//   - For GET methods: Use struct types for simple cases, pointer types when you need optional fields.
+//
+// GET Request Decoding:
+//   - Struct types (e.g., ListParams): Query parameters are decoded directly into the struct.
+//   - Pointer types (e.g., *ListParams): A new instance is created and query parameters are decoded into it.
+//     The handler receives a non-nil pointer.
+//
+// Example:
+//
+//	// POST handler - request from JSON body
+//	func CreateUser(ctx context.Context, req *CreateUserRequest) (*User, error) { ... }
+//	NewHandler(CreateUser).Method("POST")
+//
+//	// GET handler - request from query parameters (struct)
+//	func ListUsers(ctx context.Context, req ListUsersParams) ([]*User, error) { ... }
+//	NewHandler(ListUsers).Method("GET")
+//
+//	// GET handler - request from query parameters (pointer)
+//	func SearchUsers(ctx context.Context, req *SearchParams) ([]*User, error) { ... }
+//	NewHandler(SearchUsers).Method("GET")
 type Handler[Req any, Res any] struct {
 	fn           func(context.Context, Req) (Res, error)
 	method       string
@@ -47,6 +70,9 @@ type Handler[Req any, Res any] struct {
 
 // NewHandler creates a new handler from a generic function.
 // Default HTTP Method is "POST".
+//
+// The handler function signature is func(context.Context, Req) (Res, error).
+// See Handler documentation for request type guidelines based on HTTP method.
 func NewHandler[Req any, Res any](fn func(context.Context, Req) (Res, error)) *Handler[Req, Res] {
 	return &Handler[Req, Res]{
 		fn:     fn,
@@ -203,7 +229,10 @@ func (h *Handler[Req, Res]) ServeHTTP(w http.ResponseWriter, r *http.Request, co
 
 	if err := json.NewEncoder(w).Encode(res); err != nil {
 		// Response may be partially written, nothing we can do. Log for debugging.
-		fmt.Fprintf(os.Stderr, "FATAL: failed to encode response: %v\n", err)
+		slog.Error("failed to encode response",
+			slog.String("service", service),
+			slog.String("method", method),
+			slog.Any("error", err))
 	}
 }
 

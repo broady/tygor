@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/go-playground/validator/v10"
@@ -141,6 +141,9 @@ func writeError(w http.ResponseWriter, rpcErr *Error) {
 	w.WriteHeader(HTTPStatusFromCode(rpcErr.Code))
 	if err := json.NewEncoder(w).Encode(rpcErr); err != nil {
 		// Headers already sent, nothing we can do. Log for debugging.
-		fmt.Fprintf(os.Stderr, "FATAL: failed to encode error response: %v\n", err)
+		slog.Error("failed to encode error response",
+			slog.String("code", string(rpcErr.Code)),
+			slog.String("message", rpcErr.Message),
+			slog.Any("error", err))
 	}
 }

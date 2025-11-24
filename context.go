@@ -45,3 +45,38 @@ func newContext(ctx context.Context, w http.ResponseWriter, r *http.Request, inf
 	ctx = context.WithValue(ctx, rpcInfoKey, info)
 	return ctx
 }
+
+// NewTestContext creates a context with RPC metadata for testing.
+// This is useful when testing handlers directly without going through the Registry.
+//
+// Example:
+//
+//	req := httptest.NewRequest("POST", "/test", body)
+//	w := httptest.NewRecorder()
+//	info := &RPCInfo{Service: "MyService", Method: "MyMethod"}
+//	ctx := NewTestContext(req.Context(), w, req, info)
+//	req = req.WithContext(ctx)
+func NewTestContext(ctx context.Context, w http.ResponseWriter, r *http.Request, info *RPCInfo) context.Context {
+	return newContext(ctx, w, r, info)
+}
+
+// TestContextSetup returns a context setup function for use with testutil.NewRequest().
+// This provides a convenient way to set up tygor RPC context when testing from external packages.
+//
+// Example usage:
+//
+//	req, w := testutil.NewRequest(tygor.TestContextSetup()).
+//	    POST("/test").
+//	    WithJSON(&MyRequest{...}).
+//	    Build()
+//
+//	handler.ServeHTTP(w, req, tygor.HandlerConfig{})
+func TestContextSetup() func(ctx context.Context, w http.ResponseWriter, r *http.Request, service, method string) context.Context {
+	return func(ctx context.Context, w http.ResponseWriter, r *http.Request, service, method string) context.Context {
+		info := &RPCInfo{
+			Service: service,
+			Method:  method,
+		}
+		return NewTestContext(ctx, w, r, info)
+	}
+}

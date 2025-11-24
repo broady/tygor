@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/broady/tygor/testutil"
 )
 
 func TestNewRegistry(t *testing.T) {
@@ -125,18 +127,8 @@ func TestRegistry_ServeHTTP_Success(t *testing.T) {
 
 	reg.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d: %s", w.Code, w.Body.String())
-	}
-
-	var response TestResponse
-	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
-	if response.Message != "hello John" {
-		t.Errorf("expected message 'hello John', got %s", response.Message)
-	}
+	testutil.AssertStatus(t, w, http.StatusOK)
+	testutil.AssertJSONResponse(t, w, TestResponse{Message: "hello John", ID: 123})
 }
 
 func TestRegistry_ServeHTTP_NotFound(t *testing.T) {
@@ -147,18 +139,8 @@ func TestRegistry_ServeHTTP_NotFound(t *testing.T) {
 
 	reg.ServeHTTP(w, req)
 
-	if w.Code != http.StatusNotFound {
-		t.Errorf("expected status 404, got %d", w.Code)
-	}
-
-	var errResp Error
-	if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
-		t.Fatalf("failed to decode error response: %v", err)
-	}
-
-	if errResp.Code != CodeNotFound {
-		t.Errorf("expected error code %s, got %s", CodeNotFound, errResp.Code)
-	}
+	testutil.AssertStatus(t, w, http.StatusNotFound)
+	testutil.AssertJSONError(t, w, string(CodeNotFound))
 }
 
 func TestRegistry_ServeHTTP_InvalidPath(t *testing.T) {
@@ -201,18 +183,8 @@ func TestRegistry_ServeHTTP_MethodMismatch(t *testing.T) {
 
 	reg.ServeHTTP(w, req)
 
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected status 400, got %d", w.Code)
-	}
-
-	var errResp Error
-	if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
-		t.Fatalf("failed to decode error response: %v", err)
-	}
-
-	if errResp.Code != CodeInvalidArgument {
-		t.Errorf("expected error code %s, got %s", CodeInvalidArgument, errResp.Code)
-	}
+	testutil.AssertStatus(t, w, http.StatusBadRequest)
+	testutil.AssertJSONError(t, w, string(CodeInvalidArgument))
 }
 
 func TestRegistry_ServeHTTP_WithPanic(t *testing.T) {
@@ -231,18 +203,8 @@ func TestRegistry_ServeHTTP_WithPanic(t *testing.T) {
 
 	reg.ServeHTTP(w, req)
 
-	if w.Code != http.StatusInternalServerError {
-		t.Errorf("expected status 500, got %d", w.Code)
-	}
-
-	var errResp Error
-	if err := json.NewDecoder(w.Body).Decode(&errResp); err != nil {
-		t.Fatalf("failed to decode error response: %v", err)
-	}
-
-	if errResp.Code != CodeInternal {
-		t.Errorf("expected error code %s, got %s", CodeInternal, errResp.Code)
-	}
+	testutil.AssertStatus(t, w, http.StatusInternalServerError)
+	testutil.AssertJSONError(t, w, string(CodeInternal))
 }
 
 func TestRegistry_GlobalInterceptor(t *testing.T) {
@@ -425,16 +387,8 @@ func TestRegistry_MultipleServices(t *testing.T) {
 
 			reg.ServeHTTP(w, req)
 
-			if w.Code != http.StatusOK {
-				t.Errorf("expected status 200, got %d", w.Code)
-			}
-
-			var response TestResponse
-			json.NewDecoder(w.Body).Decode(&response)
-
-			if response.Message != tt.expectedMessage {
-				t.Errorf("expected message %s, got %s", tt.expectedMessage, response.Message)
-			}
+			testutil.AssertStatus(t, w, http.StatusOK)
+			testutil.AssertJSONResponse(t, w, TestResponse{Message: tt.expectedMessage})
 		})
 	}
 }

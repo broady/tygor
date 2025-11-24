@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"strings"
 	"testing"
 
+	"github.com/broady/tygor/testutil"
 	"github.com/go-playground/validator/v10"
 )
 
@@ -172,18 +172,9 @@ func TestWriteError(t *testing.T) {
 
 	writeError(w, rpcErr)
 
-	if w.Code != http.StatusNotFound {
-		t.Errorf("expected status %d, got %d", http.StatusNotFound, w.Code)
-	}
-	if w.Header().Get("Content-Type") != "application/json" {
-		t.Errorf("expected Content-Type application/json, got %s", w.Header().Get("Content-Type"))
-	}
-
-	// Check response body contains error
-	body := w.Body.String()
-	if body == "" {
-		t.Error("expected non-empty body")
-	}
+	testutil.AssertStatus(t, w, http.StatusNotFound)
+	testutil.AssertHeader(t, w, "Content-Type", "application/json")
+	testutil.AssertJSONError(t, w, string(CodeNotFound))
 }
 
 type failingWriter struct {
@@ -221,8 +212,9 @@ func TestWriteError_EncodingFailure(t *testing.T) {
 	n, _ := r.Read(stderrOutput)
 	r.Close()
 
-	if n > 0 && !strings.Contains(string(stderrOutput[:n]), "FATAL") {
-		t.Logf("stderr output: %s", string(stderrOutput[:n]))
+	// Should have written error to stderr (or slog output)
+	if n > 0 {
+		t.Logf("stderr/slog output: %s", string(stderrOutput[:n]))
 	}
 
 	if !w.headerWritten {
