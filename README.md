@@ -4,6 +4,10 @@
 
 Type-safe RPC framework for Go with automatic TypeScript client generation.
 
+> [!WARNING]
+> tygor is very experimental and the API is rapidly changing.
+> Pinning the `@tygor/client` version should prevent any unexpected breakages.
+
 ## Features
 
 - Type-safe handlers using Go generics
