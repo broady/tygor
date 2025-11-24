@@ -149,8 +149,9 @@ const client = createClient(
   {
     baseUrl: 'http://localhost:8080',
     headers: () => ({
-      'Authorization': 'Bearer my-token'  // Optional
+      'Authorization': 'Bearer my-token'
     })
+    // fetch: customFetch  // Optional: for testing or custom environments
   }
 );
 

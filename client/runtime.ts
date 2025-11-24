@@ -10,9 +10,12 @@ export class RPCError extends Error {
   }
 }
 
+export type FetchFunction = (url: string, init?: RequestInit) => Promise<Response>;
+
 export interface RPCConfig {
   baseUrl: string;
   headers?: () => Record<string, string>;
+  fetch?: FetchFunction;
 }
 
 export interface ServiceRegistry<Manifest extends Record<string, any>> {
@@ -24,6 +27,8 @@ export function createClient<Manifest extends Record<string, any>>(
   registry: ServiceRegistry<Manifest>,
   config: RPCConfig
 ): Client<Manifest> {
+  const fetchFn = config.fetch || globalThis.fetch;
+
   return new Proxy(
     {},
     {
@@ -75,7 +80,7 @@ export function createClient<Manifest extends Record<string, any>>(
                   options.body = JSON.stringify(req);
                 }
 
-                const res = await fetch(url, options);
+                const res = await fetchFn(url, options);
                 
                 if (!res.ok) {
                   let errorData;

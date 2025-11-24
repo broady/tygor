@@ -32,6 +32,33 @@ const client = createClient(
 const result = await client.MyService.MyMethod({ param: 'value' });
 ```
 
+### Custom fetch Implementation
+
+You can provide a custom `fetch` implementation for testing, adding retry logic, or supporting custom environments:
+
+```typescript
+import { createClient, type FetchFunction } from '@tygor/client';
+
+// Type-safe custom fetch
+const customFetch: FetchFunction = async (url, init) => {
+  console.log('Fetching:', url);
+  return fetch(url, init);
+};
+
+const client = createClient(
+  registry,
+  {
+    baseUrl: 'http://localhost:8080',
+    fetch: customFetch
+  }
+);
+```
+
+This is particularly useful for:
+- **Testing**: Pass a mock fetch function without type casting
+- **Middleware**: Add logging, retry logic, or request/response transformation
+- **Custom runtimes**: Support environments without global fetch
+
 ## Features
 
 - **Lightweight**: Uses JavaScript Proxies for minimal bundle size

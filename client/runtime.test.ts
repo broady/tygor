@@ -47,11 +47,13 @@ describe("createClient", () => {
       ok: true,
       json: async () => ({ data: "success" }),
     }));
-    global.fetch = mockFetch as any;
 
     const client = createClient(
       mockRegistry,
-      { baseUrl: "http://localhost:8080" }
+      {
+        baseUrl: "http://localhost:8080",
+        fetch: mockFetch,
+      }
     );
 
     const result = await client.Test.Get({ id: "123" });
@@ -70,11 +72,13 @@ describe("createClient", () => {
       ok: true,
       json: async () => ({ created: true }),
     }));
-    global.fetch = mockFetch as any;
 
     const client = createClient(
       mockRegistry,
-      { baseUrl: "http://localhost:8080" }
+      {
+        baseUrl: "http://localhost:8080",
+        fetch: mockFetch,
+      }
     );
 
     const result = await client.Test.Post({ name: "test" });
@@ -97,13 +101,13 @@ describe("createClient", () => {
       ok: true,
       json: async () => ({ data: "success" }),
     }));
-    global.fetch = mockFetch as any;
 
     const client = createClient(
       mockRegistry,
       {
         baseUrl: "http://localhost:8080",
         headers: () => ({ Authorization: "Bearer token123" }),
+        fetch: mockFetch,
       }
     );
 
@@ -115,6 +119,29 @@ describe("createClient", () => {
         headers: expect.objectContaining({
           Authorization: "Bearer token123",
         }),
+      })
+    );
+  });
+
+  test("uses globalThis.fetch when fetch option is not provided", async () => {
+    const mockFetch = mock(async () => ({
+      ok: true,
+      json: async () => ({ data: "success" }),
+    }));
+    global.fetch = mockFetch as any;
+
+    const client = createClient(
+      mockRegistry,
+      { baseUrl: "http://localhost:8080" }
+    );
+
+    const result = await client.Test.Get({ id: "123" });
+
+    expect(result).toEqual({ data: "success" });
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://localhost:8080/test/get?id=123",
+      expect.objectContaining({
+        method: "GET",
       })
     );
   });
