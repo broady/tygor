@@ -9,10 +9,11 @@ import (
 )
 
 type Registry struct {
-	mu               sync.RWMutex
-	routes           map[string]RPCMethod
-	errorTransformer ErrorTransformer
-	interceptors     []Interceptor
+	mu                 sync.RWMutex
+	routes             map[string]RPCMethod
+	errorTransformer   ErrorTransformer
+	maskInternalErrors bool
+	interceptors       []Interceptor
 }
 
 func NewRegistry() *Registry {
@@ -25,6 +26,14 @@ func NewRegistry() *Registry {
 // It returns the registry for chaining.
 func (r *Registry) WithErrorTransformer(fn ErrorTransformer) *Registry {
 	r.errorTransformer = fn
+	return r
+}
+
+// WithMaskInternalErrors enables masking of internal error messages.
+// This is useful in production to avoid leaking sensitive information.
+// The original error is still available to interceptors and logging.
+func (r *Registry) WithMaskInternalErrors() *Registry {
+	r.maskInternalErrors = true
 	return r
 }
 
@@ -98,8 +107,15 @@ func (r *Registry) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	ctx = newContext(ctx, w, req, info)
 	req = req.WithContext(ctx)
 
-	// Execute handler with Global Interceptors
-	handler.ServeHTTP(w, req, r.errorTransformer, r.interceptors)
+	// Build config with registry-level settings
+	config := HandlerConfig{
+		ErrorTransformer:   r.errorTransformer,
+		MaskInternalErrors: r.maskInternalErrors,
+		Interceptors:       r.interceptors,
+	}
+
+	// Execute handler
+	handler.ServeHTTP(w, req, config)
 }
 
 type Service struct {
@@ -143,13 +159,20 @@ type serviceWrappedHandler struct {
 	interceptors []Interceptor
 }
 
-func (h *serviceWrappedHandler) ServeHTTP(w http.ResponseWriter, r *http.Request, errTx ErrorTransformer, prefixInterceptors []Interceptor) {
-	// Combine: Global (prefix) + Service (h.interceptors)
-	combined := make([]Interceptor, 0, len(prefixInterceptors)+len(h.interceptors))
-	combined = append(combined, prefixInterceptors...)
+func (h *serviceWrappedHandler) ServeHTTP(w http.ResponseWriter, r *http.Request, config HandlerConfig) {
+	// Combine: Global (config.Interceptors) + Service (h.interceptors)
+	combined := make([]Interceptor, 0, len(config.Interceptors)+len(h.interceptors))
+	combined = append(combined, config.Interceptors...)
 	combined = append(combined, h.interceptors...)
 
-	h.inner.ServeHTTP(w, r, errTx, combined)
+	// Build new config with combined interceptors
+	serviceConfig := HandlerConfig{
+		ErrorTransformer:   config.ErrorTransformer,
+		MaskInternalErrors: config.MaskInternalErrors,
+		Interceptors:       combined,
+	}
+
+	h.inner.ServeHTTP(w, r, serviceConfig)
 }
 
 func (h *serviceWrappedHandler) Metadata() *meta.MethodMetadata {

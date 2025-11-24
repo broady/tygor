@@ -3,6 +3,7 @@ package tygor
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"reflect"
 	"time"
@@ -21,11 +22,17 @@ func init() {
 	schemaDecoder.IgnoreUnknownKeys(true)
 }
 
+// HandlerConfig contains configuration passed from Registry to handlers.
+type HandlerConfig struct {
+	ErrorTransformer   ErrorTransformer
+	MaskInternalErrors bool
+	Interceptors       []Interceptor
+}
+
 // RPCMethod is the interface for registered handlers.
 // It is exported so users can pass it to Register, but sealed so they cannot implement it.
 type RPCMethod interface {
-	// ServeHTTP now takes the prefix interceptors (Global + Service level)
-	ServeHTTP(w http.ResponseWriter, r *http.Request, errTx ErrorTransformer, prefixInterceptors []Interceptor)
+	ServeHTTP(w http.ResponseWriter, r *http.Request, config HandlerConfig)
 	Metadata() *meta.MethodMetadata
 }
 
@@ -77,7 +84,7 @@ func (h *Handler[Req, Res]) Metadata() *meta.MethodMetadata {
 }
 
 // ServeHTTP implements the generic glue code.
-func (h *Handler[Req, Res]) ServeHTTP(w http.ResponseWriter, r *http.Request, errTx ErrorTransformer, prefixInterceptors []Interceptor) {
+func (h *Handler[Req, Res]) ServeHTTP(w http.ResponseWriter, r *http.Request, config HandlerConfig) {
 	// 1. Prepare Context & Info
 	ctx := r.Context()
 	// MethodFromContext is already set by Registry.
@@ -88,9 +95,10 @@ func (h *Handler[Req, Res]) ServeHTTP(w http.ResponseWriter, r *http.Request, er
 	}
 
 	// 2. Combine Interceptors
-	// Global -> Service -> Handler
-	allInterceptors := make([]Interceptor, 0, len(prefixInterceptors)+len(h.interceptors))
-	allInterceptors = append(allInterceptors, prefixInterceptors...)
+	// Config contains: Global + Service interceptors
+	// We append Handler-level interceptors
+	allInterceptors := make([]Interceptor, 0, len(config.Interceptors)+len(h.interceptors))
+	allInterceptors = append(allInterceptors, config.Interceptors...)
 	allInterceptors = append(allInterceptors, h.interceptors...)
 
 	chain := chainInterceptors(allInterceptors)
@@ -156,7 +164,7 @@ func (h *Handler[Req, Res]) ServeHTTP(w http.ResponseWriter, r *http.Request, er
 	}()
 
 	if decodeErr != nil {
-		handleError(w, decodeErr, errTx)
+		handleError(w, decodeErr, config)
 		return
 	}
 
@@ -182,14 +190,14 @@ func (h *Handler[Req, Res]) ServeHTTP(w http.ResponseWriter, r *http.Request, er
 	}
 
 	if err != nil {
-		handleError(w, err, errTx)
+		handleError(w, err, config)
 		return
 	}
 
 	// 5. Write Response
 	w.Header().Set("Content-Type", "application/json")
 	if h.cacheTTL > 0 {
-		w.Header().Set("Cache-Control", "max-age="+time.Duration(h.cacheTTL.Seconds()).String())
+		w.Header().Set("Cache-Control", fmt.Sprintf("max-age=%d", int(h.cacheTTL.Seconds())))
 	}
 
 	if err := json.NewEncoder(w).Encode(res); err != nil {
@@ -197,13 +205,16 @@ func (h *Handler[Req, Res]) ServeHTTP(w http.ResponseWriter, r *http.Request, er
 	}
 }
 
-func handleError(w http.ResponseWriter, err error, tx ErrorTransformer) {
+func handleError(w http.ResponseWriter, err error, config HandlerConfig) {
 	var rpcErr *Error
-	if tx != nil {
-		rpcErr = tx(err)
+	if config.ErrorTransformer != nil {
+		rpcErr = config.ErrorTransformer(err)
 	}
 	if rpcErr == nil {
 		rpcErr = DefaultErrorTransformer(err)
+	}
+	if config.MaskInternalErrors && rpcErr.Code == CodeInternal {
+		rpcErr.Message = "internal server error"
 	}
 	writeError(w, rpcErr)
 }
