@@ -31,7 +31,7 @@ async function main() {
     console.log("\nCreating news...");
     const newArticle = await client.News.Create({
       title: "Hello Bun",
-      body: "Generated from tygorpc client running in Bun"
+      body: "Generated from tygor client running in Bun"
     });
     
     console.log("Created:", newArticle);

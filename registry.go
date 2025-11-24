@@ -1,11 +1,11 @@
-package tygorpc
+package tygor
 
 import (
 	"net/http"
 	"strings"
 	"sync"
 
-	"github.com/broady/tygorpc/internal/meta"
+	"github.com/broady/tygor/internal/meta"
 )
 
 type Registry struct {

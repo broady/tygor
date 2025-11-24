@@ -1,8 +1,8 @@
-# Specification: tygorpc
+# Specification: tygor
 
 ## 1. Introduction
 
-This document specifies the architecture and implementation requirements for **tygorpc** (`github.com/broady/tygorpc`), a code-first Remote Procedure Call system designed for Go backends and TypeScript frontends. The system MUST utilize Go structs as the single source of truth, leveraging Go Generics for type safety and `sqlc` for database interactions.
+This document specifies the architecture and implementation requirements for **tygor** (`github.com/broady/tygor`), a code-first Remote Procedure Call system designed for Go backends and TypeScript frontends. The system MUST utilize Go structs as the single source of truth, leveraging Go Generics for type safety and `sqlc` for database interactions.
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in RFC 2119.
 
@@ -44,7 +44,7 @@ The system MUST provide a fluent builder API for defining handlers. The handler 
 ```go
 // NewHandler creates a handler from a generic function.
 // Defaults: Method="POST"
-h := tygorpc.NewHandler(ListNews).
+h := tygor.NewHandler(ListNews).
     Method("GET").
     Cache(5 * time.Minute)
 ```
@@ -60,7 +60,7 @@ The Registry is responsible for mapping Operation IDs to generic HTTP handlers.
 The system MUST provide a `Registry` that manages services and routes.
 
 ```go
-reg := tygorpc.NewRegistry()
+reg := tygor.NewRegistry()
 news := reg.Service("News") // Returns a namespaced Service
 
 // Register takes the operation name and the handler.
@@ -73,7 +73,7 @@ news.Register("List", h)
 The Registry MUST support configuration via chaining methods that return the registry (or a modified copy).
 
 ```go
-reg := tygorpc.NewRegistry().
+reg := tygor.NewRegistry().
     WithErrorTransformer(customErrorHandler)
 ```
 
@@ -116,7 +116,7 @@ The system MUST allow users to provide a `func(error) *Error` to map application
 - `context.DeadlineExceeded` -> `unavailable` (503)
 - `validator.ValidationErrors` -> `invalid_argument` (400)
 - `nil` -> `nil`
-- `*tygorpc.Error` -> Returned as-is
+- `*tygor.Error` -> Returned as-is
 - Other -> `internal` (500) (with message masked in production, or passed through depending on config)
 
 -----

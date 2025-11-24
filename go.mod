@@ -1,4 +1,4 @@
-module github.com/broady/tygorpc
+module github.com/broady/tygor
 
 go 1.25.3
 

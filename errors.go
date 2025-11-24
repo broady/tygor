@@ -1,4 +1,4 @@
-package tygorpc
+package tygor
 
 import (
 	"context"

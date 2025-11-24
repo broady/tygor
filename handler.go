@@ -1,4 +1,4 @@
-package tygorpc
+package tygor
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/broady/tygorpc/internal/meta"
+	"github.com/broady/tygor/internal/meta"
 	"github.com/go-playground/validator/v10"
 	"github.com/gorilla/schema"
 )
