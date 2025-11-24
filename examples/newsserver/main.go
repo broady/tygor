@@ -12,6 +12,7 @@ import (
 
 	"github.com/broady/tygor"
 	"github.com/broady/tygor/examples/newsserver/api"
+	"github.com/broady/tygor/generator"
 	"github.com/broady/tygor/middleware"
 )
 
@@ -44,6 +45,8 @@ func CreateNews(ctx context.Context, req *api.CreateNewsParams) (*api.News, erro
 // --- Main ---
 
 func main() {
+	genFlag := flag.Bool("gen", false, "Generate TypeScript types and manifest")
+	outDir := flag.String("out", "./client/src/rpc", "Output directory for generation")
 	flag.Parse()
 
 	// Configure structured logging
@@ -78,7 +81,48 @@ func main() {
 			return handler(ctx, req)
 		}))
 
-	// 3. Start Server
+	// 3. Generation Mode
+	if *genFlag {
+		fmt.Printf("Generating types to %s...\n", *outDir)
+		if err := os.MkdirAll(*outDir, 0755); err != nil {
+			log.Fatal(err)
+		}
+		if err := generator.Generate(reg, &generator.Config{
+			OutDir:           *outDir,
+			PreserveComments: "default",
+			EnumStyle:        "union",
+			OptionalType:     "undefined",
+			Frontmatter: `// Branded types for enhanced type safety
+export type DateTime = string & { readonly __brand: 'DateTime' };
+
+// DateTime helper functions
+export const DateTime = {
+  // Create DateTime from string (assumes valid ISO 8601)
+  from: (s: string): DateTime => s as DateTime,
+
+  // Get current timestamp as DateTime
+  now: (): DateTime => new Date().toISOString() as DateTime,
+
+  // Parse DateTime to Date object
+  toDate: (dt: DateTime): Date => new Date(dt),
+
+  // Format DateTime for display
+  format: (dt: DateTime, locale = 'en-US'): string => {
+    return new Date(dt).toLocaleString(locale);
+  },
+};
+`,
+			TypeMappings: map[string]string{
+				"time.Time": "DateTime",
+			},
+		}); err != nil {
+			log.Fatalf("Generation failed: %v", err)
+		}
+		fmt.Println("Done.")
+		return
+	}
+
+	// 4. Start Server
 	fmt.Println("Server listening on :8080")
 	if err := http.ListenAndServe(":8080", reg.Handler()); err != nil {
 		log.Fatal(err)
