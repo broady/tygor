@@ -5,12 +5,14 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/broady/tygor"
 	"github.com/broady/tygor/examples/newsserver/api"
+	"github.com/broady/tygor/middleware"
 )
 
 // --- Handlers ---
@@ -45,6 +47,11 @@ func main() {
 	outDir := flag.String("out", "./client/src/rpc", "Output directory for generation")
 	flag.Parse()
 
+	// Configure structured logging
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+
 	// 1. Create Registry
 	reg := tygor.NewRegistry().
 		WithErrorTransformer(func(err error) *tygor.Error {
@@ -54,19 +61,8 @@ func main() {
 			}
 			return nil
 		}).
-		WithInterceptor(func(ctx context.Context, req any, info *tygor.RPCInfo, handler tygor.HandlerFunc) (any, error) {
-			start := time.Now()
-			log.Printf("[START] %s.%s", info.Service, info.Method)
-			res, err := handler(ctx, req)
-			duration := time.Since(start)
-
-			if err != nil {
-				log.Printf("[ERROR] %s.%s (%v) - %v", info.Service, info.Method, duration, err)
-			} else {
-				log.Printf("[OK] %s.%s (%v)", info.Service, info.Method, duration)
-			}
-			return res, err
-		})
+		WithInterceptor(middleware.LoggingInterceptor(logger)).
+		WithMiddleware(middleware.CORS(middleware.DefaultCORSConfig()))
 
 	// 2. Register Services
 	news := reg.Service("News")
@@ -100,7 +96,7 @@ func main() {
 
 	// 4. Server Mode
 	fmt.Println("Server listening on :8080")
-	if err := http.ListenAndServe(":8080", reg); err != nil {
+	if err := http.ListenAndServe(":8080", reg.Handler()); err != nil {
 		log.Fatal(err)
 	}
 }

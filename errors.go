@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/go-playground/validator/v10"
@@ -138,5 +139,8 @@ func HTTPStatusFromCode(code ErrorCode) int {
 func writeError(w http.ResponseWriter, rpcErr *Error) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(HTTPStatusFromCode(rpcErr.Code))
-	json.NewEncoder(w).Encode(rpcErr)
+	if err := json.NewEncoder(w).Encode(rpcErr); err != nil {
+		// Headers already sent, nothing we can do. Log for debugging.
+		fmt.Fprintf(os.Stderr, "FATAL: failed to encode error response: %v\n", err)
+	}
 }

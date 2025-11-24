@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"reflect"
 	"time"
 
@@ -201,7 +202,8 @@ func (h *Handler[Req, Res]) ServeHTTP(w http.ResponseWriter, r *http.Request, co
 	}
 
 	if err := json.NewEncoder(w).Encode(res); err != nil {
-		// log error
+		// Response may be partially written, nothing we can do. Log for debugging.
+		fmt.Fprintf(os.Stderr, "FATAL: failed to encode response: %v\n", err)
 	}
 }
 

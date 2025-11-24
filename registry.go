@@ -1,7 +1,10 @@
 package tygor
 
 import (
+	"fmt"
+	"log"
 	"net/http"
+	"runtime/debug"
 	"strings"
 	"sync"
 
@@ -14,6 +17,7 @@ type Registry struct {
 	errorTransformer   ErrorTransformer
 	maskInternalErrors bool
 	interceptors       []Interceptor
+	middlewares        []func(http.Handler) http.Handler
 }
 
 func NewRegistry() *Registry {
@@ -43,6 +47,25 @@ func (r *Registry) WithInterceptor(i Interceptor) *Registry {
 	return r
 }
 
+// WithMiddleware adds an HTTP middleware to wrap the registry.
+// Middleware is applied in the order added (first added is outermost).
+// Use Handler() to get the wrapped handler.
+func (r *Registry) WithMiddleware(mw func(http.Handler) http.Handler) *Registry {
+	r.middlewares = append(r.middlewares, mw)
+	return r
+}
+
+// Handler returns the registry wrapped with all configured middleware.
+// The middleware is applied in the order it was added via WithMiddleware.
+func (r *Registry) Handler() http.Handler {
+	var h http.Handler = http.HandlerFunc(r.ServeHTTP)
+	// Apply middleware in reverse order so first added is outermost
+	for i := len(r.middlewares) - 1; i >= 0; i-- {
+		h = r.middlewares[i](h)
+	}
+	return h
+}
+
 // Service returns a Service namespace.
 func (r *Registry) Service(name string) *Service {
 	return &Service{
@@ -55,21 +78,15 @@ func (r *Registry) Service(name string) *Service {
 func (r *Registry) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	defer func() {
 		if rec := recover(); rec != nil {
-			writeError(w, NewError(CodeInternal, "internal server error (panic)"))
+			stack := debug.Stack()
+			log.Printf("PANIC recovered: %v\nStack trace:\n%s", rec, stack)
+			writeError(w, NewError(CodeInternal, fmt.Sprintf("internal server error (panic): %v", rec)))
 		}
 	}()
 
 	// Inject Writer/Request into Context for SetHeader helper
 	ctx := newContext(req.Context(), w, req, nil) // rpcInfo is not known yet
 	req = req.WithContext(ctx)
-
-	// Basic CORS support for development (optional, but good to have)
-	if req.Method == "OPTIONS" {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		return
-	}
 
 	path := strings.TrimPrefix(req.URL.Path, "/")
 	// Path format: Service/Method or Service.Method?
