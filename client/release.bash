@@ -57,4 +57,4 @@ git tag "${TAG}"
 # Set browser to echo so it prints the URL instead of trying to open it
 npm --browser=echo publish
 
-echo "Successfully released ${TAG}"
+echo "Successfully released ${TAG}. Run git push && git push --tags"
