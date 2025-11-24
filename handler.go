@@ -40,44 +40,33 @@ type RPCMethod interface {
 	Metadata() *meta.MethodMetadata
 }
 
-// Handler implements RPCMethod for a specific Request/Response pair.
+// Handler implements RPCMethod for POST requests (state-changing operations).
 //
 // Request Type Guidelines:
-//   - For POST/PUT/PATCH methods: Use struct or pointer types. Request is decoded from JSON body.
-//   - For GET methods: Use struct types for simple cases, pointer types when you need optional fields.
-//
-// GET Request Decoding:
-//   - Struct types (e.g., ListParams): Query parameters are decoded directly into the struct.
-//   - Pointer types (e.g., *ListParams): A new instance is created and query parameters are decoded into it.
-//     The handler receives a non-nil pointer.
+//   - Use struct or pointer types
+//   - Request is decoded from JSON body
 //
 // Example:
 //
-//	// POST handler - request from JSON body (POST is default)
 //	func CreateUser(ctx context.Context, req *CreateUserRequest) (*User, error) { ... }
 //	Unary(CreateUser)
 //
-//	// GET handler - request from query parameters (struct)
-//	func ListUsers(ctx context.Context, req ListUsersParams) ([]*User, error) { ... }
-//	Unary(ListUsers).Method("GET")
-//
-//	// GET handler - request from query parameters (pointer)
-//	func SearchUsers(ctx context.Context, req *SearchParams) ([]*User, error) { ... }
-//	Unary(SearchUsers).Method("GET")
+//	func UpdatePost(ctx context.Context, req *UpdatePostRequest) (*Post, error) { ... }
+//	Unary(UpdatePost).WithUnaryInterceptor(requireAuth)
 type Handler[Req any, Res any] struct {
-	fn               func(context.Context, Req) (Res, error)
-	method           string
-	cacheTTL         time.Duration
-	interceptors     []UnaryInterceptor
-	skipValidation   bool
+	fn                func(context.Context, Req) (Res, error)
+	method            string
+	interceptors      []UnaryInterceptor
+	skipValidation    bool
 	strictQueryParams bool
 }
 
-// Unary creates a new handler from a generic function for unary (non-streaming) RPCs.
-// Default HTTP Method is "POST".
+// Unary creates a new POST handler from a generic function for unary (non-streaming) RPCs.
 //
 // The handler function signature is func(context.Context, Req) (Res, error).
-// See Handler documentation for request type guidelines based on HTTP method.
+// Requests are decoded from JSON body.
+//
+// For GET requests (cacheable reads), use UnaryGet instead.
 func Unary[Req any, Res any](fn func(context.Context, Req) (Res, error)) *Handler[Req, Res] {
 	return &Handler[Req, Res]{
 		fn:     fn,
@@ -85,15 +74,113 @@ func Unary[Req any, Res any](fn func(context.Context, Req) (Res, error)) *Handle
 	}
 }
 
-// Method sets the HTTP method (e.g., "GET", "POST").
-func (h *Handler[Req, Res]) Method(m string) *Handler[Req, Res] {
-	h.method = m
+// GetHandler implements RPCMethod for GET requests (cacheable read operations).
+//
+// Request Type Guidelines:
+//   - Use struct types for simple cases, pointer types when you need optional fields
+//   - Request parameters are decoded from URL query string
+//
+// Struct vs Pointer Types:
+//   - Struct types (e.g., ListParams): Query parameters are decoded directly into the struct
+//   - Pointer types (e.g., *ListParams): A new instance is created and query parameters are decoded into it
+//
+// Example:
+//
+//	func ListPosts(ctx context.Context, req ListPostsParams) ([]*Post, error) { ... }
+//	UnaryGet(ListPosts).Cache(5 * time.Minute)
+//
+//	func GetPost(ctx context.Context, req *GetPostParams) (*Post, error) { ... }
+//	UnaryGet(GetPost).CacheControl(tygor.CacheConfig{
+//	    MaxAge: 5 * time.Minute,
+//	    StaleWhileRevalidate: 1 * time.Minute,
+//	    Public: true,
+//	})
+type GetHandler[Req any, Res any] struct {
+	Handler[Req, Res]
+	cacheConfig *CacheConfig
+}
+
+// CacheConfig defines HTTP cache directives for GET requests.
+// See RFC 9111 (HTTP Caching) for detailed semantics.
+//
+// Common patterns:
+//   - Simple caching: CacheConfig{MaxAge: 5*time.Minute}
+//   - Public CDN caching: CacheConfig{MaxAge: 5*time.Minute, Public: true}
+//   - Stale-while-revalidate: CacheConfig{MaxAge: 1*time.Minute, StaleWhileRevalidate: 5*time.Minute}
+//   - Immutable assets: CacheConfig{MaxAge: 365*24*time.Hour, Immutable: true}
+type CacheConfig struct {
+	// MaxAge specifies the maximum time a resource is considered fresh (RFC 9111 Section 5.2.2.1).
+	// After this time, caches must revalidate before serving the cached response.
+	MaxAge time.Duration
+
+	// SMaxAge is like MaxAge but only applies to shared caches like CDNs (RFC 9111 Section 5.2.2.10).
+	// Overrides MaxAge for shared caches. Private caches ignore this directive.
+	SMaxAge time.Duration
+
+	// StaleWhileRevalidate allows serving stale content while revalidating in the background (RFC 5861).
+	// Example: MaxAge=60s, StaleWhileRevalidate=300s means serve from cache for 60s,
+	// then serve stale content for up to 300s more while fetching fresh data in background.
+	StaleWhileRevalidate time.Duration
+
+	// StaleIfError allows serving stale content if the origin server is unavailable (RFC 5861).
+	// Example: StaleIfError=86400 allows serving day-old stale content if origin returns 5xx errors.
+	StaleIfError time.Duration
+
+	// Public indicates the response may be cached by any cache, including CDNs (RFC 9111 Section 5.2.2.9).
+	// Default is false (private), meaning only the user's browser cache may store it.
+	// Set to true for responses that are safe to cache publicly.
+	Public bool
+
+	// MustRevalidate requires caches to revalidate stale responses with the origin before serving (RFC 9111 Section 5.2.2.2).
+	// Prevents serving stale content. Useful when stale data could cause problems.
+	MustRevalidate bool
+
+	// Immutable indicates the response will never change during its freshness lifetime (RFC 8246).
+	// Browsers won't send conditional requests for immutable resources within MaxAge period.
+	// Useful for content-addressed assets like "bundle.abc123.js".
+	Immutable bool
+}
+
+// UnaryGet creates a new GET handler from a generic function for cacheable read operations.
+//
+// The handler function signature is func(context.Context, Req) (Res, error).
+// Requests are decoded from URL query parameters.
+//
+// Use Cache() or CacheControl() to configure HTTP caching behavior.
+func UnaryGet[Req any, Res any](fn func(context.Context, Req) (Res, error)) *GetHandler[Req, Res] {
+	return &GetHandler[Req, Res]{
+		Handler: Handler[Req, Res]{
+			fn:     fn,
+			method: "GET",
+		},
+	}
+}
+
+// Cache sets a simple max-age cache TTL for the handler.
+// This is a convenience method equivalent to CacheControl(CacheConfig{MaxAge: d}).
+//
+// Example:
+//
+//	UnaryGet(ListPosts).Cache(5 * time.Minute).WithUnaryInterceptor(...)
+//	// Sets: Cache-Control: private, max-age=300
+func (h *GetHandler[Req, Res]) Cache(d time.Duration) *GetHandler[Req, Res] {
+	h.cacheConfig = &CacheConfig{MaxAge: d}
 	return h
 }
 
-// Cache sets the cache TTL for the handler.
-func (h *Handler[Req, Res]) Cache(d time.Duration) *Handler[Req, Res] {
-	h.cacheTTL = d
+// CacheControl sets detailed HTTP cache directives for the handler.
+// See CacheConfig documentation and RFC 9111 for directive semantics.
+//
+// Example:
+//
+//	UnaryGet(ListPosts).CacheControl(tygor.CacheConfig{
+//	    MaxAge:               5 * time.Minute,
+//	    StaleWhileRevalidate: 1 * time.Minute,
+//	    Public:               true,
+//	}).WithUnaryInterceptor(...)
+//	// Sets: Cache-Control: public, max-age=300, stale-while-revalidate=60
+func (h *GetHandler[Req, Res]) CacheControl(cfg CacheConfig) *GetHandler[Req, Res] {
+	h.cacheConfig = &cfg
 	return h
 }
 
@@ -132,12 +219,96 @@ func (h *Handler[Req, Res]) Metadata() *meta.MethodMetadata {
 		Method:   h.method,
 		Request:  reflect.TypeOf(req),
 		Response: reflect.TypeOf(res),
-		CacheTTL: h.cacheTTL,
+		CacheTTL: 0,
 	}
 }
 
-// ServeHTTP implements the generic glue code.
+// Metadata returns the runtime metadata for the GET handler.
+func (h *GetHandler[Req, Res]) Metadata() *meta.MethodMetadata {
+	meta := h.Handler.Metadata()
+	if h.cacheConfig != nil {
+		meta.CacheTTL = h.cacheConfig.MaxAge
+	}
+	return meta
+}
+
+// getCacheControlHeader returns the Cache-Control header value.
+// Handler returns empty (no caching for POST requests).
+func (h *Handler[Req, Res]) getCacheControlHeader() string {
+	return ""
+}
+
+// getCacheControlHeader builds the Cache-Control header value from the cache config.
+// Returns empty string if no cache config is set.
+func (h *GetHandler[Req, Res]) getCacheControlHeader() string {
+	if h.cacheConfig == nil {
+		return ""
+	}
+
+	cfg := h.cacheConfig
+	var parts []string
+
+	// Visibility directive
+	if cfg.Public {
+		parts = append(parts, "public")
+	} else {
+		parts = append(parts, "private")
+	}
+
+	// max-age (required if any caching is configured)
+	if cfg.MaxAge > 0 {
+		parts = append(parts, fmt.Sprintf("max-age=%d", int(cfg.MaxAge.Seconds())))
+	}
+
+	// s-maxage (shared cache specific)
+	if cfg.SMaxAge > 0 {
+		parts = append(parts, fmt.Sprintf("s-maxage=%d", int(cfg.SMaxAge.Seconds())))
+	}
+
+	// stale-while-revalidate (RFC 5861)
+	if cfg.StaleWhileRevalidate > 0 {
+		parts = append(parts, fmt.Sprintf("stale-while-revalidate=%d", int(cfg.StaleWhileRevalidate.Seconds())))
+	}
+
+	// stale-if-error (RFC 5861)
+	if cfg.StaleIfError > 0 {
+		parts = append(parts, fmt.Sprintf("stale-if-error=%d", int(cfg.StaleIfError.Seconds())))
+	}
+
+	// must-revalidate
+	if cfg.MustRevalidate {
+		parts = append(parts, "must-revalidate")
+	}
+
+	// immutable (RFC 8246)
+	if cfg.Immutable {
+		parts = append(parts, "immutable")
+	}
+
+	if len(parts) == 0 {
+		return ""
+	}
+
+	// Join with ", "
+	result := parts[0]
+	for i := 1; i < len(parts); i++ {
+		result += ", " + parts[i]
+	}
+	return result
+}
+
+// ServeHTTP implements the RPC handler for GET requests with caching support.
+func (h *GetHandler[Req, Res]) ServeHTTP(w http.ResponseWriter, r *http.Request, config HandlerConfig) {
+	h.serveHTTPWithCache(w, r, config, h.getCacheControlHeader())
+}
+
+// ServeHTTP implements the RPC handler for POST requests.
 func (h *Handler[Req, Res]) ServeHTTP(w http.ResponseWriter, r *http.Request, config HandlerConfig) {
+	h.serveHTTPWithCache(w, r, config, "")
+}
+
+// serveHTTPWithCache implements the generic glue code for both Handler and GetHandler.
+func (h *Handler[Req, Res]) serveHTTPWithCache(w http.ResponseWriter, r *http.Request, config HandlerConfig, cacheControl string) {
 	// 1. Prepare Context & Info
 	ctx := r.Context()
 	// MethodFromContext is already set by Registry.
@@ -257,11 +428,11 @@ func (h *Handler[Req, Res]) ServeHTTP(w http.ResponseWriter, r *http.Request, co
 
 	// 5. Write Response
 	w.Header().Set("Content-Type", "application/json")
-	if h.cacheTTL > 0 {
-		w.Header().Set("Cache-Control", fmt.Sprintf("max-age=%d", int(h.cacheTTL.Seconds())))
+	if cacheControl != "" {
+		w.Header().Set("Cache-Control", cacheControl)
 	}
 
-	if err := json.NewEncoder(w).Encode(res); err != nil {
+	if err := json.NewEncoder(w).Encode(res); err != nil{
 		// Response may be partially written, nothing we can do. Log for debugging.
 		logger := config.Logger
 		if logger == nil {

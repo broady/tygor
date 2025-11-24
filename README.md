@@ -112,7 +112,7 @@ func CreateNews(ctx context.Context, req *CreateNewsParams) (*News, error) {
 reg := tygor.NewRegistry()
 
 news := reg.Service("News")
-news.Register("List", tygor.Unary(ListNews).Method("GET"))
+news.Register("List", tygor.UnaryGet(ListNews))
 news.Register("Create", tygor.Unary(CreateNews)) // POST is default
 
 http.ListenAndServe(":8080", reg.Handler())
@@ -121,7 +121,7 @@ http.ListenAndServe(":8080", reg.Handler())
 ### 4. Generate TypeScript types
 
 ```go
-if err := reg.Generate(&tygor.GenConfig{
+if err := tygorgen.Generate(reg, &tygorgen.Config{
     OutDir: "./client/src/rpc",
 }); err != nil {
     log.Fatal(err)
@@ -215,7 +215,7 @@ type ListParams struct {
     Offset *int32 `json:"offset"`
 }
 
-tygor.Unary(List).Method("GET")
+tygor.UnaryGet(List)
 ```
 
 Query: `/News/List?limit=10&offset=20`
@@ -341,8 +341,7 @@ Set cache headers on handlers (typically used with GET):
 
 ```go
 news.Register("List",
-    tygor.Unary(ListNews).
-        Method("GET").
+    tygor.UnaryGet(ListNews).
         Cache(5 * time.Minute))
 ```
 
@@ -367,7 +366,7 @@ func Handler(ctx context.Context, req *Request) (*Response, error) {
 Customize TypeScript type generation for third-party types:
 
 ```go
-reg.Generate(&tygor.GenConfig{
+tygorgen.Generate(reg, &tygorgen.Config{
     OutDir: "./client/src/rpc",
     TypeMappings: map[string]string{
         "github.com/jackc/pgtype.Timestamptz": "string | null",

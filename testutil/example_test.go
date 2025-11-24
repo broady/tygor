@@ -21,6 +21,11 @@ type ExampleResponse struct {
 	ID      int    `json:"id"`
 }
 
+type GetParams struct {
+	Query string `schema:"query"`
+	Limit int    `schema:"limit"`
+}
+
 // Example handler function
 func exampleHandler(ctx context.Context, req *ExampleRequest) (*ExampleResponse, error) {
 	return &ExampleResponse{
@@ -83,7 +88,7 @@ func TestRequestBuilder_GET(t *testing.T) {
 		}, nil
 	}
 
-	handler := tygor.Unary(getHandler).Method("GET")
+	handler := tygor.UnaryGet(getHandler)
 
 	req, w := testutil.NewRequest(tygor.TestContextSetup()).
 		GET("/search").
@@ -126,16 +131,20 @@ func TestRequestBuilder_CustomHeader(t *testing.T) {
 
 // TestAssertHeader demonstrates header assertions
 func TestAssertHeader(t *testing.T) {
-	handler := tygor.Unary(exampleHandler).Cache(60 * time.Second)
+	getHandler := func(ctx context.Context, req *GetParams) (*ExampleResponse, error) {
+		return &ExampleResponse{Message: "cached response"}, nil
+	}
+	handler := tygor.UnaryGet(getHandler).Cache(60 * time.Second)
 
 	req, w := testutil.NewRequest(tygor.TestContextSetup()).
-		POST("/test").
-		WithJSON(&ExampleRequest{Name: "Alice", Email: "alice@example.com"}).
+		GET("/test").
+		WithQuery("query", "test").
+		WithQuery("limit", "10").
 		Build()
 
 	handler.ServeHTTP(w, req, tygor.HandlerConfig{})
 
-	testutil.AssertHeader(t, w, "Cache-Control", "max-age=60")
+	testutil.AssertHeader(t, w, "Cache-Control", "private, max-age=60")
 }
 
 // Example showing the before/after comparison

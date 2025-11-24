@@ -48,7 +48,7 @@ func TestHandler_Method(t *testing.T) {
 		return TestResponse{}, nil
 	}
 
-	handler := Unary(fn).Method("GET")
+	handler := UnaryGet(fn)
 	if handler.method != "GET" {
 		t.Errorf("expected method GET, got %s", handler.method)
 	}
@@ -60,9 +60,12 @@ func TestHandler_Cache(t *testing.T) {
 	}
 
 	ttl := 5 * time.Minute
-	handler := Unary(fn).Cache(ttl)
-	if handler.cacheTTL != ttl {
-		t.Errorf("expected cache TTL %v, got %v", ttl, handler.cacheTTL)
+	handler := UnaryGet(fn).Cache(ttl)
+	if handler.cacheConfig == nil {
+		t.Fatal("expected cacheConfig to be set")
+	}
+	if handler.cacheConfig.MaxAge != ttl {
+		t.Errorf("expected cache TTL %v, got %v", ttl, handler.cacheConfig.MaxAge)
 	}
 }
 
@@ -86,7 +89,7 @@ func TestHandler_Metadata(t *testing.T) {
 		return TestResponse{}, nil
 	}
 
-	handler := Unary(fn).Method("GET").Cache(1 * time.Minute)
+	handler := UnaryGet(fn).Cache(1 * time.Minute)
 	meta := handler.Metadata()
 
 	if meta.Method != "GET" {
@@ -162,7 +165,7 @@ func TestHandler_ServeHTTP_GET_WithQueryParams(t *testing.T) {
 		return TestResponse{Message: "hello " + req.Name}, nil
 	}
 
-	handler := Unary(fn).Method("GET")
+	handler := UnaryGet(fn)
 
 	w := NewTestRequest().
 		GET("/test").
@@ -200,15 +203,16 @@ func TestHandler_ServeHTTP_WithCache(t *testing.T) {
 		return TestResponse{Message: "ok"}, nil
 	}
 
-	handler := Unary(fn).Cache(60 * time.Second)
+	handler := UnaryGet(fn).Cache(60 * time.Second)
 
 	w := NewTestRequest().
-		POST("/test").
-		WithJSON(TestRequest{Name: "John", Email: "john@example.com"}).
+		GET("/test").
+		WithQuery("name", "John").
+		WithQuery("email", "john@example.com").
 		ServeHandler(handler, HandlerConfig{})
 
 	testutil.AssertStatus(t, w, http.StatusOK)
-	testutil.AssertHeader(t, w, "Cache-Control", "max-age=60")
+	testutil.AssertHeader(t, w, "Cache-Control", "private, max-age=60")
 }
 
 func TestHandler_ServeHTTP_WithUnaryInterceptor(t *testing.T) {
@@ -467,7 +471,7 @@ func TestHandler_ServeHTTP_GET_PointerRequest(t *testing.T) {
 		return TestResponse{Message: "hello " + req.Name}, nil
 	}
 
-	handler := Unary(fn).Method("GET")
+	handler := UnaryGet(fn)
 
 	w := NewTestRequest().
 		GET("/test").
@@ -507,7 +511,7 @@ func TestHandler_ServeHTTP_GET_ArrayParams(t *testing.T) {
 		return TestResponse{Message: message}, nil
 	}
 
-	handler := Unary(fn).Method("GET")
+	handler := UnaryGet(fn)
 
 	req := httptest.NewRequest("GET", "/test?ids=1&ids=2&ids=3", nil)
 	w := httptest.NewRecorder()
@@ -534,7 +538,7 @@ func TestHandler_ServeHTTP_GET_IntArrayParams(t *testing.T) {
 		return TestResponse{ID: sum}, nil
 	}
 
-	handler := Unary(fn).Method("GET")
+	handler := UnaryGet(fn)
 
 	req := httptest.NewRequest("GET", "/test?num=10&num=20&num=30", nil)
 	w := httptest.NewRecorder()
@@ -557,7 +561,7 @@ func TestHandler_ServeHTTP_GET_SpecialCharacters(t *testing.T) {
 		return TestResponse{Message: req.Query}, nil
 	}
 
-	handler := Unary(fn).Method("GET")
+	handler := UnaryGet(fn)
 
 	tests := []struct {
 		name     string

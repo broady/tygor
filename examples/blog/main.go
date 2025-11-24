@@ -445,8 +445,8 @@ func main() {
 	postService := reg.Service("Posts")
 
 	// Public endpoints
-	postService.Register("Get", tygor.Unary(GetPost).Method("GET"))
-	postService.Register("List", tygor.Unary(ListPosts).Method("GET").Cache(30*time.Second))
+	postService.Register("Get", tygor.UnaryGet(GetPost))
+	postService.Register("List", tygor.UnaryGet(ListPosts).Cache(30*time.Second))
 
 	// Private endpoints (require authentication)
 	postService.Register("Create",
@@ -459,7 +459,7 @@ func main() {
 	// Comment Service (requires authentication)
 	commentService := reg.Service("Comments").WithUnaryInterceptor(requireAuth)
 	commentService.Register("Create", tygor.Unary(CreateComment))
-	commentService.Register("List", tygor.Unary(ListComments).Method("GET"))
+	commentService.Register("List", tygor.UnaryGet(ListComments))
 
 	// Start server
 	addr := ":" + *port

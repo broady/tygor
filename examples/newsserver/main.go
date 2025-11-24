@@ -69,12 +69,10 @@ func main() {
 	// 2. Register Services
 	news := reg.Service("News")
 
-	news.Register("List", tygor.Unary(ListNews).
-		Method("GET").
+	news.Register("List", tygor.UnaryGet(ListNews).
 		Cache(1*time.Minute))
 
 	news.Register("Create", tygor.Unary(CreateNews).
-		Method("POST").
 		WithUnaryInterceptor(func(ctx context.Context, req any, info *tygor.RPCInfo, handler tygor.HandlerFunc) (any, error) {
 			// Example: Set a custom header
 			tygor.SetHeader(ctx, "X-Created-By", "Tygorpc")

@@ -53,6 +53,11 @@ Operations MUST use one of two HTTP methods based on their semantics:
 
 **Usage:** MUST be used for read-only operations (queries that do not modify state).
 
+**Characteristics:**
+- Cacheable via standard HTTP cache headers
+- Idempotent and safe
+- Parameters visible in URLs (suitable for non-sensitive data)
+
 **Request Encoding:**
 - Request parameters MUST be encoded in the URL query string
 - Field names MUST match the request type's field names
@@ -66,7 +71,14 @@ GET /News/List?limit=10&offset=0&tags=tech&tags=go
 
 #### 3.2.2 POST Requests
 
-**Usage:** MUST be used for state-changing operations (mutations).
+**Usage:** MUST be used for all state-changing operations (create, update, delete, mutations).
+
+**Rationale:** In an RPC system, operation semantics are conveyed by the service and method name (e.g., `News.Create`, `News.Update`, `News.Delete`), not by HTTP verbs. Using POST for all mutations simplifies the protocol while maintaining clear intent through naming.
+
+**Characteristics:**
+- Not cacheable
+- May modify server state
+- Parameters in request body (suitable for sensitive data)
 
 **Request Encoding:**
 - Request parameters MUST be encoded as JSON in the request body
@@ -83,6 +95,8 @@ Content-Type: application/json
   "tags": ["tech", "go"]
 }
 ```
+
+**Note:** While implementations MAY support other HTTP methods (PUT, PATCH, DELETE) for REST-style conventions, conforming implementations need only support GET and POST.
 
 ### 3.3 Response Format
 
@@ -212,31 +226,34 @@ Implementations that generate client code SHOULD provide a **manifest file** tha
 
 ```typescript
 // manifest.ts
+import { ServiceRegistry } from '@tygor/client';
 import * as types from './types';
 
 export interface RPCManifest {
   "ServiceName.MethodName": {
     req: types.RequestType;
     res: types.ResponseType;
-    method: "GET" | "POST";
-    path: string;
   };
   // ... additional operations
 }
 
-export const RPCMetadata = {
-  "ServiceName.MethodName": {
-    method: "GET",
-    path: "/ServiceName/MethodName"
-  },
+const metadata = {
+  "ServiceName.MethodName": { method: "GET", path: "/ServiceName/MethodName" },
+  "ServiceName.OtherMethod": { method: "POST", path: "/ServiceName/OtherMethod" },
   // ... additional operations
 } as const;
+
+export const registry: ServiceRegistry<RPCManifest> = {
+  manifest: {} as RPCManifest,
+  metadata,
+};
 ```
 
 **Purpose:**
-- Enables type-safe client generation
+- Enables type-safe client generation with full type inference
 - Provides operation discovery without runtime introspection
 - Documents the API contract
+- Single source of truth for service definitions
 
 ### 6.2 Runtime Discovery (Optional)
 
@@ -269,14 +286,45 @@ All JSON content MUST use UTF-8 encoding.
 
 ## 8. Caching
 
-Operations using `GET` SHOULD be cacheable. Servers MAY include standard HTTP caching headers:
+### 8.1 GET Request Caching
+
+Operations using `GET` SHOULD be cacheable. Servers MAY include standard HTTP caching headers as defined in RFC 9111 (HTTP Caching).
+
+**Common Cache-Control Directives:**
 
 ```
-Cache-Control: public, max-age=300
+Cache-Control: public, max-age=300, stale-while-revalidate=60
+```
+
+**Supported Directives:**
+- `max-age=<seconds>`: Maximum time resource is considered fresh
+- `s-maxage=<seconds>`: Like max-age but only for shared caches (CDNs)
+- `public`: Response may be cached by any cache
+- `private`: Response specific to user, only browser cache
+- `stale-while-revalidate=<seconds>`: Serve stale content while revalidating in background
+- `stale-if-error=<seconds>`: Serve stale content if origin is down
+- `must-revalidate`: Once stale, must revalidate before use
+- `immutable`: Resource will never change
+
+**ETag Support:**
+
+Servers MAY implement ETag-based validation:
+
+```
 ETag: "abc123"
 ```
 
-Clients SHOULD respect cache directives. Operations using `POST` MUST NOT be cached.
+Clients can use `If-None-Match` for conditional requests:
+
+```
+If-None-Match: "abc123"
+```
+
+Server responds with `304 Not Modified` if content unchanged.
+
+### 8.2 POST Request Caching
+
+Operations using `POST` MUST NOT be cached. Responses to POST requests are not cacheable by default per HTTP semantics.
 
 ---
 
@@ -393,12 +441,13 @@ An implementation is **protocol-compliant** if it:
 
 1. ✅ Constructs URLs as `/{Service}/{Method}`
 2. ✅ Uses GET for read-only operations with query string parameters
-3. ✅ Uses POST for mutations with JSON body
-4. ✅ Serializes arrays in GET requests using the repeat format
-5. ✅ Returns errors using the standard error envelope
+3. ✅ Uses POST for state-changing operations with JSON body
+4. ✅ Serializes arrays in GET requests using the repeat format (`?id=1&id=2`)
+5. ✅ Returns errors using the standard error envelope with `code` and `message` fields
 6. ✅ Maps error codes to the specified HTTP status codes
-7. ✅ Uses `application/json` content type
-8. ✅ Encodes timestamps as ISO 8601 strings
+7. ✅ Uses `application/json` content type for requests and responses
+8. ✅ Encodes timestamps as ISO 8601 strings (RFC 3339 format)
+9. ✅ Respects HTTP caching semantics (GET cacheable, POST not cacheable)
 
 ---
 

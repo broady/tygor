@@ -177,7 +177,7 @@ func TestRegistry_ServeHTTP_MethodMismatch(t *testing.T) {
 		return TestResponse{}, nil
 	}
 
-	reg.Service("Test").Register("Method", Unary(fn).Method("POST"))
+	reg.Service("Test").Register("Method", Unary(fn))
 
 	// Try GET when handler expects POST
 	req := httptest.NewRequest("GET", "/Test/Method", nil)
@@ -499,7 +499,7 @@ func TestServiceWrappedHandler_Metadata(t *testing.T) {
 		return TestResponse{}, nil
 	}
 
-	handler := Unary(fn).Method("GET")
+	handler := UnaryGet(fn)
 
 	wrapped := &serviceWrappedHandler{
 		inner:        handler,
