@@ -58,10 +58,10 @@ const goCode = [
 
 // TypeScript code highlighting
 const tsCode = [
-  line(span('import', colors.keyword), span(' { createClient } '), span('from', colors.keyword), span(' '), span("'./rpc/client'", colors.string)),
-  line(span('import', colors.keyword), span(' { RPCManifest } '), span('from', colors.keyword), span(' '), span("'./rpc/manifest'", colors.string)),
+  line(span('import', colors.keyword), span(' { createClient } '), span('from', colors.keyword), span(' '), span("'@tygor/client'", colors.string)),
+  line(span('import', colors.keyword), span(' { registry } '), span('from', colors.keyword), span(' '), span("'./rpc/manifest'", colors.string)),
   line(span(' ')),
-  line(span('const', colors.keyword), span(' client = createClient<RPCManifest>()')),
+  line(span('const', colors.keyword), span(' client = createClient(registry, config)')),
   line(span(' ')),
   line(span('// Fully typed', colors.comment)),
   line(span('const', colors.keyword), span(' news = '), span('await', colors.keyword), span(' client.News.List({ limit: 10 })')),

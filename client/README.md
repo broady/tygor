@@ -16,17 +16,16 @@ This package provides the runtime client used with tygor-generated TypeScript ty
 
 ```typescript
 import { createClient } from '@tygor/client';
-import type { RPCManifest } from './generated/manifest';
-import { RPCMetadata } from './generated/manifest';
+import { registry } from './generated/manifest';
 
-const client = createClient<RPCManifest>(
+const client = createClient(
+  registry,
   {
     baseUrl: 'http://localhost:8080',
     headers: () => ({
       'Authorization': 'Bearer my-token'
     })
-  },
-  RPCMetadata
+  }
 );
 
 // Type-safe RPC calls

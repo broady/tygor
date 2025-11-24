@@ -1,5 +1,5 @@
 import { describe, test, expect, mock } from "bun:test";
-import { createClient, RPCError } from "./runtime";
+import { createClient, RPCError, ServiceRegistry } from "./runtime";
 
 describe("RPCError", () => {
   test("creates error with code and message", () => {
@@ -37,6 +37,11 @@ describe("createClient", () => {
     "Test.Delete": { req: { id: string }; res: { deleted: boolean } };
   };
 
+  const mockRegistry: ServiceRegistry<TestManifest> = {
+    manifest: {} as TestManifest,
+    metadata: mockMetadata,
+  };
+
   test("successful GET request", async () => {
     const mockFetch = mock(async () => ({
       ok: true,
@@ -44,9 +49,9 @@ describe("createClient", () => {
     }));
     global.fetch = mockFetch as any;
 
-    const client = createClient<TestManifest>(
-      { baseUrl: "http://localhost:8080" },
-      mockMetadata
+    const client = createClient(
+      mockRegistry,
+      { baseUrl: "http://localhost:8080" }
     );
 
     const result = await client.Test.Get({ id: "123" });
@@ -67,9 +72,9 @@ describe("createClient", () => {
     }));
     global.fetch = mockFetch as any;
 
-    const client = createClient<TestManifest>(
-      { baseUrl: "http://localhost:8080" },
-      mockMetadata
+    const client = createClient(
+      mockRegistry,
+      { baseUrl: "http://localhost:8080" }
     );
 
     const result = await client.Test.Post({ name: "test" });
@@ -94,12 +99,12 @@ describe("createClient", () => {
     }));
     global.fetch = mockFetch as any;
 
-    const client = createClient<TestManifest>(
+    const client = createClient(
+      mockRegistry,
       {
         baseUrl: "http://localhost:8080",
         headers: () => ({ Authorization: "Bearer token123" }),
-      },
-      mockMetadata
+      }
     );
 
     await client.Test.Get({ id: "123" });
@@ -126,9 +131,9 @@ describe("createClient", () => {
     }));
     global.fetch = mockFetch as any;
 
-    const client = createClient<TestManifest>(
-      { baseUrl: "http://localhost:8080" },
-      mockMetadata
+    const client = createClient(
+      mockRegistry,
+      { baseUrl: "http://localhost:8080" }
     );
 
     try {
@@ -150,9 +155,9 @@ describe("createClient", () => {
     }));
     global.fetch = mockFetch as any;
 
-    const client = createClient<TestManifest>(
-      { baseUrl: "http://localhost:8080" },
-      mockMetadata
+    const client = createClient(
+      mockRegistry,
+      { baseUrl: "http://localhost:8080" }
     );
 
     try {
@@ -173,9 +178,9 @@ describe("createClient", () => {
     }));
     global.fetch = mockFetch as any;
 
-    const client = createClient<TestManifest>(
-      { baseUrl: "http://localhost:8080" },
-      mockMetadata
+    const client = createClient(
+      mockRegistry,
+      { baseUrl: "http://localhost:8080" }
     );
 
     try {
@@ -196,9 +201,9 @@ describe("createClient", () => {
     }));
     global.fetch = mockFetch as any;
 
-    const client = createClient<TestManifest>(
-      { baseUrl: "http://localhost:8080" },
-      mockMetadata
+    const client = createClient(
+      mockRegistry,
+      { baseUrl: "http://localhost:8080" }
     );
 
     try {
@@ -221,9 +226,9 @@ describe("createClient", () => {
     }));
     global.fetch = mockFetch as any;
 
-    const client = createClient<TestManifest>(
-      { baseUrl: "http://localhost:8080" },
-      mockMetadata
+    const client = createClient(
+      mockRegistry,
+      { baseUrl: "http://localhost:8080" }
     );
 
     try {
@@ -246,9 +251,9 @@ describe("createClient", () => {
     }));
     global.fetch = mockFetch as any;
 
-    const client = createClient<TestManifest>(
-      { baseUrl: "http://localhost:8080" },
-      mockMetadata
+    const client = createClient(
+      mockRegistry,
+      { baseUrl: "http://localhost:8080" }
     );
 
     try {
@@ -271,9 +276,9 @@ describe("createClient", () => {
     }));
     global.fetch = mockFetch as any;
 
-    const client = createClient<TestManifest>(
-      { baseUrl: "http://localhost:8080" },
-      mockMetadata
+    const client = createClient(
+      mockRegistry,
+      { baseUrl: "http://localhost:8080" }
     );
 
     try {
@@ -287,9 +292,9 @@ describe("createClient", () => {
   });
 
   test("throws error for unknown RPC method", () => {
-    const client = createClient<TestManifest>(
-      { baseUrl: "http://localhost:8080" },
-      mockMetadata
+    const client = createClient(
+      mockRegistry,
+      { baseUrl: "http://localhost:8080" }
     );
 
     expect(() => {
@@ -312,9 +317,14 @@ describe("createClient", () => {
       "Test.Search": { req: { tags: string[] }; res: { data: string } };
     };
 
-    const client = createClient<SearchManifest>(
-      { baseUrl: "http://localhost:8080" },
-      metadata
+    const searchRegistry: ServiceRegistry<SearchManifest> = {
+      manifest: {} as SearchManifest,
+      metadata,
+    };
+
+    const client = createClient(
+      searchRegistry,
+      { baseUrl: "http://localhost:8080" }
     );
 
     await client.Test.Search({ tags: ["foo", "bar"] });
@@ -343,9 +353,14 @@ describe("createClient", () => {
       };
     };
 
-    const client = createClient<QueryManifest>(
-      { baseUrl: "http://localhost:8080" },
-      metadata
+    const queryRegistry: ServiceRegistry<QueryManifest> = {
+      manifest: {} as QueryManifest,
+      metadata,
+    };
+
+    const client = createClient(
+      queryRegistry,
+      { baseUrl: "http://localhost:8080" }
     );
 
     await client.Test.Query({ id: "123", optional: undefined, nullable: null });
@@ -363,12 +378,12 @@ describe("createClient", () => {
     }));
     global.fetch = mockFetch as any;
 
-    const client = createClient<TestManifest>(
+    const client = createClient(
+      mockRegistry,
       {
         baseUrl: "http://localhost:8080",
         headers: () => ({ Authorization: "Bearer token123" }),
-      },
-      mockMetadata
+      }
     );
 
     await client.Test.Post({ name: "test" });
@@ -393,9 +408,9 @@ describe("createClient", () => {
     }));
     global.fetch = mockFetch as any;
 
-    const client = createClient<TestManifest>(
-      { baseUrl: "http://localhost:8080" },
-      mockMetadata
+    const client = createClient(
+      mockRegistry,
+      { baseUrl: "http://localhost:8080" }
     );
 
     const result = await client.Test.Put({ id: "123", name: "updated" });
@@ -420,9 +435,9 @@ describe("createClient", () => {
     }));
     global.fetch = mockFetch as any;
 
-    const client = createClient<TestManifest>(
-      { baseUrl: "http://localhost:8080" },
-      mockMetadata
+    const client = createClient(
+      mockRegistry,
+      { baseUrl: "http://localhost:8080" }
     );
 
     const result = await client.Test.Patch({ id: "123", name: "patched" });
@@ -447,9 +462,9 @@ describe("createClient", () => {
     }));
     global.fetch = mockFetch as any;
 
-    const client = createClient<TestManifest>(
-      { baseUrl: "http://localhost:8080" },
-      mockMetadata
+    const client = createClient(
+      mockRegistry,
+      { baseUrl: "http://localhost:8080" }
     );
 
     const result = await client.Test.Delete({ id: "123" });
@@ -482,9 +497,14 @@ describe("createClient", () => {
       "Test.Head": { req: { id: string }; res: { exists: boolean } };
     };
 
-    const client = createClient<HeadManifest>(
-      { baseUrl: "http://localhost:8080" },
-      metadata
+    const headRegistry: ServiceRegistry<HeadManifest> = {
+      manifest: {} as HeadManifest,
+      metadata,
+    };
+
+    const client = createClient(
+      headRegistry,
+      { baseUrl: "http://localhost:8080" }
     );
 
     const result = await client.Test.Head({ id: "123" });
@@ -521,9 +541,14 @@ describe("createClient", () => {
       };
     };
 
-    const client = createClient<SearchManifest>(
-      { baseUrl: "http://localhost:8080" },
-      metadata
+    const searchRegistry: ServiceRegistry<SearchManifest> = {
+      manifest: {} as SearchManifest,
+      metadata,
+    };
+
+    const client = createClient(
+      searchRegistry,
+      { baseUrl: "http://localhost:8080" }
     );
 
     // Call with properties in different orders

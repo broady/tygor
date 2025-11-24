@@ -15,9 +15,14 @@ export interface RPCConfig {
   headers?: () => Record<string, string>;
 }
 
+export interface ServiceRegistry<Manifest extends Record<string, any>> {
+  manifest: Manifest;
+  metadata: Record<string, { method: string; path: string }>;
+}
+
 export function createClient<Manifest extends Record<string, any>>(
-  config: RPCConfig,
-  metadata: Record<string, { method: string; path: string }>
+  registry: ServiceRegistry<Manifest>,
+  config: RPCConfig
 ): Client<Manifest> {
   return new Proxy(
     {},
@@ -28,7 +33,7 @@ export function createClient<Manifest extends Record<string, any>>(
           {
             get: (_target, method: string) => {
               const opId = `${service}.${method}`;
-              const meta = metadata[opId];
+              const meta = registry.metadata[opId];
               if (!meta) {
                 throw new Error(`Unknown RPC method: ${opId}`);
               }

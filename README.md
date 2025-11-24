@@ -138,17 +138,16 @@ The generated client provides a clean, idiomatic API with full type safety:
 
 ```typescript
 import { createClient } from '@tygor/client';
-import type { RPCManifest } from './rpc/manifest';
-import { RPCMetadata } from './rpc/manifest';
+import { registry } from './rpc/manifest';
 
-const client = createClient<RPCManifest>(
+const client = createClient(
+  registry,
   {
     baseUrl: 'http://localhost:8080',
     headers: () => ({
       'Authorization': 'Bearer my-token'  // Optional
     })
-  },
-  RPCMetadata
+  }
 );
 
 // Type-safe calls with autocomplete
@@ -181,21 +180,22 @@ export interface RPCManifest {
   "News.List": {
     req: types.ListNewsParams;
     res: types.News[];
-    method: "GET";
-    path: "/News/List";
   };
   "News.Create": {
     req: types.CreateNewsParams;
     res: types.News;
-    method: "POST";
-    path: "/News/Create";
   };
 }
 
-export const RPCMetadata = {
+const metadata = {
   "News.List": { method: "GET", path: "/News/List" },
   "News.Create": { method: "POST", path: "/News/Create" },
 } as const;
+
+export const registry: ServiceRegistry<RPCManifest> = {
+  manifest: {} as RPCManifest,
+  metadata,
+};
 ```
 
 ## Request Handling

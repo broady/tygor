@@ -1,16 +1,16 @@
 import { createClient } from '@tygor/client';
-import { RPCManifest, RPCMetadata } from './src/rpc/manifest';
+import { registry } from './src/rpc/manifest';
 import { DateTime, NewsStatusPublished, NewsStatusDraft } from './src/rpc/types';
 
 // 1. Create the strictly typed client
-const client = createClient<RPCManifest>(
+const client = createClient(
+  registry,
   {
     baseUrl: 'http://localhost:8080',
     headers: () => ({
       'Authorization': 'Bearer my-token'
     })
-  },
-  RPCMetadata
+  }
 );
 
 async function main() {

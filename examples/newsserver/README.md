@@ -55,11 +55,11 @@ The TypeScript client uses `@tygor/client` from npm:
 
 ```typescript
 import { createClient } from '@tygor/client';
-import { RPCManifest, RPCMetadata } from './src/rpc/manifest';
+import { registry } from './src/rpc/manifest';
 
-const client = createClient<RPCManifest>(
-  { baseUrl: 'http://localhost:8080' },
-  RPCMetadata
+const client = createClient(
+  registry,
+  { baseUrl: 'http://localhost:8080' }
 );
 
 // Type-safe calls
