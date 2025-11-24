@@ -1,3 +1,5 @@
+![tygor](doc/tygor-banner.svg)
+
 # tygor
 
 Type-safe RPC framework for Go with automatic TypeScript client generation.
@@ -341,3 +343,5 @@ reg.Generate(&tygor.GenConfig{
 ## License
 
 MIT
+
+Tiger image by Yan Liu, licensed under CC-BY (with a few modifications).
