@@ -10,7 +10,7 @@ npm install @tygor/client
 
 ## Usage
 
-This package provides the runtime client used with tygor-generated TypeScript types. You typically don't use this directly—instead, you import it in your generated client code.
+This package provides the runtime client used with tygor-generated TypeScript types and service registry manifest.
 
 ### Example
 
