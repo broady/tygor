@@ -661,3 +661,52 @@ func TestHandler_ServeHTTP_ResponseEncodingError(t *testing.T) {
 		t.Errorf("expected error log, got: %s", logOutput)
 	}
 }
+
+func TestHandler_ServeHTTP_GET_StrictQueryParams_RejectsUnknown(t *testing.T) {
+	type GetRequest struct {
+		Name string `schema:"name"`
+	}
+
+	fn := func(ctx context.Context, req GetRequest) (TestResponse, error) {
+		return TestResponse{Message: "hello " + req.Name}, nil
+	}
+
+	handler := UnaryGet(fn)
+	handler.WithStrictQueryParams()
+
+	// Send a request with an unknown parameter "unknown"
+	w := NewTestRequest().
+		GET("/test").
+		WithQuery("name", "John").
+		WithQuery("unknown", "value"). // This should cause an error with strict mode
+		ServeHandler(handler, HandlerConfig{})
+
+	// With strict query params, unknown params should return an error
+	testutil.AssertStatus(t, w, http.StatusBadRequest)
+	testutil.AssertJSONError(t, w, string(CodeInvalidArgument))
+}
+
+func TestHandler_ServeHTTP_GET_StrictQueryParams_AllowsKnown(t *testing.T) {
+	type GetRequest struct {
+		Name  string `schema:"name"`
+		Email string `schema:"email"`
+	}
+
+	fn := func(ctx context.Context, req GetRequest) (TestResponse, error) {
+		return TestResponse{Message: "hello " + req.Name}, nil
+	}
+
+	handler := UnaryGet(fn)
+	handler.WithStrictQueryParams()
+
+	// Send a request with only known parameters
+	w := NewTestRequest().
+		GET("/test").
+		WithQuery("name", "John").
+		WithQuery("email", "john@example.com").
+		ServeHandler(handler, HandlerConfig{})
+
+	// Should succeed - all params are known
+	testutil.AssertStatus(t, w, http.StatusOK)
+	testutil.AssertJSONResponse(t, w, TestResponse{Message: "hello John"})
+}
