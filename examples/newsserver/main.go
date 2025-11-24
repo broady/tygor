@@ -12,8 +12,8 @@ import (
 
 	"github.com/broady/tygor"
 	"github.com/broady/tygor/examples/newsserver/api"
-	"github.com/broady/tygor/tygorgen"
 	"github.com/broady/tygor/middleware"
+	"github.com/broady/tygor/tygorgen"
 )
 
 // --- Handlers ---
@@ -69,11 +69,11 @@ func main() {
 	// 2. Register Services
 	news := reg.Service("News")
 
-	news.Register("List", tygor.NewHandler(ListNews).
+	news.Register("List", tygor.Unary(ListNews).
 		Method("GET").
 		Cache(1*time.Minute))
 
-	news.Register("Create", tygor.NewHandler(CreateNews).
+	news.Register("Create", tygor.Unary(CreateNews).
 		Method("POST").
 		WithInterceptor(func(ctx context.Context, req any, info *tygor.RPCInfo, handler tygor.HandlerFunc) (any, error) {
 			// Example: Set a custom header

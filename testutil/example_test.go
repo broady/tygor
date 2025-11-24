@@ -31,7 +31,7 @@ func exampleHandler(ctx context.Context, req *ExampleRequest) (*ExampleResponse,
 
 // TestRequestBuilder demonstrates the fluent API for building requests
 func TestRequestBuilder(t *testing.T) {
-	handler := tygor.NewHandler(exampleHandler)
+	handler := tygor.Unary(exampleHandler)
 
 	// Build request with tygor context
 	req, w := testutil.NewRequest(tygor.TestContextSetup()).
@@ -52,7 +52,7 @@ func TestRequestBuilder(t *testing.T) {
 
 // TestRequestBuilder_Validation demonstrates validation error handling
 func TestRequestBuilder_Validation(t *testing.T) {
-	handler := tygor.NewHandler(exampleHandler)
+	handler := tygor.Unary(exampleHandler)
 
 	req, w := testutil.NewRequest(tygor.TestContextSetup()).
 		POST("/test").
@@ -83,7 +83,7 @@ func TestRequestBuilder_GET(t *testing.T) {
 		}, nil
 	}
 
-	handler := tygor.NewHandler(getHandler).Method("GET")
+	handler := tygor.Unary(getHandler).Method("GET")
 
 	req, w := testutil.NewRequest(tygor.TestContextSetup()).
 		GET("/search").
@@ -111,7 +111,7 @@ func TestRequestBuilder_CustomHeader(t *testing.T) {
 		return &ExampleResponse{Message: "authenticated"}, nil
 	}
 
-	handler := tygor.NewHandler(authHandler)
+	handler := tygor.Unary(authHandler)
 
 	req, w := testutil.NewRequest(tygor.TestContextSetup()).
 		POST("/test").
@@ -126,7 +126,7 @@ func TestRequestBuilder_CustomHeader(t *testing.T) {
 
 // TestAssertHeader demonstrates header assertions
 func TestAssertHeader(t *testing.T) {
-	handler := tygor.NewHandler(exampleHandler).Cache(60 * time.Second)
+	handler := tygor.Unary(exampleHandler).Cache(60 * time.Second)
 
 	req, w := testutil.NewRequest(tygor.TestContextSetup()).
 		POST("/test").
@@ -152,7 +152,7 @@ func ExampleRequestBuilder_comparison() {
 	// handler.ServeHTTP(w, req, config)
 
 	// AFTER (using testutil - more concise):
-	handler := tygor.NewHandler(exampleHandler)
+	handler := tygor.Unary(exampleHandler)
 	req, w := testutil.NewRequest(tygor.TestContextSetup()).
 		POST("/test").
 		WithJSON(&ExampleRequest{Name: "Alice", Email: "alice@example.com"}).

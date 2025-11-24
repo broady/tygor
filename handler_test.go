@@ -26,12 +26,12 @@ type TestResponse struct {
 	ID      int    `json:"id"`
 }
 
-func TestNewHandler(t *testing.T) {
+func TestUnary(t *testing.T) {
 	fn := func(ctx context.Context, req TestRequest) (TestResponse, error) {
 		return TestResponse{Message: "ok", ID: 1}, nil
 	}
 
-	handler := NewHandler(fn)
+	handler := Unary(fn)
 	if handler == nil {
 		t.Fatal("expected non-nil handler")
 	}
@@ -48,7 +48,7 @@ func TestHandler_Method(t *testing.T) {
 		return TestResponse{}, nil
 	}
 
-	handler := NewHandler(fn).Method("GET")
+	handler := Unary(fn).Method("GET")
 	if handler.method != "GET" {
 		t.Errorf("expected method GET, got %s", handler.method)
 	}
@@ -60,7 +60,7 @@ func TestHandler_Cache(t *testing.T) {
 	}
 
 	ttl := 5 * time.Minute
-	handler := NewHandler(fn).Cache(ttl)
+	handler := Unary(fn).Cache(ttl)
 	if handler.cacheTTL != ttl {
 		t.Errorf("expected cache TTL %v, got %v", ttl, handler.cacheTTL)
 	}
@@ -75,7 +75,7 @@ func TestHandler_WithInterceptor(t *testing.T) {
 		return handler(ctx, req)
 	}
 
-	handler := NewHandler(fn).WithInterceptor(interceptor)
+	handler := Unary(fn).WithInterceptor(interceptor)
 	if len(handler.interceptors) != 1 {
 		t.Errorf("expected 1 interceptor, got %d", len(handler.interceptors))
 	}
@@ -86,7 +86,7 @@ func TestHandler_Metadata(t *testing.T) {
 		return TestResponse{}, nil
 	}
 
-	handler := NewHandler(fn).Method("GET").Cache(1 * time.Minute)
+	handler := Unary(fn).Method("GET").Cache(1 * time.Minute)
 	meta := handler.Metadata()
 
 	if meta.Method != "GET" {
@@ -108,7 +108,7 @@ func TestHandler_ServeHTTP_POST_Success(t *testing.T) {
 		return TestResponse{Message: "hello " + req.Name, ID: 123}, nil
 	}
 
-	handler := NewHandler(fn)
+	handler := Unary(fn)
 
 	w := NewTestRequest().
 		POST("/test").
@@ -124,7 +124,7 @@ func TestHandler_ServeHTTP_POST_ValidationError(t *testing.T) {
 		return TestResponse{}, nil
 	}
 
-	handler := NewHandler(fn)
+	handler := Unary(fn)
 
 	// Invalid email and name too short
 	w := NewTestRequest().
@@ -141,7 +141,7 @@ func TestHandler_ServeHTTP_POST_InvalidJSON(t *testing.T) {
 		return TestResponse{}, nil
 	}
 
-	handler := NewHandler(fn)
+	handler := Unary(fn)
 
 	w := NewTestRequest().
 		POST("/test").
@@ -162,7 +162,7 @@ func TestHandler_ServeHTTP_GET_WithQueryParams(t *testing.T) {
 		return TestResponse{Message: "hello " + req.Name}, nil
 	}
 
-	handler := NewHandler(fn).Method("GET")
+	handler := Unary(fn).Method("GET")
 
 	w := NewTestRequest().
 		GET("/test").
@@ -180,7 +180,7 @@ func TestHandler_ServeHTTP_HandlerError(t *testing.T) {
 		return TestResponse{}, testErr
 	}
 
-	handler := NewHandler(fn)
+	handler := Unary(fn)
 
 	w := NewTestRequest().
 		POST("/test").
@@ -200,7 +200,7 @@ func TestHandler_ServeHTTP_WithCache(t *testing.T) {
 		return TestResponse{Message: "ok"}, nil
 	}
 
-	handler := NewHandler(fn).Cache(60 * time.Second)
+	handler := Unary(fn).Cache(60 * time.Second)
 
 	w := NewTestRequest().
 		POST("/test").
@@ -223,7 +223,7 @@ func TestHandler_ServeHTTP_WithInterceptor(t *testing.T) {
 		return handler(ctx, req)
 	}
 
-	handler := NewHandler(fn).WithInterceptor(interceptor)
+	handler := Unary(fn).WithInterceptor(interceptor)
 
 	NewTestRequest().
 		POST("/test").
@@ -240,7 +240,7 @@ func TestHandler_ServeHTTP_MaskInternalErrors(t *testing.T) {
 		return TestResponse{}, errors.New("internal database error")
 	}
 
-	handler := NewHandler(fn)
+	handler := Unary(fn)
 
 	w := NewTestRequest().
 		POST("/test").
@@ -265,7 +265,7 @@ func TestHandler_ServeHTTP_CustomErrorTransformer(t *testing.T) {
 		return TestResponse{}, customErr
 	}
 
-	handler := NewHandler(fn)
+	handler := Unary(fn)
 
 	w := NewTestRequest().
 		POST("/test").
@@ -293,7 +293,7 @@ func TestHandler_ServeHTTP_EmptyBody(t *testing.T) {
 		return TestResponse{Message: "ok"}, nil
 	}
 
-	handler := NewHandler(fn)
+	handler := Unary(fn)
 
 	// Send empty JSON object instead of nil body
 	w := NewTestRequest().
@@ -312,7 +312,7 @@ func TestHandler_ServeHTTP_PointerRequest(t *testing.T) {
 		return TestResponse{Message: "hello " + req.Name}, nil
 	}
 
-	handler := NewHandler(fn)
+	handler := Unary(fn)
 
 	w := NewTestRequest().
 		POST("/test").
@@ -335,7 +335,7 @@ func TestHandler_ServeHTTP_InterceptorModifiesRequest(t *testing.T) {
 		return handler(ctx, r)
 	}
 
-	handler := NewHandler(fn).WithInterceptor(interceptor)
+	handler := Unary(fn).WithInterceptor(interceptor)
 
 	w := NewTestRequest().
 		POST("/test").
@@ -416,7 +416,7 @@ func TestHandler_ChainedInterceptors(t *testing.T) {
 		return res, err
 	}
 
-	handler := NewHandler(fn).WithInterceptor(interceptor1).WithInterceptor(interceptor2)
+	handler := Unary(fn).WithInterceptor(interceptor1).WithInterceptor(interceptor2)
 
 	// Add config interceptor as well
 	configInterceptor := func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error) {
@@ -467,7 +467,7 @@ func TestHandler_ServeHTTP_GET_PointerRequest(t *testing.T) {
 		return TestResponse{Message: "hello " + req.Name}, nil
 	}
 
-	handler := NewHandler(fn).Method("GET")
+	handler := Unary(fn).Method("GET")
 
 	w := NewTestRequest().
 		GET("/test").
@@ -484,7 +484,7 @@ func TestHandler_WithSkipValidation(t *testing.T) {
 		return TestResponse{Message: "ok"}, nil
 	}
 
-	handler := NewHandler(fn).WithSkipValidation()
+	handler := Unary(fn).WithSkipValidation()
 
 	// Send invalid request (name too short, invalid email)
 	w := NewTestRequest().
@@ -507,7 +507,7 @@ func TestHandler_ServeHTTP_GET_ArrayParams(t *testing.T) {
 		return TestResponse{Message: message}, nil
 	}
 
-	handler := NewHandler(fn).Method("GET")
+	handler := Unary(fn).Method("GET")
 
 	req := httptest.NewRequest("GET", "/test?ids=1&ids=2&ids=3", nil)
 	w := httptest.NewRecorder()
@@ -534,7 +534,7 @@ func TestHandler_ServeHTTP_GET_IntArrayParams(t *testing.T) {
 		return TestResponse{ID: sum}, nil
 	}
 
-	handler := NewHandler(fn).Method("GET")
+	handler := Unary(fn).Method("GET")
 
 	req := httptest.NewRequest("GET", "/test?num=10&num=20&num=30", nil)
 	w := httptest.NewRecorder()
@@ -557,7 +557,7 @@ func TestHandler_ServeHTTP_GET_SpecialCharacters(t *testing.T) {
 		return TestResponse{Message: req.Query}, nil
 	}
 
-	handler := NewHandler(fn).Method("GET")
+	handler := Unary(fn).Method("GET")
 
 	tests := []struct {
 		name     string
@@ -592,7 +592,7 @@ func TestHandler_ServeHTTP_EmptyStructResponse(t *testing.T) {
 		return EmptyResponse{}, nil
 	}
 
-	handler := NewHandler(fn)
+	handler := Unary(fn)
 
 	w := NewTestRequest().
 		POST("/test").
@@ -613,7 +613,7 @@ func TestHandler_ServeHTTP_NilPointerResponse(t *testing.T) {
 		return nil, nil
 	}
 
-	handler := NewHandler(fn)
+	handler := Unary(fn)
 
 	w := NewTestRequest().
 		POST("/test").
@@ -636,7 +636,7 @@ func TestHandler_ServeHTTP_ResponseEncodingError(t *testing.T) {
 		return ch, nil
 	}
 
-	handler := NewHandler(fn)
+	handler := Unary(fn)
 
 	// Use a test logger to verify error logging
 	var buf bytes.Buffer

@@ -21,13 +21,13 @@ import (
 
 // In-memory database (for demo purposes)
 var (
-	dbMu       sync.RWMutex
-	users      = make(map[int64]*api.User)
-	posts      = make(map[int64]*api.Post)
-	comments   = make(map[int64]*api.Comment)
-	tokens     = make(map[string]int64) // token -> userID
-	nextUserID int64
-	nextPostID int64
+	dbMu          sync.RWMutex
+	users         = make(map[int64]*api.User)
+	posts         = make(map[int64]*api.Post)
+	comments      = make(map[int64]*api.Comment)
+	tokens        = make(map[string]int64) // token -> userID
+	nextUserID    int64
+	nextPostID    int64
 	nextCommentID int64
 )
 
@@ -438,28 +438,28 @@ func main() {
 
 	// User Service (public endpoints)
 	userService := reg.Service("Users")
-	userService.Register("Create", tygor.NewHandler(CreateUser))
-	userService.Register("Login", tygor.NewHandler(Login))
+	userService.Register("Create", tygor.Unary(CreateUser))
+	userService.Register("Login", tygor.Unary(Login))
 
 	// Post Service (mixed public/private endpoints)
 	postService := reg.Service("Posts")
 
 	// Public endpoints
-	postService.Register("Get", tygor.NewHandler(GetPost).Method("GET"))
-	postService.Register("List", tygor.NewHandler(ListPosts).Method("GET").Cache(30*time.Second))
+	postService.Register("Get", tygor.Unary(GetPost).Method("GET"))
+	postService.Register("List", tygor.Unary(ListPosts).Method("GET").Cache(30*time.Second))
 
 	// Private endpoints (require authentication)
 	postService.Register("Create",
-		tygor.NewHandler(CreatePost).WithInterceptor(requireAuth))
+		tygor.Unary(CreatePost).WithInterceptor(requireAuth))
 	postService.Register("Update",
-		tygor.NewHandler(UpdatePost).WithInterceptor(requireAuth))
+		tygor.Unary(UpdatePost).WithInterceptor(requireAuth))
 	postService.Register("Publish",
-		tygor.NewHandler(PublishPost).WithInterceptor(requireAuth))
+		tygor.Unary(PublishPost).WithInterceptor(requireAuth))
 
 	// Comment Service (requires authentication)
 	commentService := reg.Service("Comments").WithInterceptor(requireAuth)
-	commentService.Register("Create", tygor.NewHandler(CreateComment))
-	commentService.Register("List", tygor.NewHandler(ListComments).Method("GET"))
+	commentService.Register("Create", tygor.Unary(CreateComment))
+	commentService.Register("List", tygor.Unary(ListComments).Method("GET"))
 
 	// Start server
 	addr := ":" + *port

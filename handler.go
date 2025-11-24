@@ -51,17 +51,17 @@ type RPCMethod interface {
 //
 // Example:
 //
-//	// POST handler - request from JSON body
+//	// POST handler - request from JSON body (POST is default)
 //	func CreateUser(ctx context.Context, req *CreateUserRequest) (*User, error) { ... }
-//	NewHandler(CreateUser).Method("POST")
+//	Unary(CreateUser)
 //
 //	// GET handler - request from query parameters (struct)
 //	func ListUsers(ctx context.Context, req ListUsersParams) ([]*User, error) { ... }
-//	NewHandler(ListUsers).Method("GET")
+//	Unary(ListUsers).Method("GET")
 //
 //	// GET handler - request from query parameters (pointer)
 //	func SearchUsers(ctx context.Context, req *SearchParams) ([]*User, error) { ... }
-//	NewHandler(SearchUsers).Method("GET")
+//	Unary(SearchUsers).Method("GET")
 type Handler[Req any, Res any] struct {
 	fn             func(context.Context, Req) (Res, error)
 	method         string
@@ -70,12 +70,12 @@ type Handler[Req any, Res any] struct {
 	skipValidation bool
 }
 
-// NewHandler creates a new handler from a generic function.
+// Unary creates a new handler from a generic function for unary (non-streaming) RPCs.
 // Default HTTP Method is "POST".
 //
 // The handler function signature is func(context.Context, Req) (Res, error).
 // See Handler documentation for request type guidelines based on HTTP method.
-func NewHandler[Req any, Res any](fn func(context.Context, Req) (Res, error)) *Handler[Req, Res] {
+func Unary[Req any, Res any](fn func(context.Context, Req) (Res, error)) *Handler[Req, Res] {
 	return &Handler[Req, Res]{
 		fn:     fn,
 		method: "POST",
