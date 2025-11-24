@@ -41,7 +41,19 @@ type RPCMethod interface {
 	Metadata() *meta.MethodMetadata
 }
 
-// Handler implements RPCMethod for POST requests (state-changing operations).
+// UnaryHandler contains common configuration for all unary handlers.
+//
+// This is a base type. See UnaryPostHandler and UnaryGetHandler for specific implementations.
+type UnaryHandler[Req any, Res any] struct {
+	fn             func(context.Context, Req) (Res, error)
+	method         string
+	interceptors   []UnaryInterceptor
+	skipValidation bool
+}
+
+// UnaryPostHandler implements RPCMethod for POST requests (state-changing operations).
+//
+// It embeds UnaryHandler, inheriting methods like WithUnaryInterceptor and WithSkipValidation.
 //
 // Request Type Guidelines:
 //   - Use struct or pointer types
@@ -54,12 +66,8 @@ type RPCMethod interface {
 //
 //	func UpdatePost(ctx context.Context, req *UpdatePostRequest) (*Post, error) { ... }
 //	Unary(UpdatePost).WithUnaryInterceptor(requireAuth)
-type Handler[Req any, Res any] struct {
-	fn                 func(context.Context, Req) (Res, error)
-	method             string
-	interceptors       []UnaryInterceptor
-	skipValidation     bool
-	strictQueryParams  bool
+type UnaryPostHandler[Req any, Res any] struct {
+	UnaryHandler[Req, Res]
 	maxRequestBodySize *uint64 // nil means use registry default
 }
 
@@ -69,14 +77,23 @@ type Handler[Req any, Res any] struct {
 // Requests are decoded from JSON body.
 //
 // For GET requests (cacheable reads), use UnaryGet instead.
-func Unary[Req any, Res any](fn func(context.Context, Req) (Res, error)) *Handler[Req, Res] {
-	return &Handler[Req, Res]{
-		fn:     fn,
-		method: "POST",
+//
+// The returned UnaryPostHandler supports:
+//   - WithUnaryInterceptor (from UnaryHandler)
+//   - WithSkipValidation (from UnaryHandler)
+//   - WithMaxRequestBodySize (specific to POST)
+func Unary[Req any, Res any](fn func(context.Context, Req) (Res, error)) *UnaryPostHandler[Req, Res] {
+	return &UnaryPostHandler[Req, Res]{
+		UnaryHandler: UnaryHandler[Req, Res]{
+			fn:     fn,
+			method: "POST",
+		},
 	}
 }
 
-// GetHandler implements RPCMethod for GET requests (cacheable read operations).
+// UnaryGetHandler implements RPCMethod for GET requests (cacheable read operations).
+//
+// It embeds UnaryHandler, inheriting methods like WithUnaryInterceptor and WithSkipValidation.
 //
 // Request Type Guidelines:
 //   - Use struct types for simple cases, pointer types when you need optional fields
@@ -97,9 +114,10 @@ func Unary[Req any, Res any](fn func(context.Context, Req) (Res, error)) *Handle
 //	    StaleWhileRevalidate: 1 * time.Minute,
 //	    Public: true,
 //	})
-type GetHandler[Req any, Res any] struct {
-	Handler[Req, Res]
-	cacheConfig *CacheConfig
+type UnaryGetHandler[Req any, Res any] struct {
+	UnaryHandler[Req, Res]
+	cacheConfig       *CacheConfig
+	strictQueryParams bool
 }
 
 // CacheConfig defines HTTP cache directives for GET requests.
@@ -149,9 +167,15 @@ type CacheConfig struct {
 // Requests are decoded from URL query parameters.
 //
 // Use Cache() or CacheControl() to configure HTTP caching behavior.
-func UnaryGet[Req any, Res any](fn func(context.Context, Req) (Res, error)) *GetHandler[Req, Res] {
-	return &GetHandler[Req, Res]{
-		Handler: Handler[Req, Res]{
+//
+// The returned UnaryGetHandler supports:
+//   - WithUnaryInterceptor (from UnaryHandler)
+//   - WithSkipValidation (from UnaryHandler)
+//   - Cache / CacheControl (specific to GET)
+//   - WithStrictQueryParams (specific to GET)
+func UnaryGet[Req any, Res any](fn func(context.Context, Req) (Res, error)) *UnaryGetHandler[Req, Res] {
+	return &UnaryGetHandler[Req, Res]{
+		UnaryHandler: UnaryHandler[Req, Res]{
 			fn:     fn,
 			method: "GET",
 		},
@@ -165,7 +189,7 @@ func UnaryGet[Req any, Res any](fn func(context.Context, Req) (Res, error)) *Get
 //
 //	UnaryGet(ListPosts).Cache(5 * time.Minute).WithUnaryInterceptor(...)
 //	// Sets: Cache-Control: private, max-age=300
-func (h *GetHandler[Req, Res]) Cache(d time.Duration) *GetHandler[Req, Res] {
+func (h *UnaryGetHandler[Req, Res]) Cache(d time.Duration) *UnaryGetHandler[Req, Res] {
 	h.cacheConfig = &CacheConfig{MaxAge: d}
 	return h
 }
@@ -181,7 +205,7 @@ func (h *GetHandler[Req, Res]) Cache(d time.Duration) *GetHandler[Req, Res] {
 //	    Public:               true,
 //	}).WithUnaryInterceptor(...)
 //	// Sets: Cache-Control: public, max-age=300, stale-while-revalidate=60
-func (h *GetHandler[Req, Res]) CacheControl(cfg CacheConfig) *GetHandler[Req, Res] {
+func (h *UnaryGetHandler[Req, Res]) CacheControl(cfg CacheConfig) *UnaryGetHandler[Req, Res] {
 	h.cacheConfig = &cfg
 	return h
 }
@@ -189,7 +213,15 @@ func (h *GetHandler[Req, Res]) CacheControl(cfg CacheConfig) *GetHandler[Req, Re
 // WithUnaryInterceptor adds an interceptor to this handler.
 // Handler interceptors execute after global and service interceptors.
 // See Registry.WithUnaryInterceptor for the complete execution order.
-func (h *Handler[Req, Res]) WithUnaryInterceptor(i UnaryInterceptor) *Handler[Req, Res] {
+func (h *UnaryPostHandler[Req, Res]) WithUnaryInterceptor(i UnaryInterceptor) *UnaryPostHandler[Req, Res] {
+	h.interceptors = append(h.interceptors, i)
+	return h
+}
+
+// WithUnaryInterceptor adds an interceptor to this handler.
+// Handler interceptors execute after global and service interceptors.
+// See Registry.WithUnaryInterceptor for the complete execution order.
+func (h *UnaryGetHandler[Req, Res]) WithUnaryInterceptor(i UnaryInterceptor) *UnaryGetHandler[Req, Res] {
 	h.interceptors = append(h.interceptors, i)
 	return h
 }
@@ -198,7 +230,16 @@ func (h *Handler[Req, Res]) WithUnaryInterceptor(i UnaryInterceptor) *Handler[Re
 // By default, all handlers validate requests using the validator package.
 // Use this when you need to handle validation manually or when the request
 // type has no validation tags.
-func (h *Handler[Req, Res]) WithSkipValidation() *Handler[Req, Res] {
+func (h *UnaryPostHandler[Req, Res]) WithSkipValidation() *UnaryPostHandler[Req, Res] {
+	h.skipValidation = true
+	return h
+}
+
+// WithSkipValidation disables validation for this handler.
+// By default, all handlers validate requests using the validator package.
+// Use this when you need to handle validation manually or when the request
+// type has no validation tags.
+func (h *UnaryGetHandler[Req, Res]) WithSkipValidation() *UnaryGetHandler[Req, Res] {
 	h.skipValidation = true
 	return h
 }
@@ -207,21 +248,20 @@ func (h *Handler[Req, Res]) WithSkipValidation() *Handler[Req, Res] {
 // By default, unknown query parameters are ignored (lenient mode).
 // When enabled, requests with unknown query parameters will return an error.
 // This helps catch typos and enforces exact parameter expectations.
-// Only affects GET requests; has no effect on POST/PUT/PATCH requests.
-func (h *Handler[Req, Res]) WithStrictQueryParams() *Handler[Req, Res] {
+func (h *UnaryGetHandler[Req, Res]) WithStrictQueryParams() *UnaryGetHandler[Req, Res] {
 	h.strictQueryParams = true
 	return h
 }
 
 // WithMaxRequestBodySize sets the maximum request body size for this handler.
 // This overrides the registry-level default. A value of 0 means no limit.
-func (h *Handler[Req, Res]) WithMaxRequestBodySize(size uint64) *Handler[Req, Res] {
+func (h *UnaryPostHandler[Req, Res]) WithMaxRequestBodySize(size uint64) *UnaryPostHandler[Req, Res] {
 	h.maxRequestBodySize = &size
 	return h
 }
 
 // Metadata returns the runtime metadata for the handler.
-func (h *Handler[Req, Res]) Metadata() *meta.MethodMetadata {
+func (h *UnaryHandler[Req, Res]) Metadata() *meta.MethodMetadata {
 	var req Req
 	var res Res
 	return &meta.MethodMetadata{
@@ -233,23 +273,28 @@ func (h *Handler[Req, Res]) Metadata() *meta.MethodMetadata {
 }
 
 // Metadata returns the runtime metadata for the GET handler.
-func (h *GetHandler[Req, Res]) Metadata() *meta.MethodMetadata {
-	meta := h.Handler.Metadata()
+func (h *UnaryGetHandler[Req, Res]) Metadata() *meta.MethodMetadata {
+	meta := h.UnaryHandler.Metadata()
 	if h.cacheConfig != nil {
 		meta.CacheTTL = h.cacheConfig.MaxAge
 	}
 	return meta
 }
 
+// Metadata returns the runtime metadata for the POST handler.
+func (h *UnaryPostHandler[Req, Res]) Metadata() *meta.MethodMetadata {
+	return h.UnaryHandler.Metadata()
+}
+
 // getCacheControlHeader returns the Cache-Control header value.
 // Handler returns empty (no caching for POST requests).
-func (h *Handler[Req, Res]) getCacheControlHeader() string {
+func (h *UnaryHandler[Req, Res]) getCacheControlHeader() string {
 	return ""
 }
 
 // getCacheControlHeader builds the Cache-Control header value from the cache config.
 // Returns empty string if no cache config is set.
-func (h *GetHandler[Req, Res]) getCacheControlHeader() string {
+func (h *UnaryGetHandler[Req, Res]) getCacheControlHeader() string {
 	if h.cacheConfig == nil {
 		return ""
 	}
@@ -307,17 +352,64 @@ func (h *GetHandler[Req, Res]) getCacheControlHeader() string {
 }
 
 // ServeHTTP implements the RPC handler for GET requests with caching support.
-func (h *GetHandler[Req, Res]) ServeHTTP(w http.ResponseWriter, r *http.Request, config HandlerConfig) {
-	h.serveHTTPWithCache(w, r, config, h.getCacheControlHeader())
+func (h *UnaryGetHandler[Req, Res]) ServeHTTP(w http.ResponseWriter, r *http.Request, config HandlerConfig) {
+	decoder := func() (Req, error) {
+		var req Req
+		// Select decoder based on strictness setting
+		decoder := schemaDecoder
+		if h.strictQueryParams {
+			decoder = strictSchemaDecoder
+		}
+
+		reqType := reflect.TypeOf(req)
+		if reqType.Kind() == reflect.Pointer {
+			// Instantiate the element
+			val := reflect.New(reqType.Elem())
+			// val is *Elem.
+			// Decode into it
+			if err := decoder.Decode(val.Interface(), r.URL.Query()); err != nil {
+				return req, Errorf(CodeInvalidArgument, "failed to decode query: %v", err)
+			}
+			req = val.Interface().(Req)
+		} else {
+			// Req is a struct. &req is *Req.
+			if err := decoder.Decode(&req, r.URL.Query()); err != nil {
+				return req, Errorf(CodeInvalidArgument, "failed to decode query: %v", err)
+			}
+		}
+		return req, nil
+	}
+	h.serve(w, r, config, h.getCacheControlHeader(), decoder)
 }
 
 // ServeHTTP implements the RPC handler for POST requests.
-func (h *Handler[Req, Res]) ServeHTTP(w http.ResponseWriter, r *http.Request, config HandlerConfig) {
-	h.serveHTTPWithCache(w, r, config, "")
+func (h *UnaryPostHandler[Req, Res]) ServeHTTP(w http.ResponseWriter, r *http.Request, config HandlerConfig) {
+	decoder := func() (Req, error) {
+		var req Req
+		if r.Body != nil {
+			// Determine effective body size limit
+			effectiveLimit := config.MaxRequestBodySize
+			if h.maxRequestBodySize != nil {
+				effectiveLimit = *h.maxRequestBodySize
+			}
+
+			// Apply body size limit if > 0
+			// 0 means unlimited for backwards compatibility
+			if effectiveLimit > 0 {
+				r.Body = http.MaxBytesReader(w, r.Body, int64(effectiveLimit))
+			}
+
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				return req, Errorf(CodeInvalidArgument, "failed to decode body: %v", err)
+			}
+		}
+		return req, nil
+	}
+	h.serve(w, r, config, "", decoder)
 }
 
-// serveHTTPWithCache implements the generic glue code for both Handler and GetHandler.
-func (h *Handler[Req, Res]) serveHTTPWithCache(w http.ResponseWriter, r *http.Request, config HandlerConfig, cacheControl string) {
+// serve implements the generic glue code for both UnaryPostHandler and UnaryGetHandler.
+func (h *UnaryHandler[Req, Res]) serve(w http.ResponseWriter, r *http.Request, config HandlerConfig, cacheControl string, decodeFunc func() (Req, error)) {
 	// 1. Prepare Context & Info
 	ctx := r.Context()
 	// MethodFromContext is already set by Registry.
@@ -337,83 +429,18 @@ func (h *Handler[Req, Res]) serveHTTPWithCache(w http.ResponseWriter, r *http.Re
 	chain := chainInterceptors(allInterceptors)
 
 	// 3. Decode Request
-	// We must decode first because the interceptor expects a typed struct pointer.
-	var req Req
-
-	// Decoding logic
-	decodeErr := func() error {
-		if h.method == "GET" {
-			// Select decoder based on strictness setting
-			decoder := schemaDecoder
-			if h.strictQueryParams {
-				decoder = strictSchemaDecoder
-			}
-
-			// schemaDecoder.Decode requires a pointer to a struct.
-			// &req is a *Req.
-			// If Req is already a pointer type (e.g. *ListNewsParams), then req is *ListNewsParams.
-			// &req is **ListNewsParams.
-			// schemaDecoder wants interface{} that is a pointer to a struct.
-			// If Req is a struct (ListNewsParams), &req is *ListNewsParams. Correct.
-			// If Req is a pointer (*ListNewsParams), &req is **ListNewsParams. Incorrect?
-
-			// We need to detect if Req is a pointer type.
-			// But we can't do that easily at runtime with generics without reflection on the value?
-			// Actually, we can check h.Metadata().Request.Kind().
-
-			// But schema/decoder wants the struct pointer.
-			// If Req is *T, we need to allocate T and pass &T to Decode.
-			// Then set req = &T.
-
-			// Wait, in standard usage: func(ctx, req *ListNewsParams). Req is *ListNewsParams.
-			// So req is *ListNewsParams (which is nil initially).
-			// We need to initialize it?
-			// var req Req -> nil.
-
-			// We need to instantiate the underlying struct.
-			reqType := reflect.TypeOf(req)
-			if reqType.Kind() == reflect.Pointer {
-				// Instantiate the element
-				val := reflect.New(reqType.Elem())
-				// val is *Elem.
-				// Decode into it
-				if err := decoder.Decode(val.Interface(), r.URL.Query()); err != nil {
-					return Errorf(CodeInvalidArgument, "failed to decode query: %v", err)
-				}
-				// req = val.Interface().(Req) ??
-				req = val.Interface().(Req)
-			} else {
-				// Req is a struct. &req is *Req.
-				if err := decoder.Decode(&req, r.URL.Query()); err != nil {
-					return Errorf(CodeInvalidArgument, "failed to decode query: %v", err)
-				}
-			}
-		} else {
-			if r.Body != nil {
-				// Determine effective body size limit
-				effectiveLimit := config.MaxRequestBodySize
-				if h.maxRequestBodySize != nil {
-					effectiveLimit = *h.maxRequestBodySize
-				}
-
-				// Apply body size limit if > 0
-				// 0 means unlimited for backwards compatibility
-				if effectiveLimit > 0 {
-					r.Body = http.MaxBytesReader(w, r.Body, int64(effectiveLimit))
-				}
-
-				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-					return Errorf(CodeInvalidArgument, "failed to decode body: %v", err)
-				}
-			}
+	req, decodeErr := func() (Req, error) {
+		req, err := decodeFunc()
+		if err != nil {
+			return req, err
 		}
 
 		if !h.skipValidation {
 			if err := validate.Struct(req); err != nil {
-				return err
+				return req, err
 			}
 		}
-		return nil
+		return req, nil
 	}()
 
 	if decodeErr != nil {
