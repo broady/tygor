@@ -88,9 +88,33 @@ func main() {
 		}
 		if err := reg.Generate(&tygor.GenConfig{
 			OutDir:           *outDir,
-			PreserveComments: "default", // Preserve Go doc comments in TypeScript
-			EnumStyle:        "union",   // Generate union types for enums
+			PreserveComments: "default",   // Preserve Go doc comments in TypeScript
+			EnumStyle:        "union",     // Generate union types for enums
 			OptionalType:     "undefined", // Use T | undefined for optional fields
+			// Define custom branded types with helper functions
+			Frontmatter: `// Branded types for enhanced type safety
+export type DateTime = string & { readonly __brand: 'DateTime' };
+
+// DateTime helper functions
+export const DateTime = {
+  // Create DateTime from string (assumes valid ISO 8601)
+  from: (s: string): DateTime => s as DateTime,
+
+  // Get current timestamp as DateTime
+  now: (): DateTime => new Date().toISOString() as DateTime,
+
+  // Parse DateTime to Date object
+  toDate: (dt: DateTime): Date => new Date(dt),
+
+  // Format DateTime for display
+  format: (dt: DateTime, locale = 'en-US'): string => {
+    return new Date(dt).toLocaleString(locale);
+  },
+};
+`,
+			TypeMappings: map[string]string{
+				"time.Time": "DateTime", // Map Go time.Time to branded DateTime type
+			},
 		}); err != nil {
 			log.Fatalf("Generation failed: %v", err)
 		}
