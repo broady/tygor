@@ -306,6 +306,7 @@ func TestHandler_ServeHTTP_EmptyBody(t *testing.T) {
 		ServeHandler(handler, HandlerConfig{})
 
 	testutil.AssertStatus(t, w, http.StatusOK)
+	testutil.AssertJSONResponse(t, w, TestResponse{Message: "ok"})
 }
 
 func TestHandler_ServeHTTP_PointerRequest(t *testing.T) {

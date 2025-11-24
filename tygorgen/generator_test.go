@@ -410,8 +410,23 @@ func TestGenerate_CustomConfig(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	// Just verify it doesn't error with custom config
-	// The actual tygo output format depends on tygo internals
+	// Check types file content to verify config was applied
+	typesPath := filepath.Join(outDir, "types_github_com_broady_tygor_examples_blog_api.ts")
+	content, err := os.ReadFile(typesPath)
+	if err != nil {
+		t.Fatalf("failed to read generated types: %v", err)
+	}
+	typesStr := string(content)
+
+	// Verify comments are removed (PreserveComments: "none")
+	if strings.Contains(typesStr, "CreateUserRequest is the request") {
+		t.Error("expected comments to be removed")
+	}
+
+	// Verify User struct is present (sanity check)
+	if !strings.Contains(typesStr, "export interface User") {
+		t.Error("expected User interface to be generated")
+	}
 }
 
 // TestGenerate_GETParamsUseLowercaseNames verifies that GET request parameter types

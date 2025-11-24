@@ -96,6 +96,8 @@ func TestRegistry_Handler(t *testing.T) {
 	if !middlewareCalled {
 		t.Error("expected middleware to be called")
 	}
+	testutil.AssertStatus(t, w, http.StatusOK)
+	testutil.AssertJSONResponse(t, w, TestResponse{Message: "ok"})
 }
 
 func TestRegistry_Service(t *testing.T) {
@@ -248,6 +250,8 @@ func TestRegistry_GlobalInterceptor(t *testing.T) {
 	if !interceptorCalled {
 		t.Error("expected global interceptor to be called")
 	}
+	testutil.AssertStatus(t, w, http.StatusOK)
+	testutil.AssertJSONResponse(t, w, TestResponse{Message: "ok"})
 }
 
 func TestService_WithUnaryInterceptor(t *testing.T) {

@@ -198,12 +198,15 @@ func TestChainInterceptors_ContextPropagation(t *testing.T) {
 		if val != "test-value" {
 			t.Errorf("expected 'test-value' in context, got %v", val)
 		}
-		return nil, nil
+		return "success", nil
 	}
 
-	_, err := chain(context.Background(), "request", info, handler)
+	res, err := chain(context.Background(), "request", info, handler)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
+	}
+	if res != "success" {
+		t.Errorf("expected 'success', got %v", res)
 	}
 }
 
@@ -223,11 +226,14 @@ func TestChainInterceptors_InfoPassed(t *testing.T) {
 	chain := chainInterceptors([]UnaryInterceptor{interceptor})
 
 	handler := func(ctx context.Context, req any) (any, error) {
-		return nil, nil
+		return "success", nil
 	}
 
-	_, err := chain(context.Background(), "request", expectedInfo, handler)
+	res, err := chain(context.Background(), "request", expectedInfo, handler)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
+	}
+	if res != "success" {
+		t.Errorf("expected 'success', got %v", res)
 	}
 }
