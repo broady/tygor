@@ -53,6 +53,8 @@ fi
 # Commit, tag, and publish
 git commit -a -m "Release ${TAG}"
 git tag "${TAG}"
-npm publish
+
+# Set browser to echo so it prints the URL instead of trying to open it
+npm --browser=echo publish
 
 echo "Successfully released ${TAG}"
