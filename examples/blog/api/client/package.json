@@ -1,0 +1,9 @@
+{
+  "name": "tygor-example-blog",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@tygor/client": "^0.1.0"
+  }
+}

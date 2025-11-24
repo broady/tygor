@@ -1,1 +1,8 @@
 coverage.*
+node_modules
+package-lock.json
+
+# TypeScript build output (client runtime)
+client/runtime.js
+client/runtime.d.ts
+client/runtime.d.ts.map

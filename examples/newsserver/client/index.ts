@@ -1,4 +1,4 @@
-import { createClient } from '../../../client/runtime';
+import { createClient } from '@tygor/client';
 import { RPCManifest, RPCMetadata } from './src/rpc/manifest';
 import { DateTime, NewsStatusPublished, NewsStatusDraft } from './src/rpc/types';
 

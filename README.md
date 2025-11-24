@@ -44,8 +44,23 @@ In the future, tygor may generate OpenAPI specs to enable client generation in o
 
 ## Installation
 
+### Go (server-side)
+
 ```bash
 go get github.com/broady/tygor
+```
+
+### TypeScript/JavaScript (client-side)
+
+```bash
+npm install @tygor/client
+```
+
+Or with your preferred package manager:
+```bash
+pnpm add @tygor/client
+bun add @tygor/client
+yarn add @tygor/client
 ```
 
 ## Quick Start
@@ -113,15 +128,28 @@ This generates TypeScript types and a manifest describing all available RPC meth
 
 ### 5. Use the TypeScript client
 
+First, install the client runtime:
+
+```bash
+npm install @tygor/client
+```
+
 The generated client provides a clean, idiomatic API with full type safety:
 
 ```typescript
-import { createClient } from './rpc/client';
+import { createClient } from '@tygor/client';
 import type { RPCManifest } from './rpc/manifest';
+import { RPCMetadata } from './rpc/manifest';
 
-const client = createClient<RPCManifest>({
-  baseURL: 'http://localhost:8080'
-});
+const client = createClient<RPCManifest>(
+  {
+    baseUrl: 'http://localhost:8080',
+    headers: () => ({
+      'Authorization': 'Bearer my-token'  // Optional
+    })
+  },
+  RPCMetadata
+);
 
 // Type-safe calls with autocomplete
 const news = await client.News.List({ limit: 10, offset: 0 });
@@ -137,7 +165,10 @@ const created = await client.News.Create({
 try {
   await client.News.Create({ title: "x" }); // Validation error
 } catch (err) {
-  console.error(err.code, err.message); // 400, "validation failed"
+  if (err instanceof RPCError) {
+    console.error(err.code, err.message); // "invalid_argument", "validation failed"
+    console.error(err.details);           // Additional error context
+  }
 }
 ```
 

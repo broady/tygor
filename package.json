@@ -1,0 +1,13 @@
+{
+  "name": "tygor-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "client",
+    "examples/newsserver/client",
+    "examples/blog/api/client"
+  ],
+  "scripts": {
+    "build:client": "cd client && npm run build"
+  }
+}
