@@ -1,11 +1,13 @@
 package tygor
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
+	"strings"
 	"testing"
 
 	"github.com/broady/tygor/testutil"
@@ -150,6 +152,7 @@ func TestHTTPStatusFromCode(t *testing.T) {
 		{CodeUnauthenticated, http.StatusUnauthorized},
 		{CodePermissionDenied, http.StatusForbidden},
 		{CodeNotFound, http.StatusNotFound},
+		{CodeMethodNotAllowed, http.StatusMethodNotAllowed},
 		{CodeUnavailable, http.StatusServiceUnavailable},
 		{CodeCanceled, 499},
 		{CodeInternal, http.StatusInternalServerError},
@@ -170,7 +173,7 @@ func TestWriteError(t *testing.T) {
 	rpcErr := NewError(CodeNotFound, "resource not found")
 	w := httptest.NewRecorder()
 
-	writeError(w, rpcErr)
+	writeError(w, rpcErr, nil)
 
 	testutil.AssertStatus(t, w, http.StatusNotFound)
 	testutil.AssertHeader(t, w, "Content-Type", "application/json")
@@ -197,24 +200,18 @@ func TestWriteError_EncodingFailure(t *testing.T) {
 	rpcErr := NewError(CodeInternal, "test error")
 	w := &failingWriter{}
 
-	// Capture stderr to verify error logging
-	oldStderr := os.Stderr
-	r, fakeStderr, _ := os.Pipe()
-	os.Stderr = fakeStderr
+	// Use a test logger to verify error logging
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{
+		Level: slog.LevelError,
+	}))
 
-	writeError(w, rpcErr)
+	writeError(w, rpcErr, logger)
 
-	// Restore stderr
-	fakeStderr.Close()
-	os.Stderr = oldStderr
-
-	stderrOutput := make([]byte, 1024)
-	n, _ := r.Read(stderrOutput)
-	r.Close()
-
-	// Should have written error to stderr (or slog output)
-	if n > 0 {
-		t.Logf("stderr/slog output: %s", string(stderrOutput[:n]))
+	// Verify error was logged
+	logOutput := buf.String()
+	if !strings.Contains(logOutput, "failed to encode error response") {
+		t.Errorf("expected error log, got: %s", logOutput)
 	}
 
 	if !w.headerWritten {

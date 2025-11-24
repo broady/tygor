@@ -20,6 +20,7 @@ const (
 	CodeUnauthenticated  ErrorCode = "unauthenticated"
 	CodePermissionDenied ErrorCode = "permission_denied"
 	CodeNotFound         ErrorCode = "not_found"
+	CodeMethodNotAllowed ErrorCode = "method_not_allowed"
 	CodeUnavailable      ErrorCode = "unavailable"
 	CodeInternal         ErrorCode = "internal"
 	CodeCanceled         ErrorCode = "canceled"
@@ -125,6 +126,8 @@ func HTTPStatusFromCode(code ErrorCode) int {
 		return http.StatusForbidden
 	case CodeNotFound:
 		return http.StatusNotFound
+	case CodeMethodNotAllowed:
+		return http.StatusMethodNotAllowed
 	case CodeUnavailable:
 		return http.StatusServiceUnavailable
 	case CodeCanceled:
@@ -136,12 +139,15 @@ func HTTPStatusFromCode(code ErrorCode) int {
 	}
 }
 
-func writeError(w http.ResponseWriter, rpcErr *Error) {
+func writeError(w http.ResponseWriter, rpcErr *Error, logger *slog.Logger) {
+	if logger == nil {
+		logger = slog.Default()
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(HTTPStatusFromCode(rpcErr.Code))
 	if err := json.NewEncoder(w).Encode(rpcErr); err != nil {
 		// Headers already sent, nothing we can do. Log for debugging.
-		slog.Error("failed to encode error response",
+		logger.Error("failed to encode error response",
 			slog.String("code", string(rpcErr.Code)),
 			slog.String("message", rpcErr.Message),
 			slog.Any("error", err))

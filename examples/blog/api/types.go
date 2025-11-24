@@ -1,5 +1,7 @@
 package api
 
+//go:generate go run ../generate.go
+
 import "time"
 
 // User represents a user in the system.

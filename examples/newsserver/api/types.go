@@ -1,5 +1,7 @@
 package api
 
+//go:generate go run ../generate.go
+
 import "time"
 
 // NewsStatus represents the publication status of a news article.
