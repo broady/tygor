@@ -15,12 +15,14 @@ import (
 )
 
 var (
-	validate      = validator.New()
-	schemaDecoder = schema.NewDecoder()
+	validate            = validator.New()
+	schemaDecoder       = schema.NewDecoder() // lenient: ignores unknown keys
+	strictSchemaDecoder = schema.NewDecoder() // strict: errors on unknown keys
 )
 
 func init() {
 	schemaDecoder.IgnoreUnknownKeys(true)
+	strictSchemaDecoder.IgnoreUnknownKeys(false)
 }
 
 // HandlerConfig contains configuration passed from Registry to handlers.
@@ -63,11 +65,12 @@ type RPCMethod interface {
 //	func SearchUsers(ctx context.Context, req *SearchParams) ([]*User, error) { ... }
 //	Unary(SearchUsers).Method("GET")
 type Handler[Req any, Res any] struct {
-	fn             func(context.Context, Req) (Res, error)
-	method         string
-	cacheTTL       time.Duration
-	interceptors   []UnaryInterceptor
-	skipValidation bool
+	fn               func(context.Context, Req) (Res, error)
+	method           string
+	cacheTTL         time.Duration
+	interceptors     []UnaryInterceptor
+	skipValidation   bool
+	strictQueryParams bool
 }
 
 // Unary creates a new handler from a generic function for unary (non-streaming) RPCs.
@@ -111,6 +114,16 @@ func (h *Handler[Req, Res]) WithSkipValidation() *Handler[Req, Res] {
 	return h
 }
 
+// WithStrictQueryParams enables strict query parameter validation for GET requests.
+// By default, unknown query parameters are ignored (lenient mode).
+// When enabled, requests with unknown query parameters will return an error.
+// This helps catch typos and enforces exact parameter expectations.
+// Only affects GET requests; has no effect on POST/PUT/PATCH requests.
+func (h *Handler[Req, Res]) WithStrictQueryParams() *Handler[Req, Res] {
+	h.strictQueryParams = true
+	return h
+}
+
 // Metadata returns the runtime metadata for the handler.
 func (h *Handler[Req, Res]) Metadata() *meta.MethodMetadata {
 	var req Req
@@ -150,6 +163,12 @@ func (h *Handler[Req, Res]) ServeHTTP(w http.ResponseWriter, r *http.Request, co
 	// Decoding logic
 	decodeErr := func() error {
 		if h.method == "GET" {
+			// Select decoder based on strictness setting
+			decoder := schemaDecoder
+			if h.strictQueryParams {
+				decoder = strictSchemaDecoder
+			}
+
 			// schemaDecoder.Decode requires a pointer to a struct.
 			// &req is a *Req.
 			// If Req is already a pointer type (e.g. *ListNewsParams), then req is *ListNewsParams.
@@ -178,14 +197,14 @@ func (h *Handler[Req, Res]) ServeHTTP(w http.ResponseWriter, r *http.Request, co
 				val := reflect.New(reqType.Elem())
 				// val is *Elem.
 				// Decode into it
-				if err := schemaDecoder.Decode(val.Interface(), r.URL.Query()); err != nil {
+				if err := decoder.Decode(val.Interface(), r.URL.Query()); err != nil {
 					return Errorf(CodeInvalidArgument, "failed to decode query: %v", err)
 				}
 				// req = val.Interface().(Req) ??
 				req = val.Interface().(Req)
 			} else {
 				// Req is a struct. &req is *Req.
-				if err := schemaDecoder.Decode(&req, r.URL.Query()); err != nil {
+				if err := decoder.Decode(&req, r.URL.Query()); err != nil {
 					return Errorf(CodeInvalidArgument, "failed to decode query: %v", err)
 				}
 			}
