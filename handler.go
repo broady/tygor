@@ -28,6 +28,7 @@ type HandlerConfig struct {
 	ErrorTransformer   ErrorTransformer
 	MaskInternalErrors bool
 	Interceptors       []Interceptor
+	Logger             *slog.Logger
 }
 
 // RPCMethod is the interface for registered handlers.
@@ -62,10 +63,11 @@ type RPCMethod interface {
 //	func SearchUsers(ctx context.Context, req *SearchParams) ([]*User, error) { ... }
 //	NewHandler(SearchUsers).Method("GET")
 type Handler[Req any, Res any] struct {
-	fn           func(context.Context, Req) (Res, error)
-	method       string
-	cacheTTL     time.Duration
-	interceptors []Interceptor
+	fn             func(context.Context, Req) (Res, error)
+	method         string
+	cacheTTL       time.Duration
+	interceptors   []Interceptor
+	skipValidation bool
 }
 
 // NewHandler creates a new handler from a generic function.
@@ -93,8 +95,19 @@ func (h *Handler[Req, Res]) Cache(d time.Duration) *Handler[Req, Res] {
 }
 
 // WithInterceptor adds an interceptor to this handler.
+// Handler interceptors execute after global and service interceptors.
+// See Registry.WithInterceptor for the complete execution order.
 func (h *Handler[Req, Res]) WithInterceptor(i Interceptor) *Handler[Req, Res] {
 	h.interceptors = append(h.interceptors, i)
+	return h
+}
+
+// WithSkipValidation disables validation for this handler.
+// By default, all handlers validate requests using the validator package.
+// Use this when you need to handle validation manually or when the request
+// type has no validation tags.
+func (h *Handler[Req, Res]) WithSkipValidation() *Handler[Req, Res] {
+	h.skipValidation = true
 	return h
 }
 
@@ -184,8 +197,10 @@ func (h *Handler[Req, Res]) ServeHTTP(w http.ResponseWriter, r *http.Request, co
 			}
 		}
 
-		if err := validate.Struct(req); err != nil {
-			return err
+		if !h.skipValidation {
+			if err := validate.Struct(req); err != nil {
+				return err
+			}
 		}
 		return nil
 	}()
@@ -229,7 +244,11 @@ func (h *Handler[Req, Res]) ServeHTTP(w http.ResponseWriter, r *http.Request, co
 
 	if err := json.NewEncoder(w).Encode(res); err != nil {
 		// Response may be partially written, nothing we can do. Log for debugging.
-		slog.Error("failed to encode response",
+		logger := config.Logger
+		if logger == nil {
+			logger = slog.Default()
+		}
+		logger.Error("failed to encode response",
 			slog.String("service", service),
 			slog.String("method", method),
 			slog.Any("error", err))
@@ -247,5 +266,5 @@ func handleError(w http.ResponseWriter, err error, config HandlerConfig) {
 	if config.MaskInternalErrors && rpcErr.Code == CodeInternal {
 		rpcErr.Message = "internal server error"
 	}
-	writeError(w, rpcErr)
+	writeError(w, rpcErr, config.Logger)
 }

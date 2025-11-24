@@ -1,12 +1,15 @@
 package tygor
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -475,6 +478,156 @@ func TestHandler_ServeHTTP_GET_PointerRequest(t *testing.T) {
 	testutil.AssertJSONResponse(t, w, TestResponse{Message: "hello John"})
 }
 
+func TestHandler_WithSkipValidation(t *testing.T) {
+	fn := func(ctx context.Context, req TestRequest) (TestResponse, error) {
+		// Handler should receive the invalid request
+		return TestResponse{Message: "ok"}, nil
+	}
+
+	handler := NewHandler(fn).WithSkipValidation()
+
+	// Send invalid request (name too short, invalid email)
+	w := NewTestRequest().
+		POST("/test").
+		WithJSON(map[string]string{"name": "Jo", "email": "invalid"}).
+		ServeHandler(handler, HandlerConfig{})
+
+	// Should succeed because validation is skipped
+	testutil.AssertStatus(t, w, http.StatusOK)
+	testutil.AssertJSONResponse(t, w, TestResponse{Message: "ok"})
+}
+
+func TestHandler_ServeHTTP_GET_ArrayParams(t *testing.T) {
+	type GetRequest struct {
+		IDs []string `schema:"ids"`
+	}
+
+	fn := func(ctx context.Context, req GetRequest) (TestResponse, error) {
+		message := fmt.Sprintf("ids: %v", strings.Join(req.IDs, ","))
+		return TestResponse{Message: message}, nil
+	}
+
+	handler := NewHandler(fn).Method("GET")
+
+	req := httptest.NewRequest("GET", "/test?ids=1&ids=2&ids=3", nil)
+	w := httptest.NewRecorder()
+	info := &RPCInfo{Service: "TestService", Method: "TestMethod"}
+	ctx := NewTestContext(req.Context(), w, req, info)
+	req = req.WithContext(ctx)
+
+	handler.ServeHTTP(w, req, HandlerConfig{})
+
+	testutil.AssertStatus(t, w, http.StatusOK)
+	testutil.AssertJSONResponse(t, w, TestResponse{Message: "ids: 1,2,3"})
+}
+
+func TestHandler_ServeHTTP_GET_IntArrayParams(t *testing.T) {
+	type GetRequest struct {
+		Numbers []int `schema:"num"`
+	}
+
+	fn := func(ctx context.Context, req GetRequest) (TestResponse, error) {
+		sum := 0
+		for _, n := range req.Numbers {
+			sum += n
+		}
+		return TestResponse{ID: sum}, nil
+	}
+
+	handler := NewHandler(fn).Method("GET")
+
+	req := httptest.NewRequest("GET", "/test?num=10&num=20&num=30", nil)
+	w := httptest.NewRecorder()
+	info := &RPCInfo{Service: "TestService", Method: "TestMethod"}
+	ctx := NewTestContext(req.Context(), w, req, info)
+	req = req.WithContext(ctx)
+
+	handler.ServeHTTP(w, req, HandlerConfig{})
+
+	testutil.AssertStatus(t, w, http.StatusOK)
+	testutil.AssertJSONResponse(t, w, TestResponse{ID: 60})
+}
+
+func TestHandler_ServeHTTP_GET_SpecialCharacters(t *testing.T) {
+	type GetRequest struct {
+		Query string `schema:"q"`
+	}
+
+	fn := func(ctx context.Context, req GetRequest) (TestResponse, error) {
+		return TestResponse{Message: req.Query}, nil
+	}
+
+	handler := NewHandler(fn).Method("GET")
+
+	tests := []struct {
+		name     string
+		query    string
+		expected string
+	}{
+		{"spaces", "/test?q=hello+world", "hello world"},
+		{"special chars", "/test?q=a%26b%3Dc", "a&b=c"},
+		{"unicode", "/test?q=%E2%9C%93", "✓"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", tt.query, nil)
+			w := httptest.NewRecorder()
+			info := &RPCInfo{Service: "TestService", Method: "TestMethod"}
+			ctx := NewTestContext(req.Context(), w, req, info)
+			req = req.WithContext(ctx)
+
+			handler.ServeHTTP(w, req, HandlerConfig{})
+
+			testutil.AssertStatus(t, w, http.StatusOK)
+			testutil.AssertJSONResponse(t, w, TestResponse{Message: tt.expected})
+		})
+	}
+}
+
+func TestHandler_ServeHTTP_EmptyStructResponse(t *testing.T) {
+	type EmptyResponse struct{}
+
+	fn := func(ctx context.Context, req TestRequest) (EmptyResponse, error) {
+		return EmptyResponse{}, nil
+	}
+
+	handler := NewHandler(fn)
+
+	w := NewTestRequest().
+		POST("/test").
+		WithJSON(TestRequest{Name: "John", Email: "john@example.com"}).
+		ServeHandler(handler, HandlerConfig{})
+
+	testutil.AssertStatus(t, w, http.StatusOK)
+	// Empty struct should encode as {}
+	var response map[string]any
+	testutil.DecodeJSON(t, w, &response)
+	if len(response) != 0 {
+		t.Errorf("expected empty response, got %v", response)
+	}
+}
+
+func TestHandler_ServeHTTP_NilPointerResponse(t *testing.T) {
+	fn := func(ctx context.Context, req TestRequest) (*TestResponse, error) {
+		return nil, nil
+	}
+
+	handler := NewHandler(fn)
+
+	w := NewTestRequest().
+		POST("/test").
+		WithJSON(TestRequest{Name: "John", Email: "john@example.com"}).
+		ServeHandler(handler, HandlerConfig{})
+
+	testutil.AssertStatus(t, w, http.StatusOK)
+	// Nil pointer should encode as null
+	body := strings.TrimSpace(w.Body.String())
+	if body != "null" {
+		t.Errorf("expected null, got %s", body)
+	}
+}
+
 func TestHandler_ServeHTTP_ResponseEncodingError(t *testing.T) {
 	// This test simulates a response encoding error by returning a channel
 	// which cannot be JSON encoded
@@ -485,26 +638,22 @@ func TestHandler_ServeHTTP_ResponseEncodingError(t *testing.T) {
 
 	handler := NewHandler(fn)
 
-	// Capture stderr to verify error logging
-	oldStderr := os.Stderr
-	r, fakeStderr, _ := os.Pipe()
-	os.Stderr = fakeStderr
+	// Use a test logger to verify error logging
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{
+		Level: slog.LevelError,
+	}))
 
 	NewTestRequest().
 		POST("/test").
 		WithJSON(TestRequest{Name: "John", Email: "john@example.com"}).
-		ServeHandler(handler, HandlerConfig{})
+		ServeHandler(handler, HandlerConfig{
+			Logger: logger,
+		})
 
-	// Restore stderr
-	fakeStderr.Close()
-	os.Stderr = oldStderr
-
-	stderrOutput := make([]byte, 1024)
-	n, _ := r.Read(stderrOutput)
-	r.Close()
-
-	// Should have written error to stderr (or slog output)
-	if n > 0 {
-		t.Logf("stderr/slog output: %s", string(stderrOutput[:n]))
+	// Verify error was logged
+	logOutput := buf.String()
+	if !strings.Contains(logOutput, "failed to encode response") {
+		t.Errorf("expected error log, got: %s", logOutput)
 	}
 }

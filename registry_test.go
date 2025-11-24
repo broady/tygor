@@ -1,8 +1,10 @@
 package tygor
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -183,12 +185,18 @@ func TestRegistry_ServeHTTP_MethodMismatch(t *testing.T) {
 
 	reg.ServeHTTP(w, req)
 
-	testutil.AssertStatus(t, w, http.StatusBadRequest)
-	testutil.AssertJSONError(t, w, string(CodeInvalidArgument))
+	testutil.AssertStatus(t, w, http.StatusMethodNotAllowed)
+	testutil.AssertJSONError(t, w, string(CodeMethodNotAllowed))
 }
 
 func TestRegistry_ServeHTTP_WithPanic(t *testing.T) {
-	reg := NewRegistry()
+	// Use a test logger to verify panic logging
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{
+		Level: slog.LevelError,
+	}))
+
+	reg := NewRegistry().WithLogger(logger)
 
 	fn := func(ctx context.Context, req TestRequest) (TestResponse, error) {
 		panic("test panic")
@@ -205,6 +213,12 @@ func TestRegistry_ServeHTTP_WithPanic(t *testing.T) {
 
 	testutil.AssertStatus(t, w, http.StatusInternalServerError)
 	testutil.AssertJSONError(t, w, string(CodeInternal))
+
+	// Verify panic was logged
+	logOutput := buf.String()
+	if !strings.Contains(logOutput, "PANIC recovered") {
+		t.Errorf("expected panic log, got: %s", logOutput)
+	}
 }
 
 func TestRegistry_GlobalInterceptor(t *testing.T) {
@@ -267,6 +281,45 @@ func TestService_Register(t *testing.T) {
 	if _, ok := reg.routes["Test.Method"]; !ok {
 		t.Error("expected route to be registered")
 	}
+}
+
+func TestRegistry_DuplicateRouteRegistration(t *testing.T) {
+	// Use a test logger to verify duplicate registration warning
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{
+		Level: slog.LevelWarn,
+	}))
+
+	reg := NewRegistry().WithLogger(logger)
+
+	fn1 := func(ctx context.Context, req TestRequest) (TestResponse, error) {
+		return TestResponse{Message: "first"}, nil
+	}
+
+	fn2 := func(ctx context.Context, req TestRequest) (TestResponse, error) {
+		return TestResponse{Message: "second"}, nil
+	}
+
+	// Register the same route twice
+	reg.Service("Test").Register("Method", NewHandler(fn1))
+	reg.Service("Test").Register("Method", NewHandler(fn2))
+
+	// Verify warning was logged
+	logOutput := buf.String()
+	if !strings.Contains(logOutput, "duplicate route registration") {
+		t.Errorf("expected duplicate registration warning, got: %s", logOutput)
+	}
+
+	// Verify second handler is used
+	reqBody := `{"name":"John","email":"john@example.com"}`
+	req := httptest.NewRequest("POST", "/Test/Method", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	reg.ServeHTTP(w, req)
+
+	testutil.AssertStatus(t, w, http.StatusOK)
+	testutil.AssertJSONResponse(t, w, TestResponse{Message: "second"})
 }
 
 func TestService_InterceptorOrder(t *testing.T) {

@@ -2,7 +2,7 @@ package tygor
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"runtime/debug"
 	"strings"
@@ -18,6 +18,7 @@ type Registry struct {
 	maskInternalErrors bool
 	interceptors       []Interceptor
 	middlewares        []func(http.Handler) http.Handler
+	logger             *slog.Logger
 }
 
 func NewRegistry() *Registry {
@@ -42,6 +43,15 @@ func (r *Registry) WithMaskInternalErrors() *Registry {
 }
 
 // WithInterceptor adds a global interceptor.
+// Global interceptors are executed before service-level and handler-level interceptors.
+//
+// Interceptor execution order:
+//  1. Global interceptors (added via Registry.WithInterceptor)
+//  2. Service interceptors (added via Service.WithInterceptor)
+//  3. Handler interceptors (added via Handler.WithInterceptor)
+//  4. Handler function
+//
+// Within each level, interceptors execute in the order they were added.
 func (r *Registry) WithInterceptor(i Interceptor) *Registry {
 	r.interceptors = append(r.interceptors, i)
 	return r
@@ -52,6 +62,13 @@ func (r *Registry) WithInterceptor(i Interceptor) *Registry {
 // Use Handler() to get the wrapped handler.
 func (r *Registry) WithMiddleware(mw func(http.Handler) http.Handler) *Registry {
 	r.middlewares = append(r.middlewares, mw)
+	return r
+}
+
+// WithLogger sets a custom logger for the registry.
+// If not set, slog.Default() will be used.
+func (r *Registry) WithLogger(logger *slog.Logger) *Registry {
+	r.logger = logger
 	return r
 }
 
@@ -79,8 +96,14 @@ func (r *Registry) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	defer func() {
 		if rec := recover(); rec != nil {
 			stack := debug.Stack()
-			log.Printf("PANIC recovered: %v\nStack trace:\n%s", rec, stack)
-			writeError(w, NewError(CodeInternal, fmt.Sprintf("internal server error (panic): %v", rec)))
+			logger := r.logger
+			if logger == nil {
+				logger = slog.Default()
+			}
+			logger.Error("PANIC recovered",
+				slog.Any("panic", rec),
+				slog.String("stack", string(stack)))
+			writeError(w, NewError(CodeInternal, fmt.Sprintf("internal server error (panic): %v", rec)), r.logger)
 		}
 	}()
 
@@ -95,7 +118,7 @@ func (r *Registry) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// Normalize path
 	parts := strings.Split(path, "/")
 	if len(parts) < 2 {
-		writeError(w, NewError(CodeNotFound, "route not found"))
+		writeError(w, NewError(CodeNotFound, "route not found"), r.logger)
 		return
 	}
 
@@ -108,14 +131,14 @@ func (r *Registry) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	r.mu.RUnlock()
 
 	if !ok {
-		writeError(w, NewError(CodeNotFound, "route not found"))
+		writeError(w, NewError(CodeNotFound, "route not found"), r.logger)
 		return
 	}
 
 	// Check HTTP Method
 	meta := handler.Metadata()
 	if req.Method != meta.Method {
-		writeError(w, Errorf(CodeInvalidArgument, "method %s not allowed, expected %s", req.Method, meta.Method))
+		writeError(w, Errorf(CodeMethodNotAllowed, "method %s not allowed, expected %s", req.Method, meta.Method), r.logger)
 		return
 	}
 
@@ -129,6 +152,7 @@ func (r *Registry) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		ErrorTransformer:   r.errorTransformer,
 		MaskInternalErrors: r.maskInternalErrors,
 		Interceptors:       r.interceptors,
+		Logger:             r.logger,
 	}
 
 	// Execute handler
@@ -142,16 +166,32 @@ type Service struct {
 }
 
 // WithInterceptor adds an interceptor to this service.
+// Service interceptors execute after global interceptors but before handler interceptors.
+// See Registry.WithInterceptor for the complete execution order.
 func (s *Service) WithInterceptor(i Interceptor) *Service {
 	s.interceptors = append(s.interceptors, i)
 	return s
 }
 
 // Register registers a handler for the given operation name.
+// If a handler is already registered for this service and method, it will be replaced
+// and a warning will be logged.
 func (s *Service) Register(name string, handler RPCMethod) {
 	key := s.name + "." + name
 	s.registry.mu.Lock()
 	defer s.registry.mu.Unlock()
+
+	// Check for duplicate registration
+	if _, exists := s.registry.routes[key]; exists {
+		logger := s.registry.logger
+		if logger == nil {
+			logger = slog.Default()
+		}
+		logger.Warn("duplicate route registration",
+			slog.String("service", s.name),
+			slog.String("method", name),
+			slog.String("route", key))
+	}
 
 	// We need to wrap the handler or somehow attach the service interceptors?
 	// The handler.ServeHTTP takes a list of prefix interceptors.
@@ -187,6 +227,7 @@ func (h *serviceWrappedHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 		ErrorTransformer:   config.ErrorTransformer,
 		MaskInternalErrors: config.MaskInternalErrors,
 		Interceptors:       combined,
+		Logger:             config.Logger,
 	}
 
 	h.inner.ServeHTTP(w, r, serviceConfig)
