@@ -328,6 +328,11 @@ reg := tygor.NewRegistry().
 
 For GET requests, the library MUST decode query parameters using a decoder compatible with `gorilla/schema`.
 
+**Important:** GET requests use `schema` struct tags, NOT `json` tags. The `json` tags are ignored by the query parameter decoder.
+
+**Case-Insensitive Matching:**
+Query parameter names are matched case-insensitively. Without a `schema` tag, the field name is used (e.g., field `Limit` matches query param `limit`, `Limit`, or `LIMIT`). For clarity, always use explicit `schema` tags.
+
 **Array Handling:**
 Arrays MUST be decoded from the "repeat" format: `?ids=1&ids=2&ids=3`
 

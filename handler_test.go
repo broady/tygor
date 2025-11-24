@@ -827,3 +827,76 @@ func TestHandler_ServeHTTP_MaxRequestBodySize_DefaultLimit(t *testing.T) {
 	testutil.AssertStatus(t, w, http.StatusBadRequest)
 	testutil.AssertJSONError(t, w, string(CodeInvalidArgument))
 }
+
+// TestHandler_GET_TagBehavior tests which struct tags work for GET query param decoding.
+// gorilla/schema uses "schema" tags by default, NOT "json" tags.
+// IMPORTANT: gorilla/schema uses case-insensitive matching for field names.
+func TestHandler_GET_TagBehavior(t *testing.T) {
+	t.Run("schema_tags_work", func(t *testing.T) {
+		type Req struct {
+			Value string `schema:"myvalue"`
+		}
+		fn := func(ctx context.Context, req Req) (TestResponse, error) {
+			return TestResponse{Message: req.Value}, nil
+		}
+		w := NewTestRequest().
+			GET("/test").
+			WithQuery("myvalue", "hello").
+			ServeHandler(UnaryGet(fn), HandlerConfig{})
+
+		testutil.AssertStatus(t, w, http.StatusOK)
+		testutil.AssertJSONResponse(t, w, TestResponse{Message: "hello"})
+	})
+
+	t.Run("json_tags_are_ignored", func(t *testing.T) {
+		type Req struct {
+			Value string `json:"myjsonvalue"`
+		}
+		fn := func(ctx context.Context, req Req) (TestResponse, error) {
+			return TestResponse{Message: req.Value}, nil
+		}
+		// Using "myjsonvalue" which is the json tag - this should NOT work
+		w := NewTestRequest().
+			GET("/test").
+			WithQuery("myjsonvalue", "hello").
+			ServeHandler(UnaryGet(fn), HandlerConfig{})
+
+		testutil.AssertStatus(t, w, http.StatusOK)
+		// Value should be empty because json tag is ignored by gorilla/schema
+		testutil.AssertJSONResponse(t, w, TestResponse{Message: ""})
+	})
+
+	t.Run("field_name_works_as_default", func(t *testing.T) {
+		type Req struct {
+			Value string `json:"myjsonvalue"` // json tag ignored
+		}
+		fn := func(ctx context.Context, req Req) (TestResponse, error) {
+			return TestResponse{Message: req.Value}, nil
+		}
+		// Using "Value" (field name) - this should work
+		w := NewTestRequest().
+			GET("/test").
+			WithQuery("Value", "hello").
+			ServeHandler(UnaryGet(fn), HandlerConfig{})
+
+		testutil.AssertStatus(t, w, http.StatusOK)
+		testutil.AssertJSONResponse(t, w, TestResponse{Message: "hello"})
+	})
+
+	t.Run("field_name_is_case_insensitive", func(t *testing.T) {
+		type Req struct {
+			Value string // no tags at all
+		}
+		fn := func(ctx context.Context, req Req) (TestResponse, error) {
+			return TestResponse{Message: req.Value}, nil
+		}
+		// Using lowercase "value" for field name "Value" - works due to case-insensitive matching
+		w := NewTestRequest().
+			GET("/test").
+			WithQuery("value", "hello").
+			ServeHandler(UnaryGet(fn), HandlerConfig{})
+
+		testutil.AssertStatus(t, w, http.StatusOK)
+		testutil.AssertJSONResponse(t, w, TestResponse{Message: "hello"})
+	})
+}

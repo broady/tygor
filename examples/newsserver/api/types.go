@@ -33,9 +33,9 @@ type News struct {
 // ListNewsParams contains pagination parameters for listing news articles.
 type ListNewsParams struct {
 	// Limit is the maximum number of articles to return.
-	Limit *int32 `json:"limit,omitempty"`
+	Limit *int32 `schema:"limit"`
 	// Offset is the number of articles to skip.
-	Offset *int32 `json:"offset,omitempty"`
+	Offset *int32 `schema:"offset"`
 }
 
 // CreateNewsParams contains the parameters for creating a new news article.

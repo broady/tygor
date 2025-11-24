@@ -332,7 +332,9 @@ http.ListenAndServe(":8080", reg.Handler())
 
 ## Validation
 
-Request validation uses struct tags via the `validator/v10` package:
+### POST Requests
+
+POST request bodies are validated using struct tags via the `validator/v10` package:
 
 ```go
 type CreateParams struct {
@@ -340,6 +342,22 @@ type CreateParams struct {
     Email string `json:"email" validate:"required,email"`
 }
 ```
+
+### GET Requests
+
+GET request query parameters are decoded using `gorilla/schema` and then validated with `validator/v10`:
+
+```go
+type ListParams struct {
+    Limit  int    `schema:"limit" validate:"min=0,max=100"`
+    Offset int    `schema:"offset" validate:"min=0"`
+    Status string `schema:"status" validate:"omitempty,oneof=draft published"`
+}
+```
+
+Query: `/News/List?limit=10&offset=0&status=published`
+
+**Note:** `gorilla/schema` uses case-insensitive matching for query parameter names. Without a `schema` tag, the field name is used (e.g., field `Limit` matches query param `limit`, `Limit`, or `LIMIT`). For clarity, always use explicit `schema` tags.
 
 ## Caching
 
