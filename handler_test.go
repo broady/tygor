@@ -430,7 +430,7 @@ func TestHandler_ChainedInterceptors(t *testing.T) {
 		POST("/test").
 		WithJSON(TestRequest{Name: "John", Email: "john@example.com"}).
 		ServeHandler(handler, HandlerConfig{
-			Interceptors: []Interceptor{configInterceptor},
+			Interceptors: []UnaryInterceptor{configInterceptor},
 		})
 
 	// Expected order: config -> interceptor1 -> interceptor2 -> handler -> interceptor2 -> interceptor1 -> config

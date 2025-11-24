@@ -503,7 +503,7 @@ func TestServiceWrappedHandler_Metadata(t *testing.T) {
 
 	wrapped := &serviceWrappedHandler{
 		inner:        handler,
-		interceptors: []Interceptor{},
+		interceptors: []UnaryInterceptor{},
 	}
 
 	meta := wrapped.Metadata()

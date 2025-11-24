@@ -123,7 +123,7 @@ reg := tygor.NewRegistry().WithErrorTransformer(func(err error) *tygor.Error {
 
 **Interceptor chain:** Global → Service → Handler. Signature:
 ```go
-type Interceptor func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error)
+type UnaryInterceptor func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error)
 ```
 
 **Context API:**

@@ -10,7 +10,7 @@ import (
 
 // LoggingInterceptor creates an interceptor that logs RPC calls using slog.
 // It logs the start and end of each RPC call, including duration and error status.
-func LoggingInterceptor(logger *slog.Logger) tygor.Interceptor {
+func LoggingInterceptor(logger *slog.Logger) tygor.UnaryInterceptor {
 	if logger == nil {
 		logger = slog.Default()
 	}

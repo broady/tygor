@@ -7,7 +7,7 @@ import (
 )
 
 func TestChainInterceptors_Empty(t *testing.T) {
-	chain := chainInterceptors([]Interceptor{})
+	chain := chainInterceptors([]UnaryInterceptor{})
 	if chain != nil {
 		t.Error("expected nil chain for empty interceptors")
 	}
@@ -20,7 +20,7 @@ func TestChainInterceptors_Single(t *testing.T) {
 		return handler(ctx, req)
 	}
 
-	chain := chainInterceptors([]Interceptor{interceptor})
+	chain := chainInterceptors([]UnaryInterceptor{interceptor})
 	if chain == nil {
 		t.Fatal("expected non-nil chain")
 	}
@@ -66,7 +66,7 @@ func TestChainInterceptors_Multiple(t *testing.T) {
 		return res, err
 	}
 
-	chain := chainInterceptors([]Interceptor{interceptor1, interceptor2, interceptor3})
+	chain := chainInterceptors([]UnaryInterceptor{interceptor1, interceptor2, interceptor3})
 	if chain == nil {
 		t.Fatal("expected non-nil chain")
 	}
@@ -112,7 +112,7 @@ func TestChainInterceptors_ErrorPropagation(t *testing.T) {
 		return handler(ctx, req)
 	}
 
-	chain := chainInterceptors([]Interceptor{interceptor1, interceptor2, interceptor3})
+	chain := chainInterceptors([]UnaryInterceptor{interceptor1, interceptor2, interceptor3})
 
 	info := &RPCInfo{Service: "Test", Method: "Method"}
 	handler := func(ctx context.Context, req any) (any, error) {
@@ -135,7 +135,7 @@ func TestChainInterceptors_ModifyRequest(t *testing.T) {
 		return handler(ctx, "modified")
 	}
 
-	chain := chainInterceptors([]Interceptor{interceptor1})
+	chain := chainInterceptors([]UnaryInterceptor{interceptor1})
 
 	info := &RPCInfo{Service: "Test", Method: "Method"}
 	handler := func(ctx context.Context, req any) (any, error) {
@@ -164,7 +164,7 @@ func TestChainInterceptors_ModifyResponse(t *testing.T) {
 		return res.(string) + "-modified", nil
 	}
 
-	chain := chainInterceptors([]Interceptor{interceptor1})
+	chain := chainInterceptors([]UnaryInterceptor{interceptor1})
 
 	info := &RPCInfo{Service: "Test", Method: "Method"}
 	handler := func(ctx context.Context, req any) (any, error) {
@@ -190,7 +190,7 @@ func TestChainInterceptors_ContextPropagation(t *testing.T) {
 		return handler(ctx, req)
 	}
 
-	chain := chainInterceptors([]Interceptor{interceptor1})
+	chain := chainInterceptors([]UnaryInterceptor{interceptor1})
 
 	info := &RPCInfo{Service: "Test", Method: "Method"}
 	handler := func(ctx context.Context, req any) (any, error) {
@@ -220,7 +220,7 @@ func TestChainInterceptors_InfoPassed(t *testing.T) {
 		return handler(ctx, req)
 	}
 
-	chain := chainInterceptors([]Interceptor{interceptor})
+	chain := chainInterceptors([]UnaryInterceptor{interceptor})
 
 	handler := func(ctx context.Context, req any) (any, error) {
 		return nil, nil

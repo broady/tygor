@@ -27,7 +27,7 @@ func init() {
 type HandlerConfig struct {
 	ErrorTransformer   ErrorTransformer
 	MaskInternalErrors bool
-	Interceptors       []Interceptor
+	Interceptors       []UnaryInterceptor
 	Logger             *slog.Logger
 }
 
@@ -66,7 +66,7 @@ type Handler[Req any, Res any] struct {
 	fn             func(context.Context, Req) (Res, error)
 	method         string
 	cacheTTL       time.Duration
-	interceptors   []Interceptor
+	interceptors   []UnaryInterceptor
 	skipValidation bool
 }
 
@@ -97,7 +97,7 @@ func (h *Handler[Req, Res]) Cache(d time.Duration) *Handler[Req, Res] {
 // WithUnaryInterceptor adds an interceptor to this handler.
 // Handler interceptors execute after global and service interceptors.
 // See Registry.WithUnaryInterceptor for the complete execution order.
-func (h *Handler[Req, Res]) WithUnaryInterceptor(i Interceptor) *Handler[Req, Res] {
+func (h *Handler[Req, Res]) WithUnaryInterceptor(i UnaryInterceptor) *Handler[Req, Res] {
 	h.interceptors = append(h.interceptors, i)
 	return h
 }
@@ -137,7 +137,7 @@ func (h *Handler[Req, Res]) ServeHTTP(w http.ResponseWriter, r *http.Request, co
 	// 2. Combine Interceptors
 	// Config contains: Global + Service interceptors
 	// We append Handler-level interceptors
-	allInterceptors := make([]Interceptor, 0, len(config.Interceptors)+len(h.interceptors))
+	allInterceptors := make([]UnaryInterceptor, 0, len(config.Interceptors)+len(h.interceptors))
 	allInterceptors = append(allInterceptors, config.Interceptors...)
 	allInterceptors = append(allInterceptors, h.interceptors...)
 

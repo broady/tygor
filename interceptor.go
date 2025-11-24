@@ -11,13 +11,13 @@ type RPCInfo struct {
 // HandlerFunc represents the next handler in the chain.
 type HandlerFunc func(ctx context.Context, req any) (res any, err error)
 
-// Interceptor is a generic hook that wraps the RPC handler execution.
+// UnaryInterceptor is a generic hook that wraps the RPC handler execution for unary (non-streaming) calls.
 // req/res are pointers to the structs.
-type Interceptor func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (res any, err error)
+type UnaryInterceptor func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (res any, err error)
 
 // chainInterceptors combines multiple interceptors into a single one.
 // The first interceptor in the slice is the outer-most one (runs first).
-func chainInterceptors(interceptors []Interceptor) Interceptor {
+func chainInterceptors(interceptors []UnaryInterceptor) UnaryInterceptor {
 	if len(interceptors) == 0 {
 		return nil
 	}

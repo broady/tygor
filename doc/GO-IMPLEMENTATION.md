@@ -430,7 +430,7 @@ This ensures that only handlers created via `tygor.NewHandler` can be registered
 The library MUST support interceptors (middleware) with the following signature:
 
 ```go
-type Interceptor func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (res any, err error)
+type UnaryInterceptor func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (res any, err error)
 
 type HandlerFunc func(ctx context.Context, req any) (res any, err error)
 

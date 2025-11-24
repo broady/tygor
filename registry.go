@@ -16,7 +16,7 @@ type Registry struct {
 	routes             map[string]RPCMethod
 	errorTransformer   ErrorTransformer
 	maskInternalErrors bool
-	interceptors       []Interceptor
+	interceptors       []UnaryInterceptor
 	middlewares        []func(http.Handler) http.Handler
 	logger             *slog.Logger
 }
@@ -52,7 +52,7 @@ func (r *Registry) WithMaskInternalErrors() *Registry {
 //  4. Handler function
 //
 // Within each level, interceptors execute in the order they were added.
-func (r *Registry) WithUnaryInterceptor(i Interceptor) *Registry {
+func (r *Registry) WithUnaryInterceptor(i UnaryInterceptor) *Registry {
 	r.interceptors = append(r.interceptors, i)
 	return r
 }
@@ -162,13 +162,13 @@ func (r *Registry) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 type Service struct {
 	registry     *Registry
 	name         string
-	interceptors []Interceptor
+	interceptors []UnaryInterceptor
 }
 
 // WithUnaryInterceptor adds an interceptor to this service.
 // Service interceptors execute after global interceptors but before handler interceptors.
 // See Registry.WithUnaryInterceptor for the complete execution order.
-func (s *Service) WithUnaryInterceptor(i Interceptor) *Service {
+func (s *Service) WithUnaryInterceptor(i UnaryInterceptor) *Service {
 	s.interceptors = append(s.interceptors, i)
 	return s
 }
@@ -213,12 +213,12 @@ func (s *Service) Register(name string, handler RPCMethod) {
 
 type serviceWrappedHandler struct {
 	inner        RPCMethod
-	interceptors []Interceptor
+	interceptors []UnaryInterceptor
 }
 
 func (h *serviceWrappedHandler) ServeHTTP(w http.ResponseWriter, r *http.Request, config HandlerConfig) {
 	// Combine: Global (config.Interceptors) + Service (h.interceptors)
-	combined := make([]Interceptor, 0, len(config.Interceptors)+len(h.interceptors))
+	combined := make([]UnaryInterceptor, 0, len(config.Interceptors)+len(h.interceptors))
 	combined = append(combined, config.Interceptors...)
 	combined = append(combined, h.interceptors...)
 
