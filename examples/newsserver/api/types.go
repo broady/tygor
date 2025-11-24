@@ -1,6 +1,6 @@
 package api
 
-//go:generate go run ../ -gen
+//go:generate go run ../ -gen -out ../client/src/rpc
 
 import "time"
 
@@ -33,9 +33,9 @@ type News struct {
 // ListNewsParams contains pagination parameters for listing news articles.
 type ListNewsParams struct {
 	// Limit is the maximum number of articles to return.
-	Limit *int32 `schema:"limit"`
+	Limit *int32 `json:"limit" schema:"limit"`
 	// Offset is the number of articles to skip.
-	Offset *int32 `schema:"offset"`
+	Offset *int32 `json:"offset" schema:"offset"`
 }
 
 // CreateNewsParams contains the parameters for creating a new news article.

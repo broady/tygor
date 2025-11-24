@@ -1,6 +1,6 @@
 package api
 
-//go:generate go run ../ -gen
+//go:generate go run ../ -gen -out ../client/src/rpc
 
 import "time"
 
@@ -66,15 +66,15 @@ type UpdatePostRequest struct {
 
 // ListPostsParams are the query parameters for listing posts.
 type ListPostsParams struct {
-	AuthorID  *int64 `schema:"author_id"`
-	Published *bool  `schema:"published"`
-	Limit     int32  `schema:"limit"`
-	Offset    int32  `schema:"offset"`
+	AuthorID  *int64 `json:"author_id" schema:"author_id"`
+	Published *bool  `json:"published" schema:"published"`
+	Limit     int32  `json:"limit" schema:"limit"`
+	Offset    int32  `json:"offset" schema:"offset"`
 }
 
 // GetPostParams are the query parameters for getting a post.
 type GetPostParams struct {
-	PostID int64 `schema:"post_id" validate:"required,gt=0"`
+	PostID int64 `json:"post_id" schema:"post_id" validate:"required,gt=0"`
 }
 
 // PublishPostRequest marks a post as published.
@@ -90,7 +90,7 @@ type CreateCommentRequest struct {
 
 // ListCommentsParams are the query parameters for listing comments.
 type ListCommentsParams struct {
-	PostID int64 `schema:"post_id" validate:"required,gt=0"`
-	Limit  int32 `schema:"limit"`
-	Offset int32 `schema:"offset"`
+	PostID int64 `json:"post_id" schema:"post_id" validate:"required,gt=0"`
+	Limit  int32 `json:"limit" schema:"limit"`
+	Offset int32 `json:"offset" schema:"offset"`
 }

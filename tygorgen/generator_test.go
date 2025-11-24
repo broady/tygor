@@ -413,3 +413,55 @@ func TestGenerate_CustomConfig(t *testing.T) {
 	// Just verify it doesn't error with custom config
 	// The actual tygo output format depends on tygo internals
 }
+
+// TestGenerate_GETParamsUseLowercaseNames verifies that GET request parameter types
+// generate TypeScript with lowercase property names (matching schema tags via json tags).
+// This ensures the TypeScript client sends query params that match what Go expects.
+func TestGenerate_GETParamsUseLowercaseNames(t *testing.T) {
+	reg := tygor.NewRegistry()
+	outDir := t.TempDir()
+
+	// Register a GET handler using ListPostsParams which has both json and schema tags
+	listHandler := func(ctx context.Context, req *api.ListPostsParams) ([]*api.Post, error) {
+		return nil, nil
+	}
+	reg.Service("Posts").Register("List", tygor.UnaryGet(listHandler))
+
+	cfg := &Config{OutDir: outDir}
+
+	err := Generate(reg, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Read the generated types file
+	typesPath := filepath.Join(outDir, "types_github_com_broady_tygor_examples_blog_api.ts")
+	content, err := os.ReadFile(typesPath)
+	if err != nil {
+		t.Fatalf("failed to read generated types: %v", err)
+	}
+	typesStr := string(content)
+
+	// Verify ListPostsParams has lowercase property names (from json tags)
+	// These should match the schema tags used for query parameter decoding
+	if !strings.Contains(typesStr, "author_id") {
+		t.Error("ListPostsParams should have 'author_id' property (lowercase)")
+	}
+	if !strings.Contains(typesStr, "published") {
+		t.Error("ListPostsParams should have 'published' property (lowercase)")
+	}
+	if !strings.Contains(typesStr, "limit") {
+		t.Error("ListPostsParams should have 'limit' property (lowercase)")
+	}
+	if !strings.Contains(typesStr, "offset") {
+		t.Error("ListPostsParams should have 'offset' property (lowercase)")
+	}
+
+	// Verify we DON'T have the capitalized Go field names
+	if strings.Contains(typesStr, "AuthorID") {
+		t.Error("ListPostsParams should NOT have 'AuthorID' - should use lowercase 'author_id'")
+	}
+	if strings.Contains(typesStr, "Published:") {
+		t.Error("ListPostsParams should NOT have 'Published' - should use lowercase 'published'")
+	}
+}

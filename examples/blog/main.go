@@ -17,6 +17,7 @@ import (
 	"github.com/broady/tygor"
 	"github.com/broady/tygor/examples/blog/api"
 	"github.com/broady/tygor/middleware"
+	"github.com/broady/tygor/tygorgen"
 )
 
 // In-memory database (for demo purposes)
@@ -427,6 +428,8 @@ func ListComments(ctx context.Context, req *api.ListCommentsParams) ([]*api.Comm
 
 func main() {
 	port := flag.String("port", "8080", "Server port")
+	genFlag := flag.Bool("gen", false, "Generate TypeScript types and manifest")
+	outDir := flag.String("out", "./api/client/src/rpc", "Output directory for generation")
 	flag.Parse()
 
 	// Configure structured logging
@@ -464,6 +467,21 @@ func main() {
 	commentService := reg.Service("Comments").WithUnaryInterceptor(requireAuth)
 	commentService.Register("Create", tygor.Unary(CreateComment))
 	commentService.Register("List", tygor.UnaryGet(ListComments))
+
+	// Generation Mode
+	if *genFlag {
+		fmt.Printf("Generating types to %s...\n", *outDir)
+		if err := os.MkdirAll(*outDir, 0755); err != nil {
+			log.Fatal(err)
+		}
+		if err := tygorgen.Generate(reg, &tygorgen.Config{
+			OutDir: *outDir,
+		}); err != nil {
+			log.Fatalf("Generation failed: %v", err)
+		}
+		fmt.Println("Done.")
+		return
+	}
 
 	// Start server
 	addr := ":" + *port

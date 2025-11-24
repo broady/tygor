@@ -75,16 +75,16 @@ export interface UpdatePostRequest {
  * ListPostsParams are the query parameters for listing posts.
  */
 export interface ListPostsParams {
-  AuthorID?: number /* int64 */;
-  Published?: boolean;
-  Limit: number /* int32 */;
-  Offset: number /* int32 */;
+  author_id?: number /* int64 */;
+  published?: boolean;
+  limit: number /* int32 */;
+  offset: number /* int32 */;
 }
 /**
  * GetPostParams are the query parameters for getting a post.
  */
 export interface GetPostParams {
-  PostID: number /* int64 */;
+  post_id: number /* int64 */;
 }
 /**
  * PublishPostRequest marks a post as published.
@@ -103,7 +103,7 @@ export interface CreateCommentRequest {
  * ListCommentsParams are the query parameters for listing comments.
  */
 export interface ListCommentsParams {
-  PostID: number /* int64 */;
-  Limit: number /* int32 */;
-  Offset: number /* int32 */;
+  post_id: number /* int64 */;
+  limit: number /* int32 */;
+  offset: number /* int32 */;
 }
