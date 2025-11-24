@@ -42,17 +42,17 @@ func (r *Registry) WithMaskInternalErrors() *Registry {
 	return r
 }
 
-// WithInterceptor adds a global interceptor.
+// WithUnaryInterceptor adds a global interceptor.
 // Global interceptors are executed before service-level and handler-level interceptors.
 //
 // Interceptor execution order:
-//  1. Global interceptors (added via Registry.WithInterceptor)
-//  2. Service interceptors (added via Service.WithInterceptor)
-//  3. Handler interceptors (added via Handler.WithInterceptor)
+//  1. Global interceptors (added via Registry.WithUnaryInterceptor)
+//  2. Service interceptors (added via Service.WithUnaryInterceptor)
+//  3. Handler interceptors (added via Handler.WithUnaryInterceptor)
 //  4. Handler function
 //
 // Within each level, interceptors execute in the order they were added.
-func (r *Registry) WithInterceptor(i Interceptor) *Registry {
+func (r *Registry) WithUnaryInterceptor(i Interceptor) *Registry {
 	r.interceptors = append(r.interceptors, i)
 	return r
 }
@@ -165,10 +165,10 @@ type Service struct {
 	interceptors []Interceptor
 }
 
-// WithInterceptor adds an interceptor to this service.
+// WithUnaryInterceptor adds an interceptor to this service.
 // Service interceptors execute after global interceptors but before handler interceptors.
-// See Registry.WithInterceptor for the complete execution order.
-func (s *Service) WithInterceptor(i Interceptor) *Service {
+// See Registry.WithUnaryInterceptor for the complete execution order.
+func (s *Service) WithUnaryInterceptor(i Interceptor) *Service {
 	s.interceptors = append(s.interceptors, i)
 	return s
 }

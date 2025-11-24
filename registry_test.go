@@ -41,12 +41,12 @@ func TestRegistry_WithMaskInternalErrors(t *testing.T) {
 	}
 }
 
-func TestRegistry_WithInterceptor(t *testing.T) {
+func TestRegistry_WithUnaryInterceptor(t *testing.T) {
 	interceptor := func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error) {
 		return handler(ctx, req)
 	}
 
-	reg := NewRegistry().WithInterceptor(interceptor)
+	reg := NewRegistry().WithUnaryInterceptor(interceptor)
 	if len(reg.interceptors) != 1 {
 		t.Errorf("expected 1 interceptor, got %d", len(reg.interceptors))
 	}
@@ -224,7 +224,7 @@ func TestRegistry_ServeHTTP_WithPanic(t *testing.T) {
 func TestRegistry_GlobalInterceptor(t *testing.T) {
 	interceptorCalled := false
 
-	reg := NewRegistry().WithInterceptor(func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error) {
+	reg := NewRegistry().WithUnaryInterceptor(func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error) {
 		interceptorCalled = true
 		if info.Service != "Test" || info.Method != "Method" {
 			t.Errorf("unexpected RPC info: %v", info)
@@ -250,14 +250,14 @@ func TestRegistry_GlobalInterceptor(t *testing.T) {
 	}
 }
 
-func TestService_WithInterceptor(t *testing.T) {
+func TestService_WithUnaryInterceptor(t *testing.T) {
 	reg := NewRegistry()
 
 	interceptor := func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error) {
 		return handler(ctx, req)
 	}
 
-	service := reg.Service("Test").WithInterceptor(interceptor)
+	service := reg.Service("Test").WithUnaryInterceptor(interceptor)
 
 	if len(service.interceptors) != 1 {
 		t.Errorf("expected 1 service interceptor, got %d", len(service.interceptors))
@@ -340,15 +340,15 @@ func TestService_InterceptorOrder(t *testing.T) {
 		return handler(ctx, req)
 	}
 
-	reg := NewRegistry().WithInterceptor(globalInterceptor)
+	reg := NewRegistry().WithUnaryInterceptor(globalInterceptor)
 
 	fn := func(ctx context.Context, req TestRequest) (TestResponse, error) {
 		callOrder = append(callOrder, "fn")
 		return TestResponse{Message: "ok"}, nil
 	}
 
-	handler := Unary(fn).WithInterceptor(handlerInterceptor)
-	reg.Service("Test").WithInterceptor(serviceInterceptor).Register("Method", handler)
+	handler := Unary(fn).WithUnaryInterceptor(handlerInterceptor)
+	reg.Service("Test").WithUnaryInterceptor(serviceInterceptor).Register("Method", handler)
 
 	reqBody := `{"name":"John","email":"john@example.com"}`
 	req := httptest.NewRequest("POST", "/Test/Method", strings.NewReader(reqBody))

@@ -66,7 +66,7 @@ func TestHandler_Cache(t *testing.T) {
 	}
 }
 
-func TestHandler_WithInterceptor(t *testing.T) {
+func TestHandler_WithUnaryInterceptor(t *testing.T) {
 	fn := func(ctx context.Context, req TestRequest) (TestResponse, error) {
 		return TestResponse{}, nil
 	}
@@ -75,7 +75,7 @@ func TestHandler_WithInterceptor(t *testing.T) {
 		return handler(ctx, req)
 	}
 
-	handler := Unary(fn).WithInterceptor(interceptor)
+	handler := Unary(fn).WithUnaryInterceptor(interceptor)
 	if len(handler.interceptors) != 1 {
 		t.Errorf("expected 1 interceptor, got %d", len(handler.interceptors))
 	}
@@ -211,7 +211,7 @@ func TestHandler_ServeHTTP_WithCache(t *testing.T) {
 	testutil.AssertHeader(t, w, "Cache-Control", "max-age=60")
 }
 
-func TestHandler_ServeHTTP_WithInterceptor(t *testing.T) {
+func TestHandler_ServeHTTP_WithUnaryInterceptor(t *testing.T) {
 	interceptorCalled := false
 
 	fn := func(ctx context.Context, req TestRequest) (TestResponse, error) {
@@ -223,7 +223,7 @@ func TestHandler_ServeHTTP_WithInterceptor(t *testing.T) {
 		return handler(ctx, req)
 	}
 
-	handler := Unary(fn).WithInterceptor(interceptor)
+	handler := Unary(fn).WithUnaryInterceptor(interceptor)
 
 	NewTestRequest().
 		POST("/test").
@@ -335,7 +335,7 @@ func TestHandler_ServeHTTP_InterceptorModifiesRequest(t *testing.T) {
 		return handler(ctx, r)
 	}
 
-	handler := Unary(fn).WithInterceptor(interceptor)
+	handler := Unary(fn).WithUnaryInterceptor(interceptor)
 
 	w := NewTestRequest().
 		POST("/test").
@@ -416,7 +416,7 @@ func TestHandler_ChainedInterceptors(t *testing.T) {
 		return res, err
 	}
 
-	handler := Unary(fn).WithInterceptor(interceptor1).WithInterceptor(interceptor2)
+	handler := Unary(fn).WithUnaryInterceptor(interceptor1).WithUnaryInterceptor(interceptor2)
 
 	// Add config interceptor as well
 	configInterceptor := func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error) {

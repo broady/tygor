@@ -433,7 +433,7 @@ func main() {
 
 	// Create registry with global middleware and interceptors
 	reg := tygor.NewRegistry().
-		WithInterceptor(middleware.LoggingInterceptor(logger)).
+		WithUnaryInterceptor(middleware.LoggingInterceptor(logger)).
 		WithMiddleware(middleware.CORS(middleware.DefaultCORSConfig()))
 
 	// User Service (public endpoints)
@@ -450,14 +450,14 @@ func main() {
 
 	// Private endpoints (require authentication)
 	postService.Register("Create",
-		tygor.Unary(CreatePost).WithInterceptor(requireAuth))
+		tygor.Unary(CreatePost).WithUnaryInterceptor(requireAuth))
 	postService.Register("Update",
-		tygor.Unary(UpdatePost).WithInterceptor(requireAuth))
+		tygor.Unary(UpdatePost).WithUnaryInterceptor(requireAuth))
 	postService.Register("Publish",
-		tygor.Unary(PublishPost).WithInterceptor(requireAuth))
+		tygor.Unary(PublishPost).WithUnaryInterceptor(requireAuth))
 
 	// Comment Service (requires authentication)
-	commentService := reg.Service("Comments").WithInterceptor(requireAuth)
+	commentService := reg.Service("Comments").WithUnaryInterceptor(requireAuth)
 	commentService.Register("Create", tygor.Unary(CreateComment))
 	commentService.Register("List", tygor.Unary(ListComments).Method("GET"))
 

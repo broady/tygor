@@ -94,10 +94,10 @@ func (h *Handler[Req, Res]) Cache(d time.Duration) *Handler[Req, Res] {
 	return h
 }
 
-// WithInterceptor adds an interceptor to this handler.
+// WithUnaryInterceptor adds an interceptor to this handler.
 // Handler interceptors execute after global and service interceptors.
-// See Registry.WithInterceptor for the complete execution order.
-func (h *Handler[Req, Res]) WithInterceptor(i Interceptor) *Handler[Req, Res] {
+// See Registry.WithUnaryInterceptor for the complete execution order.
+func (h *Handler[Req, Res]) WithUnaryInterceptor(i Interceptor) *Handler[Req, Res] {
 	h.interceptors = append(h.interceptors, i)
 	return h
 }

@@ -63,7 +63,7 @@ func main() {
 			}
 			return nil
 		}).
-		WithInterceptor(middleware.LoggingInterceptor(logger)).
+		WithUnaryInterceptor(middleware.LoggingInterceptor(logger)).
 		WithMiddleware(middleware.CORS(middleware.DefaultCORSConfig()))
 
 	// 2. Register Services
@@ -75,7 +75,7 @@ func main() {
 
 	news.Register("Create", tygor.Unary(CreateNews).
 		Method("POST").
-		WithInterceptor(func(ctx context.Context, req any, info *tygor.RPCInfo, handler tygor.HandlerFunc) (any, error) {
+		WithUnaryInterceptor(func(ctx context.Context, req any, info *tygor.RPCInfo, handler tygor.HandlerFunc) (any, error) {
 			// Example: Set a custom header
 			tygor.SetHeader(ctx, "X-Created-By", "Tygorpc")
 			return handler(ctx, req)
