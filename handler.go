@@ -31,7 +31,7 @@ type HandlerConfig struct {
 	MaskInternalErrors bool
 	Interceptors       []UnaryInterceptor
 	Logger             *slog.Logger
-	MaxBodySize        int64
+	MaxRequestBodySize uint64
 }
 
 // RPCMethod is the interface for registered handlers.
@@ -55,12 +55,12 @@ type RPCMethod interface {
 //	func UpdatePost(ctx context.Context, req *UpdatePostRequest) (*Post, error) { ... }
 //	Unary(UpdatePost).WithUnaryInterceptor(requireAuth)
 type Handler[Req any, Res any] struct {
-	fn                func(context.Context, Req) (Res, error)
-	method            string
-	interceptors      []UnaryInterceptor
-	skipValidation    bool
-	strictQueryParams bool
-	maxBodySize       *int64 // nil means use registry default
+	fn                 func(context.Context, Req) (Res, error)
+	method             string
+	interceptors       []UnaryInterceptor
+	skipValidation     bool
+	strictQueryParams  bool
+	maxRequestBodySize *uint64 // nil means use registry default
 }
 
 // Unary creates a new POST handler from a generic function for unary (non-streaming) RPCs.
@@ -213,13 +213,10 @@ func (h *Handler[Req, Res]) WithStrictQueryParams() *Handler[Req, Res] {
 	return h
 }
 
-// WithMaxBodySize sets the maximum request body size for this handler.
-// This overrides the registry-level default.
-// A value of 0 means no limit. Negative values are invalid and will be ignored.
-func (h *Handler[Req, Res]) WithMaxBodySize(size int64) *Handler[Req, Res] {
-	if size >= 0 {
-		h.maxBodySize = &size
-	}
+// WithMaxRequestBodySize sets the maximum request body size for this handler.
+// This overrides the registry-level default. A value of 0 means no limit.
+func (h *Handler[Req, Res]) WithMaxRequestBodySize(size uint64) *Handler[Req, Res] {
+	h.maxRequestBodySize = &size
 	return h
 }
 
@@ -394,15 +391,15 @@ func (h *Handler[Req, Res]) serveHTTPWithCache(w http.ResponseWriter, r *http.Re
 		} else {
 			if r.Body != nil {
 				// Determine effective body size limit
-				effectiveLimit := config.MaxBodySize
-				if h.maxBodySize != nil {
-					effectiveLimit = *h.maxBodySize
+				effectiveLimit := config.MaxRequestBodySize
+				if h.maxRequestBodySize != nil {
+					effectiveLimit = *h.maxRequestBodySize
 				}
 
 				// Apply body size limit if > 0
 				// 0 means unlimited for backwards compatibility
 				if effectiveLimit > 0 {
-					r.Body = http.MaxBytesReader(w, r.Body, effectiveLimit)
+					r.Body = http.MaxBytesReader(w, r.Body, int64(effectiveLimit))
 				}
 
 				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

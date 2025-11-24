@@ -711,7 +711,7 @@ func TestHandler_ServeHTTP_GET_StrictQueryParams_AllowsKnown(t *testing.T) {
 	testutil.AssertJSONResponse(t, w, TestResponse{Message: "hello John"})
 }
 
-func TestHandler_ServeHTTP_MaxBodySize_ExceedsLimit(t *testing.T) {
+func TestHandler_ServeHTTP_MaxRequestBodySize_ExceedsLimit(t *testing.T) {
 	fn := func(ctx context.Context, req TestRequest) (TestResponse, error) {
 		return TestResponse{Message: "ok"}, nil
 	}
@@ -728,7 +728,7 @@ func TestHandler_ServeHTTP_MaxBodySize_ExceedsLimit(t *testing.T) {
 		POST("/test").
 		WithJSON(largeReq).
 		ServeHandler(handler, HandlerConfig{
-			MaxBodySize: 50, // 50 bytes limit
+			MaxRequestBodySize: 50, // 50 bytes limit
 		})
 
 	// Should return invalid_argument error when body exceeds limit
@@ -736,7 +736,7 @@ func TestHandler_ServeHTTP_MaxBodySize_ExceedsLimit(t *testing.T) {
 	testutil.AssertJSONError(t, w, string(CodeInvalidArgument))
 }
 
-func TestHandler_ServeHTTP_MaxBodySize_WithinLimit(t *testing.T) {
+func TestHandler_ServeHTTP_MaxRequestBodySize_WithinLimit(t *testing.T) {
 	fn := func(ctx context.Context, req TestRequest) (TestResponse, error) {
 		return TestResponse{Message: "hello " + req.Name}, nil
 	}
@@ -748,27 +748,27 @@ func TestHandler_ServeHTTP_MaxBodySize_WithinLimit(t *testing.T) {
 		POST("/test").
 		WithJSON(TestRequest{Name: "John", Email: "john@example.com"}).
 		ServeHandler(handler, HandlerConfig{
-			MaxBodySize: 1000, // 1KB limit
+			MaxRequestBodySize: 1000, // 1KB limit
 		})
 
 	testutil.AssertStatus(t, w, http.StatusOK)
 	testutil.AssertJSONResponse(t, w, TestResponse{Message: "hello John"})
 }
 
-func TestHandler_ServeHTTP_MaxBodySize_HandlerOverride(t *testing.T) {
+func TestHandler_ServeHTTP_MaxRequestBodySize_HandlerOverride(t *testing.T) {
 	fn := func(ctx context.Context, req TestRequest) (TestResponse, error) {
 		return TestResponse{Message: "ok"}, nil
 	}
 
 	// Handler sets a very small limit (10 bytes)
-	handler := Unary(fn).WithMaxBodySize(10)
+	handler := Unary(fn).WithMaxRequestBodySize(10)
 
 	// Even a small request should fail with the handler override
 	w := NewTestRequest().
 		POST("/test").
 		WithJSON(TestRequest{Name: "Jo", Email: "a@b.c"}).
 		ServeHandler(handler, HandlerConfig{
-			MaxBodySize: 10000, // Registry default is 10KB, but handler overrides to 10 bytes
+			MaxRequestBodySize: 10000, // Registry default is 10KB, but handler overrides to 10 bytes
 		})
 
 	// Should return invalid_argument error
@@ -776,13 +776,13 @@ func TestHandler_ServeHTTP_MaxBodySize_HandlerOverride(t *testing.T) {
 	testutil.AssertJSONError(t, w, string(CodeInvalidArgument))
 }
 
-func TestHandler_ServeHTTP_MaxBodySize_Unlimited(t *testing.T) {
+func TestHandler_ServeHTTP_MaxRequestBodySize_Unlimited(t *testing.T) {
 	fn := func(ctx context.Context, req TestRequest) (TestResponse, error) {
 		return TestResponse{Message: "ok"}, nil
 	}
 
 	// Handler sets unlimited (0 means no limit)
-	handler := Unary(fn).WithMaxBodySize(0)
+	handler := Unary(fn).WithMaxRequestBodySize(0)
 
 	// Large request should succeed with unlimited setting
 	largeReq := TestRequest{
@@ -794,14 +794,14 @@ func TestHandler_ServeHTTP_MaxBodySize_Unlimited(t *testing.T) {
 		POST("/test").
 		WithJSON(largeReq).
 		ServeHandler(handler, HandlerConfig{
-			MaxBodySize: 50, // Registry default is 50 bytes, but handler overrides to unlimited
+			MaxRequestBodySize: 50, // Registry default is 50 bytes, but handler overrides to unlimited
 		})
 
 	testutil.AssertStatus(t, w, http.StatusOK)
 	testutil.AssertJSONResponse(t, w, TestResponse{Message: "ok"})
 }
 
-func TestHandler_ServeHTTP_MaxBodySize_DefaultLimit(t *testing.T) {
+func TestHandler_ServeHTTP_MaxRequestBodySize_DefaultLimit(t *testing.T) {
 	fn := func(ctx context.Context, req TestRequest) (TestResponse, error) {
 		return TestResponse{Message: "ok"}, nil
 	}
@@ -816,7 +816,7 @@ func TestHandler_ServeHTTP_MaxBodySize_DefaultLimit(t *testing.T) {
 			Email: "test@example.com",
 		}).
 		ServeHandler(handler, HandlerConfig{
-			MaxBodySize: 20, // Very small default
+			MaxRequestBodySize: 20, // Very small default
 		})
 
 	// Should return invalid_argument error
