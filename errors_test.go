@@ -190,7 +190,7 @@ func TestDefaultErrorTransformer_MultiError(t *testing.T) {
 	}
 }
 
-func TestHTTPStatusFromCode(t *testing.T) {
+func TestErrorCode_HTTPStatus(t *testing.T) {
 	tests := []struct {
 		code       ErrorCode
 		wantStatus int
@@ -214,7 +214,7 @@ func TestHTTPStatusFromCode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(string(tt.code), func(t *testing.T) {
-			status := HTTPStatusFromCode(tt.code)
+			status := tt.code.HTTPStatus()
 			if status != tt.wantStatus {
 				t.Errorf("expected status %d, got %d", tt.wantStatus, status)
 			}

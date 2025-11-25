@@ -191,9 +191,9 @@ func DefaultErrorTransformer(err error) *Error {
 	return NewError(CodeInternal, err.Error())
 }
 
-// HTTPStatusFromCode maps an ErrorCode to an HTTP status code.
-func HTTPStatusFromCode(code ErrorCode) int {
-	switch code {
+// HTTPStatus maps an ErrorCode to an HTTP status code.
+func (c ErrorCode) HTTPStatus() int {
+	switch c {
 	case CodeInvalidArgument:
 		return http.StatusBadRequest
 	case CodeUnauthenticated:
@@ -230,7 +230,7 @@ func writeError(w http.ResponseWriter, rpcErr *Error, logger *slog.Logger) {
 		logger = slog.Default()
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(HTTPStatusFromCode(rpcErr.Code))
+	w.WriteHeader(rpcErr.Code.HTTPStatus())
 	if err := encodeErrorResponse(w, rpcErr); err != nil {
 		// Headers already sent, nothing we can do. Log for debugging.
 		logger.Error("failed to encode error response",
