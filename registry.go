@@ -11,6 +11,10 @@ import (
 	"github.com/broady/tygor/internal/meta"
 )
 
+// Registry is the central router for RPC handlers.
+// It manages route registration, middleware, interceptors, and error handling.
+// Registry implements http.Handler and can be used directly with http.ListenAndServe
+// or wrapped with additional middleware via the Handler method.
 type Registry struct {
 	mu                 sync.RWMutex
 	routes             map[string]RPCMethod
