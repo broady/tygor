@@ -1,23 +1,21 @@
 package tygor
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 
-	"github.com/broady/tygor/testutil"
+	"github.com/broady/tygor/internal/tygortest"
 )
 
-// TestRequestBuilder wraps testutil.RequestBuilder with tygor-specific context setup.
-// This is only available in tests within the tygor package.
+// TestRequestBuilder wraps tygortest.RequestBuilder for use in tygor package tests.
 type TestRequestBuilder struct {
-	*testutil.RequestBuilder
+	*tygortest.RequestBuilder
 }
 
 // NewTestRequest creates a new test request builder for tygor handlers.
 func NewTestRequest() *TestRequestBuilder {
 	return &TestRequestBuilder{
-		RequestBuilder: testutil.NewRequest(contextSetup()),
+		RequestBuilder: tygortest.NewRequest(tygortest.ContextSetup()),
 	}
 }
 
@@ -61,17 +59,6 @@ func (tr *TestRequestBuilder) WithQuery(key, value string) *TestRequestBuilder {
 func (tr *TestRequestBuilder) WithRPCInfo(service, method string) *TestRequestBuilder {
 	tr.RequestBuilder.WithRPCInfo(service, method)
 	return tr
-}
-
-// contextSetup returns a context setup function for tygor RPC tests.
-func contextSetup() testutil.ContextSetupFunc {
-	return func(ctx context.Context, w http.ResponseWriter, r *http.Request, service, method string) context.Context {
-		info := &RPCInfo{
-			Service: service,
-			Method:  method,
-		}
-		return NewTestContext(ctx, w, r, info)
-	}
 }
 
 // Build creates the HTTP request with tygor RPC context.

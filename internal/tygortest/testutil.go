@@ -1,6 +1,7 @@
-// Package testutil provides testing helpers for HTTP handlers and tygor RPC handlers.
-// This package is designed to be import-cycle safe and can be used from any package.
-package testutil
+// Package tygortest provides testing helpers for HTTP handlers and tygor RPC handlers.
+// This package is designed to be import-cycle safe and can be used from any package
+// within the tygor module.
+package tygortest
 
 import (
 	"bytes"

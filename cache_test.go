@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/broady/tygor/internal/tygortest"
 )
 
 type CacheTestRequest struct {
@@ -34,7 +36,7 @@ func TestGetHandler_CacheControl_Simple(t *testing.T) {
 	// Verify header is set in HTTP response
 	req := httptest.NewRequest("GET", "/test?query=hello", nil)
 	w := httptest.NewRecorder()
-	ctx := NewTestContext(req.Context(), w, req, &RPCInfo{Service: "Test", Method: "Cache"})
+	ctx := tygortest.NewTestContext(req.Context(), w, req, "Test", "Cache")
 	req = req.WithContext(ctx)
 
 	handler.ServeHTTP(w, req, HandlerConfig{})
@@ -228,7 +230,7 @@ func TestGetHandler_CacheControl_NoCache(t *testing.T) {
 	// Verify no header in HTTP response
 	req := httptest.NewRequest("GET", "/test?query=hello", nil)
 	w := httptest.NewRecorder()
-	ctx := NewTestContext(req.Context(), w, req, &RPCInfo{Service: "Test", Method: "NoCache"})
+	ctx := tygortest.NewTestContext(req.Context(), w, req, "Test", "NoCache")
 	req = req.WithContext(ctx)
 
 	handler.ServeHTTP(w, req, HandlerConfig{})
@@ -254,7 +256,7 @@ func TestHandler_POST_NoCache(t *testing.T) {
 	// Verify no header in HTTP response
 	req := httptest.NewRequest("POST", "/test", nil)
 	w := httptest.NewRecorder()
-	ctx := NewTestContext(req.Context(), w, req, &RPCInfo{Service: "Test", Method: "Create"})
+	ctx := tygortest.NewTestContext(req.Context(), w, req, "Test", "Create")
 	req = req.WithContext(ctx)
 
 	handler.ServeHTTP(w, req, HandlerConfig{})
@@ -314,7 +316,7 @@ func TestGetHandler_CacheControl_EndToEnd(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/test?query=hello", nil)
 	w := httptest.NewRecorder()
-	ctx := NewTestContext(req.Context(), w, req, &RPCInfo{Service: "Test", Method: "List"})
+	ctx := tygortest.NewTestContext(req.Context(), w, req, "Test", "List")
 	req = req.WithContext(ctx)
 
 	handler.ServeHTTP(w, req, HandlerConfig{})

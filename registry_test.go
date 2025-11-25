@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/broady/tygor/testutil"
+	"github.com/broady/tygor/internal/tygortest"
 )
 
 func TestNewRegistry(t *testing.T) {
@@ -96,8 +96,8 @@ func TestRegistry_Handler(t *testing.T) {
 	if !middlewareCalled {
 		t.Error("expected middleware to be called")
 	}
-	testutil.AssertStatus(t, w, http.StatusOK)
-	testutil.AssertJSONResponse(t, w, TestResponse{Message: "ok"})
+	tygortest.AssertStatus(t, w, http.StatusOK)
+	tygortest.AssertJSONResponse(t, w, TestResponse{Message: "ok"})
 }
 
 func TestRegistry_Service(t *testing.T) {
@@ -131,8 +131,8 @@ func TestRegistry_ServeHTTP_Success(t *testing.T) {
 
 	reg.ServeHTTP(w, req)
 
-	testutil.AssertStatus(t, w, http.StatusOK)
-	testutil.AssertJSONResponse(t, w, TestResponse{Message: "hello John", ID: 123})
+	tygortest.AssertStatus(t, w, http.StatusOK)
+	tygortest.AssertJSONResponse(t, w, TestResponse{Message: "hello John", ID: 123})
 }
 
 func TestRegistry_ServeHTTP_NotFound(t *testing.T) {
@@ -143,8 +143,8 @@ func TestRegistry_ServeHTTP_NotFound(t *testing.T) {
 
 	reg.ServeHTTP(w, req)
 
-	testutil.AssertStatus(t, w, http.StatusNotFound)
-	testutil.AssertJSONError(t, w, string(CodeNotFound))
+	tygortest.AssertStatus(t, w, http.StatusNotFound)
+	tygortest.AssertJSONError(t, w, string(CodeNotFound))
 }
 
 func TestRegistry_ServeHTTP_InvalidPath(t *testing.T) {
@@ -187,8 +187,8 @@ func TestRegistry_ServeHTTP_MethodMismatch(t *testing.T) {
 
 	reg.ServeHTTP(w, req)
 
-	testutil.AssertStatus(t, w, http.StatusMethodNotAllowed)
-	testutil.AssertJSONError(t, w, string(CodeMethodNotAllowed))
+	tygortest.AssertStatus(t, w, http.StatusMethodNotAllowed)
+	tygortest.AssertJSONError(t, w, string(CodeMethodNotAllowed))
 }
 
 func TestRegistry_ServeHTTP_WithPanic(t *testing.T) {
@@ -213,8 +213,8 @@ func TestRegistry_ServeHTTP_WithPanic(t *testing.T) {
 
 	reg.ServeHTTP(w, req)
 
-	testutil.AssertStatus(t, w, http.StatusInternalServerError)
-	testutil.AssertJSONError(t, w, string(CodeInternal))
+	tygortest.AssertStatus(t, w, http.StatusInternalServerError)
+	tygortest.AssertJSONError(t, w, string(CodeInternal))
 
 	// Verify panic was logged
 	logOutput := buf.String()
@@ -250,8 +250,8 @@ func TestRegistry_GlobalInterceptor(t *testing.T) {
 	if !interceptorCalled {
 		t.Error("expected global interceptor to be called")
 	}
-	testutil.AssertStatus(t, w, http.StatusOK)
-	testutil.AssertJSONResponse(t, w, TestResponse{Message: "ok"})
+	tygortest.AssertStatus(t, w, http.StatusOK)
+	tygortest.AssertJSONResponse(t, w, TestResponse{Message: "ok"})
 }
 
 func TestService_WithUnaryInterceptor(t *testing.T) {
@@ -322,8 +322,8 @@ func TestRegistry_DuplicateRouteRegistration(t *testing.T) {
 
 	reg.ServeHTTP(w, req)
 
-	testutil.AssertStatus(t, w, http.StatusOK)
-	testutil.AssertJSONResponse(t, w, TestResponse{Message: "second"})
+	tygortest.AssertStatus(t, w, http.StatusOK)
+	tygortest.AssertJSONResponse(t, w, TestResponse{Message: "second"})
 }
 
 func TestService_InterceptorOrder(t *testing.T) {
@@ -444,8 +444,8 @@ func TestRegistry_MultipleServices(t *testing.T) {
 
 			reg.ServeHTTP(w, req)
 
-			testutil.AssertStatus(t, w, http.StatusOK)
-			testutil.AssertJSONResponse(t, w, TestResponse{Message: tt.expectedMessage})
+			tygortest.AssertStatus(t, w, http.StatusOK)
+			tygortest.AssertJSONResponse(t, w, TestResponse{Message: tt.expectedMessage})
 		})
 	}
 }

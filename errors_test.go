@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/broady/tygor/testutil"
+	"github.com/broady/tygor/internal/tygortest"
 	"github.com/go-playground/validator/v10"
 )
 
@@ -228,9 +228,9 @@ func TestWriteError(t *testing.T) {
 
 	writeError(w, rpcErr, nil)
 
-	testutil.AssertStatus(t, w, http.StatusNotFound)
-	testutil.AssertHeader(t, w, "Content-Type", "application/json")
-	testutil.AssertJSONError(t, w, string(CodeNotFound))
+	tygortest.AssertStatus(t, w, http.StatusNotFound)
+	tygortest.AssertHeader(t, w, "Content-Type", "application/json")
+	tygortest.AssertJSONError(t, w, string(CodeNotFound))
 }
 
 type failingWriter struct {

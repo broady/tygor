@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/broady/tygor/testutil"
+	"github.com/broady/tygor/internal/tygortest"
 )
 
 type TestRequest struct {
@@ -118,8 +118,8 @@ func TestHandler_ServeHTTP_POST_Success(t *testing.T) {
 		WithJSON(TestRequest{Name: "John", Email: "john@example.com"}).
 		ServeHandler(handler, HandlerConfig{})
 
-	testutil.AssertStatus(t, w, http.StatusOK)
-	testutil.AssertJSONResponse(t, w, TestResponse{Message: "hello John", ID: 123})
+	tygortest.AssertStatus(t, w, http.StatusOK)
+	tygortest.AssertJSONResponse(t, w, TestResponse{Message: "hello John", ID: 123})
 }
 
 func TestHandler_ServeHTTP_POST_ValidationError(t *testing.T) {
@@ -135,8 +135,8 @@ func TestHandler_ServeHTTP_POST_ValidationError(t *testing.T) {
 		WithJSON(map[string]string{"name": "Jo", "email": "invalid"}).
 		ServeHandler(handler, HandlerConfig{})
 
-	testutil.AssertStatus(t, w, http.StatusBadRequest)
-	testutil.AssertJSONError(t, w, string(CodeInvalidArgument))
+	tygortest.AssertStatus(t, w, http.StatusBadRequest)
+	tygortest.AssertJSONError(t, w, string(CodeInvalidArgument))
 }
 
 func TestHandler_ServeHTTP_POST_InvalidJSON(t *testing.T) {
@@ -151,8 +151,8 @@ func TestHandler_ServeHTTP_POST_InvalidJSON(t *testing.T) {
 		WithBody(`{invalid json}`).
 		ServeHandler(handler, HandlerConfig{})
 
-	testutil.AssertStatus(t, w, http.StatusBadRequest)
-	testutil.AssertJSONError(t, w, string(CodeInvalidArgument))
+	tygortest.AssertStatus(t, w, http.StatusBadRequest)
+	tygortest.AssertJSONError(t, w, string(CodeInvalidArgument))
 }
 
 func TestHandler_ServeHTTP_GET_WithQueryParams(t *testing.T) {
@@ -173,8 +173,8 @@ func TestHandler_ServeHTTP_GET_WithQueryParams(t *testing.T) {
 		WithQuery("email", "john@example.com").
 		ServeHandler(handler, HandlerConfig{})
 
-	testutil.AssertStatus(t, w, http.StatusOK)
-	testutil.AssertJSONResponse(t, w, TestResponse{Message: "hello John"})
+	tygortest.AssertStatus(t, w, http.StatusOK)
+	tygortest.AssertJSONResponse(t, w, TestResponse{Message: "hello John"})
 }
 
 func TestHandler_ServeHTTP_HandlerError(t *testing.T) {
@@ -190,8 +190,8 @@ func TestHandler_ServeHTTP_HandlerError(t *testing.T) {
 		WithJSON(TestRequest{Name: "John", Email: "john@example.com"}).
 		ServeHandler(handler, HandlerConfig{})
 
-	testutil.AssertStatus(t, w, http.StatusNotFound)
-	errResp := testutil.AssertJSONError(t, w, string(CodeNotFound))
+	tygortest.AssertStatus(t, w, http.StatusNotFound)
+	errResp := tygortest.AssertJSONError(t, w, string(CodeNotFound))
 
 	if errResp.Message != "resource not found" {
 		t.Errorf("expected message 'resource not found', got %s", errResp.Message)
@@ -211,8 +211,8 @@ func TestHandler_ServeHTTP_WithCacheControl(t *testing.T) {
 		WithQuery("email", "john@example.com").
 		ServeHandler(handler, HandlerConfig{})
 
-	testutil.AssertStatus(t, w, http.StatusOK)
-	testutil.AssertHeader(t, w, "Cache-Control", "private, max-age=60")
+	tygortest.AssertStatus(t, w, http.StatusOK)
+	tygortest.AssertHeader(t, w, "Cache-Control", "private, max-age=60")
 }
 
 func TestHandler_ServeHTTP_WithUnaryInterceptor(t *testing.T) {
@@ -253,7 +253,7 @@ func TestHandler_ServeHTTP_MaskInternalErrors(t *testing.T) {
 			MaskInternalErrors: true,
 		})
 
-	errResp := testutil.AssertJSONError(t, w, string(CodeInternal))
+	errResp := tygortest.AssertJSONError(t, w, string(CodeInternal))
 
 	if errResp.Message == "internal database error" {
 		t.Error("expected internal error message to be masked")
@@ -283,7 +283,7 @@ func TestHandler_ServeHTTP_CustomErrorTransformer(t *testing.T) {
 			},
 		})
 
-	errResp := testutil.AssertJSONError(t, w, string(CodeUnavailable))
+	errResp := tygortest.AssertJSONError(t, w, string(CodeUnavailable))
 
 	if errResp.Message != "custom mapped error" {
 		t.Errorf("expected message 'custom mapped error', got %s", errResp.Message)
@@ -305,8 +305,8 @@ func TestHandler_ServeHTTP_EmptyBody(t *testing.T) {
 		WithBody("{}").
 		ServeHandler(handler, HandlerConfig{})
 
-	testutil.AssertStatus(t, w, http.StatusOK)
-	testutil.AssertJSONResponse(t, w, TestResponse{Message: "ok"})
+	tygortest.AssertStatus(t, w, http.StatusOK)
+	tygortest.AssertJSONResponse(t, w, TestResponse{Message: "ok"})
 }
 
 func TestHandler_ServeHTTP_PointerRequest(t *testing.T) {
@@ -324,8 +324,8 @@ func TestHandler_ServeHTTP_PointerRequest(t *testing.T) {
 		WithJSON(TestRequest{Name: "John", Email: "john@example.com"}).
 		ServeHandler(handler, HandlerConfig{})
 
-	testutil.AssertStatus(t, w, http.StatusOK)
-	testutil.AssertJSONResponse(t, w, TestResponse{Message: "hello John"})
+	tygortest.AssertStatus(t, w, http.StatusOK)
+	tygortest.AssertJSONResponse(t, w, TestResponse{Message: "hello John"})
 }
 
 func TestHandler_ServeHTTP_InterceptorModifiesRequest(t *testing.T) {
@@ -347,7 +347,7 @@ func TestHandler_ServeHTTP_InterceptorModifiesRequest(t *testing.T) {
 		WithJSON(TestRequest{Name: "Original", Email: "test@example.com"}).
 		ServeHandler(handler, HandlerConfig{})
 
-	testutil.AssertJSONResponse(t, w, TestResponse{Message: "Modified"})
+	tygortest.AssertJSONResponse(t, w, TestResponse{Message: "Modified"})
 }
 
 // errorEnvelopeTest is used for decoding error responses in tests.
@@ -484,8 +484,8 @@ func TestHandler_ServeHTTP_GET_PointerRequest(t *testing.T) {
 		WithQuery("name", "John").
 		ServeHandler(handler, HandlerConfig{})
 
-	testutil.AssertStatus(t, w, http.StatusOK)
-	testutil.AssertJSONResponse(t, w, TestResponse{Message: "hello John"})
+	tygortest.AssertStatus(t, w, http.StatusOK)
+	tygortest.AssertJSONResponse(t, w, TestResponse{Message: "hello John"})
 }
 
 func TestHandler_WithSkipValidation(t *testing.T) {
@@ -503,8 +503,8 @@ func TestHandler_WithSkipValidation(t *testing.T) {
 		ServeHandler(handler, HandlerConfig{})
 
 	// Should succeed because validation is skipped
-	testutil.AssertStatus(t, w, http.StatusOK)
-	testutil.AssertJSONResponse(t, w, TestResponse{Message: "ok"})
+	tygortest.AssertStatus(t, w, http.StatusOK)
+	tygortest.AssertJSONResponse(t, w, TestResponse{Message: "ok"})
 }
 
 func TestHandler_ServeHTTP_GET_ArrayParams(t *testing.T) {
@@ -521,14 +521,13 @@ func TestHandler_ServeHTTP_GET_ArrayParams(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/test?ids=1&ids=2&ids=3", nil)
 	w := httptest.NewRecorder()
-	info := &RPCInfo{Service: "TestService", Method: "TestMethod"}
-	ctx := NewTestContext(req.Context(), w, req, info)
+	ctx := tygortest.NewTestContext(req.Context(), w, req, "TestService", "TestMethod")
 	req = req.WithContext(ctx)
 
 	handler.ServeHTTP(w, req, HandlerConfig{})
 
-	testutil.AssertStatus(t, w, http.StatusOK)
-	testutil.AssertJSONResponse(t, w, TestResponse{Message: "ids: 1,2,3"})
+	tygortest.AssertStatus(t, w, http.StatusOK)
+	tygortest.AssertJSONResponse(t, w, TestResponse{Message: "ids: 1,2,3"})
 }
 
 func TestHandler_ServeHTTP_GET_IntArrayParams(t *testing.T) {
@@ -548,14 +547,13 @@ func TestHandler_ServeHTTP_GET_IntArrayParams(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/test?num=10&num=20&num=30", nil)
 	w := httptest.NewRecorder()
-	info := &RPCInfo{Service: "TestService", Method: "TestMethod"}
-	ctx := NewTestContext(req.Context(), w, req, info)
+	ctx := tygortest.NewTestContext(req.Context(), w, req, "TestService", "TestMethod")
 	req = req.WithContext(ctx)
 
 	handler.ServeHTTP(w, req, HandlerConfig{})
 
-	testutil.AssertStatus(t, w, http.StatusOK)
-	testutil.AssertJSONResponse(t, w, TestResponse{ID: 60})
+	tygortest.AssertStatus(t, w, http.StatusOK)
+	tygortest.AssertJSONResponse(t, w, TestResponse{ID: 60})
 }
 
 func TestHandler_ServeHTTP_GET_SpecialCharacters(t *testing.T) {
@@ -583,14 +581,13 @@ func TestHandler_ServeHTTP_GET_SpecialCharacters(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest("GET", tt.query, nil)
 			w := httptest.NewRecorder()
-			info := &RPCInfo{Service: "TestService", Method: "TestMethod"}
-			ctx := NewTestContext(req.Context(), w, req, info)
+			ctx := tygortest.NewTestContext(req.Context(), w, req, "TestService", "TestMethod")
 			req = req.WithContext(ctx)
 
 			handler.ServeHTTP(w, req, HandlerConfig{})
 
-			testutil.AssertStatus(t, w, http.StatusOK)
-			testutil.AssertJSONResponse(t, w, TestResponse{Message: tt.expected})
+			tygortest.AssertStatus(t, w, http.StatusOK)
+			tygortest.AssertJSONResponse(t, w, TestResponse{Message: tt.expected})
 		})
 	}
 }
@@ -609,9 +606,9 @@ func TestHandler_ServeHTTP_EmptyStructResponse(t *testing.T) {
 		WithJSON(TestRequest{Name: "John", Email: "john@example.com"}).
 		ServeHandler(handler, HandlerConfig{})
 
-	testutil.AssertStatus(t, w, http.StatusOK)
+	tygortest.AssertStatus(t, w, http.StatusOK)
 	// Empty struct should encode as {"result": {}}
-	testutil.AssertJSONResponse(t, w, EmptyResponse{})
+	tygortest.AssertJSONResponse(t, w, EmptyResponse{})
 }
 
 func TestHandler_ServeHTTP_NilPointerResponse(t *testing.T) {
@@ -626,12 +623,12 @@ func TestHandler_ServeHTTP_NilPointerResponse(t *testing.T) {
 		WithJSON(TestRequest{Name: "John", Email: "john@example.com"}).
 		ServeHandler(handler, HandlerConfig{})
 
-	testutil.AssertStatus(t, w, http.StatusOK)
+	tygortest.AssertStatus(t, w, http.StatusOK)
 	// Nil pointer should encode as {"result": null}
 	var envelope struct {
 		Result *TestResponse `json:"result"`
 	}
-	testutil.DecodeJSON(t, w, &envelope)
+	tygortest.DecodeJSON(t, w, &envelope)
 	if envelope.Result != nil {
 		t.Errorf("expected result to be nil, got %v", envelope.Result)
 	}
@@ -687,8 +684,8 @@ func TestHandler_ServeHTTP_GET_StrictQueryParams_RejectsUnknown(t *testing.T) {
 		ServeHandler(handler, HandlerConfig{})
 
 	// With strict query params, unknown params should return an error
-	testutil.AssertStatus(t, w, http.StatusBadRequest)
-	testutil.AssertJSONError(t, w, string(CodeInvalidArgument))
+	tygortest.AssertStatus(t, w, http.StatusBadRequest)
+	tygortest.AssertJSONError(t, w, string(CodeInvalidArgument))
 }
 
 func TestHandler_ServeHTTP_GET_StrictQueryParams_AllowsKnown(t *testing.T) {
@@ -712,8 +709,8 @@ func TestHandler_ServeHTTP_GET_StrictQueryParams_AllowsKnown(t *testing.T) {
 		ServeHandler(handler, HandlerConfig{})
 
 	// Should succeed - all params are known
-	testutil.AssertStatus(t, w, http.StatusOK)
-	testutil.AssertJSONResponse(t, w, TestResponse{Message: "hello John"})
+	tygortest.AssertStatus(t, w, http.StatusOK)
+	tygortest.AssertJSONResponse(t, w, TestResponse{Message: "hello John"})
 }
 
 func TestHandler_ServeHTTP_MaxRequestBodySize_ExceedsLimit(t *testing.T) {
@@ -737,8 +734,8 @@ func TestHandler_ServeHTTP_MaxRequestBodySize_ExceedsLimit(t *testing.T) {
 		})
 
 	// Should return invalid_argument error when body exceeds limit
-	testutil.AssertStatus(t, w, http.StatusBadRequest)
-	testutil.AssertJSONError(t, w, string(CodeInvalidArgument))
+	tygortest.AssertStatus(t, w, http.StatusBadRequest)
+	tygortest.AssertJSONError(t, w, string(CodeInvalidArgument))
 }
 
 func TestHandler_ServeHTTP_MaxRequestBodySize_WithinLimit(t *testing.T) {
@@ -756,8 +753,8 @@ func TestHandler_ServeHTTP_MaxRequestBodySize_WithinLimit(t *testing.T) {
 			MaxRequestBodySize: 1000, // 1KB limit
 		})
 
-	testutil.AssertStatus(t, w, http.StatusOK)
-	testutil.AssertJSONResponse(t, w, TestResponse{Message: "hello John"})
+	tygortest.AssertStatus(t, w, http.StatusOK)
+	tygortest.AssertJSONResponse(t, w, TestResponse{Message: "hello John"})
 }
 
 func TestHandler_ServeHTTP_MaxRequestBodySize_HandlerOverride(t *testing.T) {
@@ -777,8 +774,8 @@ func TestHandler_ServeHTTP_MaxRequestBodySize_HandlerOverride(t *testing.T) {
 		})
 
 	// Should return invalid_argument error
-	testutil.AssertStatus(t, w, http.StatusBadRequest)
-	testutil.AssertJSONError(t, w, string(CodeInvalidArgument))
+	tygortest.AssertStatus(t, w, http.StatusBadRequest)
+	tygortest.AssertJSONError(t, w, string(CodeInvalidArgument))
 }
 
 func TestHandler_ServeHTTP_MaxRequestBodySize_Unlimited(t *testing.T) {
@@ -802,8 +799,8 @@ func TestHandler_ServeHTTP_MaxRequestBodySize_Unlimited(t *testing.T) {
 			MaxRequestBodySize: 50, // Registry default is 50 bytes, but handler overrides to unlimited
 		})
 
-	testutil.AssertStatus(t, w, http.StatusOK)
-	testutil.AssertJSONResponse(t, w, TestResponse{Message: "ok"})
+	tygortest.AssertStatus(t, w, http.StatusOK)
+	tygortest.AssertJSONResponse(t, w, TestResponse{Message: "ok"})
 }
 
 func TestHandler_ServeHTTP_MaxRequestBodySize_DefaultLimit(t *testing.T) {
@@ -825,8 +822,8 @@ func TestHandler_ServeHTTP_MaxRequestBodySize_DefaultLimit(t *testing.T) {
 		})
 
 	// Should return invalid_argument error
-	testutil.AssertStatus(t, w, http.StatusBadRequest)
-	testutil.AssertJSONError(t, w, string(CodeInvalidArgument))
+	tygortest.AssertStatus(t, w, http.StatusBadRequest)
+	tygortest.AssertJSONError(t, w, string(CodeInvalidArgument))
 }
 
 // TestHandler_GET_TagBehavior tests which struct tags work for GET query param decoding.
@@ -845,8 +842,8 @@ func TestHandler_GET_TagBehavior(t *testing.T) {
 			WithQuery("myvalue", "hello").
 			ServeHandler(UnaryGet(fn), HandlerConfig{})
 
-		testutil.AssertStatus(t, w, http.StatusOK)
-		testutil.AssertJSONResponse(t, w, TestResponse{Message: "hello"})
+		tygortest.AssertStatus(t, w, http.StatusOK)
+		tygortest.AssertJSONResponse(t, w, TestResponse{Message: "hello"})
 	})
 
 	t.Run("json_tags_are_ignored", func(t *testing.T) {
@@ -862,9 +859,9 @@ func TestHandler_GET_TagBehavior(t *testing.T) {
 			WithQuery("myjsonvalue", "hello").
 			ServeHandler(UnaryGet(fn), HandlerConfig{})
 
-		testutil.AssertStatus(t, w, http.StatusOK)
+		tygortest.AssertStatus(t, w, http.StatusOK)
 		// Value should be empty because json tag is ignored by gorilla/schema
-		testutil.AssertJSONResponse(t, w, TestResponse{Message: ""})
+		tygortest.AssertJSONResponse(t, w, TestResponse{Message: ""})
 	})
 
 	t.Run("field_name_works_as_default", func(t *testing.T) {
@@ -880,8 +877,8 @@ func TestHandler_GET_TagBehavior(t *testing.T) {
 			WithQuery("Value", "hello").
 			ServeHandler(UnaryGet(fn), HandlerConfig{})
 
-		testutil.AssertStatus(t, w, http.StatusOK)
-		testutil.AssertJSONResponse(t, w, TestResponse{Message: "hello"})
+		tygortest.AssertStatus(t, w, http.StatusOK)
+		tygortest.AssertJSONResponse(t, w, TestResponse{Message: "hello"})
 	})
 
 	t.Run("field_name_is_case_insensitive", func(t *testing.T) {
@@ -897,7 +894,7 @@ func TestHandler_GET_TagBehavior(t *testing.T) {
 			WithQuery("value", "hello").
 			ServeHandler(UnaryGet(fn), HandlerConfig{})
 
-		testutil.AssertStatus(t, w, http.StatusOK)
-		testutil.AssertJSONResponse(t, w, TestResponse{Message: "hello"})
+		tygortest.AssertStatus(t, w, http.StatusOK)
+		tygortest.AssertJSONResponse(t, w, TestResponse{Message: "hello"})
 	})
 }

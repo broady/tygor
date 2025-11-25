@@ -1,4 +1,4 @@
-package testutil_test
+package tygortest_test
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/broady/tygor"
-	"github.com/broady/tygor/testutil"
+	"github.com/broady/tygor/internal/tygortest"
 )
 
 // Example types for testing
@@ -39,7 +39,7 @@ func TestRequestBuilder(t *testing.T) {
 	handler := tygor.Unary(exampleHandler)
 
 	// Build request with tygor context
-	req, w := testutil.NewRequest(tygor.TestContextSetup()).
+	req, w := tygortest.NewRequest(tygortest.ContextSetup()).
 		POST("/test").
 		WithJSON(&ExampleRequest{Name: "Alice", Email: "alice@example.com"}).
 		Build()
@@ -48,8 +48,8 @@ func TestRequestBuilder(t *testing.T) {
 	handler.ServeHTTP(w, req, tygor.HandlerConfig{})
 
 	// Use assertion helpers
-	testutil.AssertStatus(t, w, http.StatusOK)
-	testutil.AssertJSONResponse(t, w, &ExampleResponse{
+	tygortest.AssertStatus(t, w, http.StatusOK)
+	tygortest.AssertJSONResponse(t, w, &ExampleResponse{
 		Message: "Hello, Alice",
 		ID:      123,
 	})
@@ -59,15 +59,15 @@ func TestRequestBuilder(t *testing.T) {
 func TestRequestBuilder_Validation(t *testing.T) {
 	handler := tygor.Unary(exampleHandler)
 
-	req, w := testutil.NewRequest(tygor.TestContextSetup()).
+	req, w := tygortest.NewRequest(tygortest.ContextSetup()).
 		POST("/test").
 		WithJSON(&ExampleRequest{Name: "Alice", Email: "invalid-email"}).
 		Build()
 
 	handler.ServeHTTP(w, req, tygor.HandlerConfig{})
 
-	testutil.AssertStatus(t, w, http.StatusBadRequest)
-	errResp := testutil.AssertJSONError(t, w, string(tygor.CodeInvalidArgument))
+	tygortest.AssertStatus(t, w, http.StatusBadRequest)
+	errResp := tygortest.AssertJSONError(t, w, string(tygor.CodeInvalidArgument))
 
 	if errResp.Message != "validation failed" {
 		t.Errorf("expected validation error message, got %s", errResp.Message)
@@ -90,7 +90,7 @@ func TestRequestBuilder_GET(t *testing.T) {
 
 	handler := tygor.UnaryGet(getHandler)
 
-	req, w := testutil.NewRequest(tygor.TestContextSetup()).
+	req, w := tygortest.NewRequest(tygortest.ContextSetup()).
 		GET("/search").
 		WithQuery("query", "golang").
 		WithQuery("limit", "10").
@@ -98,8 +98,8 @@ func TestRequestBuilder_GET(t *testing.T) {
 
 	handler.ServeHTTP(w, req, tygor.HandlerConfig{})
 
-	testutil.AssertStatus(t, w, http.StatusOK)
-	testutil.AssertJSONResponse(t, w, &ExampleResponse{
+	tygortest.AssertStatus(t, w, http.StatusOK)
+	tygortest.AssertJSONResponse(t, w, &ExampleResponse{
 		Message: "Search: golang",
 		ID:      10,
 	})
@@ -118,7 +118,7 @@ func TestRequestBuilder_CustomHeader(t *testing.T) {
 
 	handler := tygor.Unary(authHandler)
 
-	req, w := testutil.NewRequest(tygor.TestContextSetup()).
+	req, w := tygortest.NewRequest(tygortest.ContextSetup()).
 		POST("/test").
 		WithJSON(&ExampleRequest{Name: "Alice", Email: "alice@example.com"}).
 		WithHeader("X-API-Key", "secret").
@@ -126,7 +126,7 @@ func TestRequestBuilder_CustomHeader(t *testing.T) {
 
 	handler.ServeHTTP(w, req, tygor.HandlerConfig{})
 
-	testutil.AssertStatus(t, w, http.StatusOK)
+	tygortest.AssertStatus(t, w, http.StatusOK)
 }
 
 // TestAssertHeader demonstrates header assertions
@@ -136,7 +136,7 @@ func TestAssertHeader(t *testing.T) {
 	}
 	handler := tygor.UnaryGet(getHandler).CacheControl(tygor.CacheConfig{MaxAge: 60 * time.Second})
 
-	req, w := testutil.NewRequest(tygor.TestContextSetup()).
+	req, w := tygortest.NewRequest(tygortest.ContextSetup()).
 		GET("/test").
 		WithQuery("query", "test").
 		WithQuery("limit", "10").
@@ -144,7 +144,7 @@ func TestAssertHeader(t *testing.T) {
 
 	handler.ServeHTTP(w, req, tygor.HandlerConfig{})
 
-	testutil.AssertHeader(t, w, "Cache-Control", "private, max-age=60")
+	tygortest.AssertHeader(t, w, "Cache-Control", "private, max-age=60")
 }
 
 // Example showing the before/after comparison
@@ -155,18 +155,18 @@ func ExampleRequestBuilder_comparison() {
 	// req.Header.Set("Content-Type", "application/json")
 	// info := &tygor.RPCInfo{Service: "TestService", Method: "TestMethod"}
 	// w := httptest.NewRecorder()
-	// ctx := tygor.NewTestContext(req.Context(), w, req, info)
+	// ctx := tygortest.NewTestContext(req.Context(), w, req, "TestService", "TestMethod")
 	// req = req.WithContext(ctx)
 	// config := tygor.HandlerConfig{}
 	// handler.ServeHTTP(w, req, config)
 
-	// AFTER (using testutil - more concise):
+	// AFTER (using tygortest - more concise):
 	handler := tygor.Unary(exampleHandler)
-	req, w := testutil.NewRequest(tygor.TestContextSetup()).
+	req, w := tygortest.NewRequest(tygortest.ContextSetup()).
 		POST("/test").
 		WithJSON(&ExampleRequest{Name: "Alice", Email: "alice@example.com"}).
 		Build()
 
 	handler.ServeHTTP(w, req, tygor.HandlerConfig{})
-	testutil.AssertStatus(nil, w, http.StatusOK)
+	tygortest.AssertStatus(nil, w, http.StatusOK)
 }

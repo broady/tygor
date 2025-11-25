@@ -1,12 +1,13 @@
 package tygor
 
-import "context"
+import (
+	"context"
+
+	"github.com/broady/tygor/internal/rpccontext"
+)
 
 // RPCInfo provides metadata about the current operation.
-type RPCInfo struct {
-	Service string
-	Method  string
-}
+type RPCInfo = rpccontext.RPCInfo
 
 // HandlerFunc represents the next handler in the chain.
 type HandlerFunc func(ctx context.Context, req any) (res any, err error)
