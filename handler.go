@@ -106,12 +106,8 @@ func Unary[Req any, Res any](fn func(context.Context, Req) (Res, error)) *UnaryP
 // Example:
 //
 //	func ListPosts(ctx context.Context, req ListPostsParams) ([]*Post, error) { ... }
-//	UnaryGet(ListPosts).Cache(5 * time.Minute)
-//
-//	func GetPost(ctx context.Context, req *GetPostParams) (*Post, error) { ... }
-//	UnaryGet(GetPost).CacheControl(tygor.CacheConfig{
+//	UnaryGet(ListPosts).CacheControl(tygor.CacheConfig{
 //	    MaxAge: 5 * time.Minute,
-//	    StaleWhileRevalidate: 1 * time.Minute,
 //	    Public: true,
 //	})
 type UnaryGetHandler[Req any, Res any] struct {
@@ -166,12 +162,12 @@ type CacheConfig struct {
 // The handler function signature is func(context.Context, Req) (Res, error).
 // Requests are decoded from URL query parameters.
 //
-// Use Cache() or CacheControl() to configure HTTP caching behavior.
+// Use CacheControl() to configure HTTP caching behavior.
 //
 // The returned UnaryGetHandler supports:
 //   - WithUnaryInterceptor (from UnaryHandler)
 //   - WithSkipValidation (from UnaryHandler)
-//   - Cache / CacheControl (specific to GET)
+//   - CacheControl (specific to GET)
 //   - WithStrictQueryParams (specific to GET)
 func UnaryGet[Req any, Res any](fn func(context.Context, Req) (Res, error)) *UnaryGetHandler[Req, Res] {
 	return &UnaryGetHandler[Req, Res]{
@@ -180,18 +176,6 @@ func UnaryGet[Req any, Res any](fn func(context.Context, Req) (Res, error)) *Una
 			method: "GET",
 		},
 	}
-}
-
-// Cache sets a simple max-age cache TTL for the handler.
-// This is a convenience method equivalent to CacheControl(CacheConfig{MaxAge: d}).
-//
-// Example:
-//
-//	UnaryGet(ListPosts).Cache(5 * time.Minute).WithUnaryInterceptor(...)
-//	// Sets: Cache-Control: private, max-age=300
-func (h *UnaryGetHandler[Req, Res]) Cache(d time.Duration) *UnaryGetHandler[Req, Res] {
-	h.cacheConfig = &CacheConfig{MaxAge: d}
-	return h
 }
 
 // CacheControl sets detailed HTTP cache directives for the handler.

@@ -70,7 +70,10 @@ func main() {
 	news := reg.Service("News")
 
 	news.Register("List", tygor.UnaryGet(ListNews).
-		Cache(1*time.Minute))
+		CacheControl(tygor.CacheConfig{
+			MaxAge: 1 * time.Minute,
+			Public: true,
+		}))
 
 	news.Register("Create", tygor.Unary(CreateNews).
 		WithUnaryInterceptor(func(ctx context.Context, req any, info *tygor.RPCInfo, handler tygor.HandlerFunc) (any, error) {

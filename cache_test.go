@@ -23,7 +23,7 @@ func TestGetHandler_CacheControl_Simple(t *testing.T) {
 		return CacheTestResponse{Message: "test"}, nil
 	}
 
-	handler := UnaryGet(fn).Cache(5 * time.Minute)
+	handler := UnaryGet(fn).CacheControl(CacheConfig{MaxAge: 5 * time.Minute})
 
 	cacheHeader := handler.getCacheControlHeader()
 	expected := "private, max-age=300"
@@ -292,7 +292,7 @@ func TestGetHandler_Metadata_ReflectsCacheTTL(t *testing.T) {
 	}
 
 	ttl := 10 * time.Minute
-	handler := UnaryGet(fn).Cache(ttl)
+	handler := UnaryGet(fn).CacheControl(CacheConfig{MaxAge: ttl})
 
 	meta := handler.Metadata()
 	if meta.CacheTTL != ttl {

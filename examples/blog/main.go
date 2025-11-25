@@ -453,7 +453,10 @@ func main() {
 
 	// Public endpoints
 	postService.Register("Get", tygor.UnaryGet(GetPost))
-	postService.Register("List", tygor.UnaryGet(ListPosts).Cache(30*time.Second))
+	postService.Register("List", tygor.UnaryGet(ListPosts).CacheControl(tygor.CacheConfig{
+		MaxAge: 30 * time.Second,
+		Public: true,
+	}))
 
 	// Private endpoints (require authentication)
 	postService.Register("Create",

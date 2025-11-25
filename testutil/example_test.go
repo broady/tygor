@@ -134,7 +134,7 @@ func TestAssertHeader(t *testing.T) {
 	getHandler := func(ctx context.Context, req *GetParams) (*ExampleResponse, error) {
 		return &ExampleResponse{Message: "cached response"}, nil
 	}
-	handler := tygor.UnaryGet(getHandler).Cache(60 * time.Second)
+	handler := tygor.UnaryGet(getHandler).CacheControl(tygor.CacheConfig{MaxAge: 60 * time.Second})
 
 	req, w := testutil.NewRequest(tygor.TestContextSetup()).
 		GET("/test").

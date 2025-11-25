@@ -361,12 +361,32 @@ Query: `/News/List?limit=10&offset=0&status=published`
 
 ## Caching
 
-Set cache headers on handlers (typically used with GET):
+Set cache headers on GET handlers using `CacheControl`:
 
 ```go
 news.Register("List",
     tygor.UnaryGet(ListNews).
-        Cache(5 * time.Minute))
+        CacheControl(tygor.CacheConfig{
+            MaxAge: 5 * time.Minute,
+            Public: true,
+        }))
+```
+
+Common patterns:
+
+```go
+// Browser-only caching (private)
+CacheControl(tygor.CacheConfig{MaxAge: 5 * time.Minute})
+
+// CDN + browser caching (public)
+CacheControl(tygor.CacheConfig{MaxAge: 5 * time.Minute, Public: true})
+
+// Stale-while-revalidate for smooth updates
+CacheControl(tygor.CacheConfig{
+    MaxAge:               1 * time.Minute,
+    StaleWhileRevalidate: 5 * time.Minute,
+    Public:               true,
+})
 ```
 
 ## Context Helpers

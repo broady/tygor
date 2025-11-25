@@ -54,13 +54,13 @@ func TestHandler_Method(t *testing.T) {
 	}
 }
 
-func TestHandler_Cache(t *testing.T) {
+func TestHandler_CacheControl(t *testing.T) {
 	fn := func(ctx context.Context, req TestRequest) (TestResponse, error) {
 		return TestResponse{}, nil
 	}
 
 	ttl := 5 * time.Minute
-	handler := UnaryGet(fn).Cache(ttl)
+	handler := UnaryGet(fn).CacheControl(CacheConfig{MaxAge: ttl})
 	if handler.cacheConfig == nil {
 		t.Fatal("expected cacheConfig to be set")
 	}
@@ -89,7 +89,7 @@ func TestHandler_Metadata(t *testing.T) {
 		return TestResponse{}, nil
 	}
 
-	handler := UnaryGet(fn).Cache(1 * time.Minute)
+	handler := UnaryGet(fn).CacheControl(CacheConfig{MaxAge: 1 * time.Minute})
 	meta := handler.Metadata()
 
 	if meta.Method != "GET" {
@@ -198,12 +198,12 @@ func TestHandler_ServeHTTP_HandlerError(t *testing.T) {
 	}
 }
 
-func TestHandler_ServeHTTP_WithCache(t *testing.T) {
+func TestHandler_ServeHTTP_WithCacheControl(t *testing.T) {
 	fn := func(ctx context.Context, req TestRequest) (TestResponse, error) {
 		return TestResponse{Message: "ok"}, nil
 	}
 
-	handler := UnaryGet(fn).Cache(60 * time.Second)
+	handler := UnaryGet(fn).CacheControl(CacheConfig{MaxAge: 60 * time.Second})
 
 	w := NewTestRequest().
 		GET("/test").
