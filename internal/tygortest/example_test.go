@@ -108,8 +108,11 @@ func TestRequestBuilder_GET(t *testing.T) {
 // TestRequestBuilder_CustomHeader demonstrates custom headers
 func TestRequestBuilder_CustomHeader(t *testing.T) {
 	authHandler := func(ctx context.Context, req *ExampleRequest) (*ExampleResponse, error) {
-		httpReq := tygor.RequestFromContext(ctx)
-		token := httpReq.Header.Get("X-API-Key")
+		tc, ok := tygor.FromContext(ctx)
+		if !ok {
+			return nil, tygor.NewError(tygor.CodeInternal, "missing tygor context")
+		}
+		token := tc.HTTPRequest().Header.Get("X-API-Key")
 		if token != "secret" {
 			return nil, tygor.NewError(tygor.CodeUnauthenticated, "invalid api key")
 		}

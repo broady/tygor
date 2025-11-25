@@ -124,9 +124,9 @@ examples/blog/
 ### Authentication Interceptor
 
 ```go
-func requireAuth(ctx context.Context, req any, info *tygor.RPCInfo, handler tygor.HandlerFunc) (any, error) {
-    // Extract and validate token from Authorization header
-    // Add user ID to context
+func requireAuth(ctx *tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
+    // Extract and validate token from Authorization header via ctx.HTTPRequest()
+    // Add user ID to context with context.WithValue
     // Call next handler
 }
 ```
@@ -136,10 +136,10 @@ Applied at different levels:
 ```go
 // Handler-level (specific endpoints)
 postService.Register("Create",
-    tygor.NewHandler(CreatePost).WithInterceptor(requireAuth))
+    tygor.Unary(CreatePost).WithUnaryInterceptor(requireAuth))
 
 // Service-level (all endpoints)
-commentService := reg.Service("Comments").WithInterceptor(requireAuth)
+commentService := reg.Service("Comments").WithUnaryInterceptor(requireAuth)
 ```
 
 ### Authorization in Handlers

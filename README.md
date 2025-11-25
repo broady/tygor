@@ -316,8 +316,8 @@ Applied to specific handlers:
 ```go
 news.Register("Create",
     tygor.Unary(CreateNews).
-        WithInterceptor(func(ctx context.Context, req any, info *tygor.RPCInfo, handler tygor.HandlerFunc) (any, error) {
-            // Custom logic
+        WithUnaryInterceptor(func(ctx *tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
+            // Custom logic - access ctx.Service(), ctx.Method(), ctx.HTTPRequest(), etc.
             return handler(ctx, req)
         }))
 ```
@@ -392,19 +392,34 @@ CacheControl(tygor.CacheConfig{
 })
 ```
 
-## Context Helpers
+## Context Access
 
-Access request metadata and modify responses:
+Access RPC metadata and HTTP primitives via `tygor.FromContext`:
 
 ```go
 func Handler(ctx context.Context, req *Request) (*Response, error) {
-    // Get service and method name
-    service, method, _ := tygor.MethodFromContext(ctx)
+    tc, ok := tygor.FromContext(ctx)
+    if ok {
+        // Get service and method name
+        service, method := tc.Service(), tc.Method()
 
-    // Set custom response headers
-    tygor.SetHeader(ctx, "X-Custom", "value")
+        // Access HTTP request headers
+        token := tc.HTTPRequest().Header.Get("Authorization")
+
+        // Set custom response headers
+        tc.HTTPWriter().Header().Set("X-Custom", "value")
+    }
 
     return &Response{}, nil
+}
+```
+
+In interceptors, you receive `*tygor.Context` directly:
+
+```go
+func loggingInterceptor(ctx *tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
+    log.Printf("calling %s.%s", ctx.Service(), ctx.Method())
+    return handler(ctx, req)
 }
 ```
 

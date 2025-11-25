@@ -14,6 +14,9 @@ import (
 	"github.com/gorilla/schema"
 )
 
+// Ensure *Context satisfies context.Context at compile time.
+var _ context.Context = (*Context)(nil)
+
 var (
 	validate            = validator.New()
 	schemaDecoder       = schema.NewDecoder() // lenient: ignores unknown keys
@@ -394,13 +397,12 @@ func (h *UnaryPostHandler[Req, Res]) ServeHTTP(w http.ResponseWriter, r *http.Re
 
 // serve implements the generic glue code for both UnaryPostHandler and UnaryGetHandler.
 func (h *UnaryHandler[Req, Res]) serve(w http.ResponseWriter, r *http.Request, config HandlerConfig, cacheControl string, decodeFunc func() (Req, error)) {
-	// 1. Prepare Context & Info
-	ctx := r.Context()
-	// MethodFromContext is already set by Registry.
-	service, method, _ := MethodFromContext(ctx)
-	info := &RPCInfo{
-		Service: service,
-		Method:  method,
+	// 1. Get tygor Context (set by Registry)
+	tygorCtx, ok := FromContext(r.Context())
+	if !ok {
+		// This shouldn't happen if called through Registry, but handle gracefully
+		handleError(w, NewError(CodeInternal, "missing tygor context"), config)
+		return
 	}
 
 	// 2. Combine Interceptors
@@ -448,9 +450,9 @@ func (h *UnaryHandler[Req, Res]) serve(w http.ResponseWriter, r *http.Request, c
 	var err error
 
 	if chain != nil {
-		res, err = chain(ctx, req, info, finalHandler)
+		res, err = chain(tygorCtx, req, finalHandler)
 	} else {
-		res, err = finalHandler(ctx, req)
+		res, err = finalHandler(tygorCtx, req)
 	}
 
 	if err != nil {
@@ -471,8 +473,8 @@ func (h *UnaryHandler[Req, Res]) serve(w http.ResponseWriter, r *http.Request, c
 			logger = slog.Default()
 		}
 		logger.Error("failed to encode response",
-			slog.String("service", service),
-			slog.String("method", method),
+			slog.String("service", tygorCtx.Service()),
+			slog.String("method", tygorCtx.Method()),
 			slog.Any("error", err))
 	}
 }

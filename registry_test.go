@@ -42,7 +42,7 @@ func TestRegistry_WithMaskInternalErrors(t *testing.T) {
 }
 
 func TestRegistry_WithUnaryInterceptor(t *testing.T) {
-	interceptor := func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error) {
+	interceptor := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
 		return handler(ctx, req)
 	}
 
@@ -226,10 +226,10 @@ func TestRegistry_ServeHTTP_WithPanic(t *testing.T) {
 func TestRegistry_GlobalInterceptor(t *testing.T) {
 	interceptorCalled := false
 
-	reg := NewRegistry().WithUnaryInterceptor(func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error) {
+	reg := NewRegistry().WithUnaryInterceptor(func(ctx *Context, req any, handler HandlerFunc) (any, error) {
 		interceptorCalled = true
-		if info.Service != "Test" || info.Method != "Method" {
-			t.Errorf("unexpected RPC info: %v", info)
+		if ctx.Service() != "Test" || ctx.Method() != "Method" {
+			t.Errorf("unexpected RPC info: service=%s, method=%s", ctx.Service(), ctx.Method())
 		}
 		return handler(ctx, req)
 	})
@@ -257,7 +257,7 @@ func TestRegistry_GlobalInterceptor(t *testing.T) {
 func TestService_WithUnaryInterceptor(t *testing.T) {
 	reg := NewRegistry()
 
-	interceptor := func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error) {
+	interceptor := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
 		return handler(ctx, req)
 	}
 
@@ -329,17 +329,17 @@ func TestRegistry_DuplicateRouteRegistration(t *testing.T) {
 func TestService_InterceptorOrder(t *testing.T) {
 	var callOrder []string
 
-	globalInterceptor := func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error) {
+	globalInterceptor := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
 		callOrder = append(callOrder, "global")
 		return handler(ctx, req)
 	}
 
-	serviceInterceptor := func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error) {
+	serviceInterceptor := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
 		callOrder = append(callOrder, "service")
 		return handler(ctx, req)
 	}
 
-	handlerInterceptor := func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error) {
+	handlerInterceptor := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
 		callOrder = append(callOrder, "handler")
 		return handler(ctx, req)
 	}
@@ -377,24 +377,25 @@ func TestRegistry_ContextPropagation(t *testing.T) {
 	reg := NewRegistry()
 
 	fn := func(ctx context.Context, req TestRequest) (TestResponse, error) {
-		// Verify context has request, writer, and RPC info
-		if RequestFromContext(ctx) == nil {
+		// Verify context has request, writer, and RPC info via FromContext
+		tc, ok := FromContext(ctx)
+		if !ok {
+			t.Fatal("expected tygor context")
+		}
+
+		if tc.HTTPRequest() == nil {
 			t.Error("expected request in context")
 		}
 
-		service, method, ok := MethodFromContext(ctx)
-		if !ok {
-			t.Error("expected RPC info in context")
+		if tc.Service() != "Test" {
+			t.Errorf("expected service 'Test', got %s", tc.Service())
 		}
-		if service != "Test" {
-			t.Errorf("expected service 'Test', got %s", service)
-		}
-		if method != "Method" {
-			t.Errorf("expected method 'Method', got %s", method)
+		if tc.Method() != "Method" {
+			t.Errorf("expected method 'Method', got %s", tc.Method())
 		}
 
-		// Test SetHeader
-		SetHeader(ctx, "X-Custom", "value")
+		// Test setting header via HTTPWriter
+		tc.HTTPWriter().Header().Set("X-Custom", "value")
 
 		return TestResponse{Message: "ok"}, nil
 	}

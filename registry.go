@@ -121,13 +121,8 @@ func (r *Registry) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}()
 
-	// Inject Writer/Request into Context for SetHeader helper
-	ctx := newContext(req.Context(), w, req, nil) // rpcInfo is not known yet
-	req = req.WithContext(ctx)
-
 	path := strings.TrimPrefix(req.URL.Path, "/")
-	// Path format: Service/Method or Service.Method?
-	// Spec says: /{service_name}/{method_name}
+	// Path format: /{service_name}/{method_name}
 
 	// Normalize path
 	parts := strings.Split(path, "/")
@@ -136,9 +131,11 @@ func (r *Registry) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	service, method := parts[0], parts[1]
+
 	// We store keys as "Service.Method" internally to match the Manifest format
 	// But the URL is /Service/Method.
-	key := parts[0] + "." + parts[1]
+	key := service + "." + method
 
 	r.mu.RLock()
 	handler, ok := r.routes[key]
@@ -156,9 +153,8 @@ func (r *Registry) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Update context with RPC Info
-	info := &RPCInfo{Service: parts[0], Method: parts[1]}
-	ctx = newContext(ctx, w, req, info)
+	// Create tygor Context with RPC metadata
+	ctx := newContext(req.Context(), w, req, service, method)
 	req = req.WithContext(ctx)
 
 	// Build config with registry-level settings

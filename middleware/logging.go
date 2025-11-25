@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"context"
 	"log/slog"
 	"time"
 
@@ -15,12 +14,12 @@ func LoggingInterceptor(logger *slog.Logger) tygor.UnaryInterceptor {
 		logger = slog.Default()
 	}
 
-	return func(ctx context.Context, req any, info *tygor.RPCInfo, handler tygor.HandlerFunc) (any, error) {
+	return func(ctx *tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
 		start := time.Now()
 
 		logger.InfoContext(ctx, "RPC started",
-			slog.String("service", info.Service),
-			slog.String("method", info.Method),
+			slog.String("service", ctx.Service()),
+			slog.String("method", ctx.Method()),
 		)
 
 		res, err := handler(ctx, req)
@@ -28,15 +27,15 @@ func LoggingInterceptor(logger *slog.Logger) tygor.UnaryInterceptor {
 
 		if err != nil {
 			logger.ErrorContext(ctx, "RPC failed",
-				slog.String("service", info.Service),
-				slog.String("method", info.Method),
+				slog.String("service", ctx.Service()),
+				slog.String("method", ctx.Method()),
 				slog.Duration("duration", duration),
 				slog.Any("error", err),
 			)
 		} else {
 			logger.InfoContext(ctx, "RPC completed",
-				slog.String("service", info.Service),
-				slog.String("method", info.Method),
+				slog.String("service", ctx.Service()),
+				slog.String("method", ctx.Method()),
 				slog.Duration("duration", duration),
 			)
 		}

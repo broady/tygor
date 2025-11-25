@@ -73,7 +73,7 @@ Unary(BulkUpdate).WithSkipValidation()
 For complex validation logic, business rules, or cross-field validation, use interceptors:
 
 ```go
-func CustomValidationInterceptor(ctx context.Context, req any, info *tygor.RPCInfo, handler tygor.HandlerFunc) (any, error) {
+func CustomValidationInterceptor(ctx *tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
     // Type assert to your specific request type
     if searchReq, ok := req.(*SearchRequest); ok {
         // Custom validation logic

@@ -17,11 +17,7 @@ import (
 //	ctx := tygortest.NewTestContext(req.Context(), w, req, "MyService", "MyMethod")
 //	req = req.WithContext(ctx)
 func NewTestContext(ctx context.Context, w http.ResponseWriter, r *http.Request, service, method string) context.Context {
-	info := &rpccontext.RPCInfo{
-		Service: service,
-		Method:  method,
-	}
-	return rpccontext.NewContext(ctx, w, r, info)
+	return rpccontext.NewContext(ctx, w, r, service, method)
 }
 
 // ContextSetup returns a context setup function for use with NewRequest().

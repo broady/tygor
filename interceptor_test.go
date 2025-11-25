@@ -15,7 +15,7 @@ func TestChainInterceptors_Empty(t *testing.T) {
 
 func TestChainInterceptors_Single(t *testing.T) {
 	called := false
-	interceptor := func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error) {
+	interceptor := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
 		called = true
 		return handler(ctx, req)
 	}
@@ -25,12 +25,12 @@ func TestChainInterceptors_Single(t *testing.T) {
 		t.Fatal("expected non-nil chain")
 	}
 
-	info := &RPCInfo{Service: "Test", Method: "Method"}
+	ctx := NewContext(context.Background(), "Test", "Method")
 	handler := func(ctx context.Context, req any) (any, error) {
 		return "result", nil
 	}
 
-	result, err := chain(context.Background(), "request", info, handler)
+	result, err := chain(ctx, "request", handler)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -45,21 +45,21 @@ func TestChainInterceptors_Single(t *testing.T) {
 func TestChainInterceptors_Multiple(t *testing.T) {
 	var order []string
 
-	interceptor1 := func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error) {
+	interceptor1 := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
 		order = append(order, "before-1")
 		res, err := handler(ctx, req)
 		order = append(order, "after-1")
 		return res, err
 	}
 
-	interceptor2 := func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error) {
+	interceptor2 := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
 		order = append(order, "before-2")
 		res, err := handler(ctx, req)
 		order = append(order, "after-2")
 		return res, err
 	}
 
-	interceptor3 := func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error) {
+	interceptor3 := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
 		order = append(order, "before-3")
 		res, err := handler(ctx, req)
 		order = append(order, "after-3")
@@ -71,13 +71,13 @@ func TestChainInterceptors_Multiple(t *testing.T) {
 		t.Fatal("expected non-nil chain")
 	}
 
-	info := &RPCInfo{Service: "Test", Method: "Method"}
+	ctx := NewContext(context.Background(), "Test", "Method")
 	handler := func(ctx context.Context, req any) (any, error) {
 		order = append(order, "handler")
 		return "result", nil
 	}
 
-	result, err := chain(context.Background(), "request", info, handler)
+	result, err := chain(ctx, "request", handler)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -99,28 +99,28 @@ func TestChainInterceptors_Multiple(t *testing.T) {
 func TestChainInterceptors_ErrorPropagation(t *testing.T) {
 	testErr := errors.New("test error")
 
-	interceptor1 := func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error) {
+	interceptor1 := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
 		return handler(ctx, req)
 	}
 
-	interceptor2 := func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error) {
+	interceptor2 := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
 		// This interceptor returns an error
 		return nil, testErr
 	}
 
-	interceptor3 := func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error) {
+	interceptor3 := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
 		return handler(ctx, req)
 	}
 
 	chain := chainInterceptors([]UnaryInterceptor{interceptor1, interceptor2, interceptor3})
 
-	info := &RPCInfo{Service: "Test", Method: "Method"}
+	ctx := NewContext(context.Background(), "Test", "Method")
 	handler := func(ctx context.Context, req any) (any, error) {
 		t.Error("handler should not be called when interceptor returns error")
 		return nil, nil
 	}
 
-	result, err := chain(context.Background(), "request", info, handler)
+	result, err := chain(ctx, "request", handler)
 	if err != testErr {
 		t.Errorf("expected test error, got %v", err)
 	}
@@ -130,14 +130,14 @@ func TestChainInterceptors_ErrorPropagation(t *testing.T) {
 }
 
 func TestChainInterceptors_ModifyRequest(t *testing.T) {
-	interceptor1 := func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error) {
+	interceptor1 := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
 		// Modify request
 		return handler(ctx, "modified")
 	}
 
 	chain := chainInterceptors([]UnaryInterceptor{interceptor1})
 
-	info := &RPCInfo{Service: "Test", Method: "Method"}
+	ctx := NewContext(context.Background(), "Test", "Method")
 	handler := func(ctx context.Context, req any) (any, error) {
 		if req != "modified" {
 			t.Errorf("expected modified request, got %v", req)
@@ -145,7 +145,7 @@ func TestChainInterceptors_ModifyRequest(t *testing.T) {
 		return req, nil
 	}
 
-	result, err := chain(context.Background(), "original", info, handler)
+	result, err := chain(ctx, "original", handler)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -155,7 +155,7 @@ func TestChainInterceptors_ModifyRequest(t *testing.T) {
 }
 
 func TestChainInterceptors_ModifyResponse(t *testing.T) {
-	interceptor1 := func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error) {
+	interceptor1 := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
 		res, err := handler(ctx, req)
 		if err != nil {
 			return nil, err
@@ -166,12 +166,12 @@ func TestChainInterceptors_ModifyResponse(t *testing.T) {
 
 	chain := chainInterceptors([]UnaryInterceptor{interceptor1})
 
-	info := &RPCInfo{Service: "Test", Method: "Method"}
+	ctx := NewContext(context.Background(), "Test", "Method")
 	handler := func(ctx context.Context, req any) (any, error) {
 		return "original", nil
 	}
 
-	result, err := chain(context.Background(), "request", info, handler)
+	result, err := chain(ctx, "request", handler)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -184,15 +184,15 @@ func TestChainInterceptors_ContextPropagation(t *testing.T) {
 	type ctxKey string
 	key := ctxKey("test-key")
 
-	interceptor1 := func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error) {
+	interceptor1 := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
 		// Add value to context
-		ctx = context.WithValue(ctx, key, "test-value")
-		return handler(ctx, req)
+		newCtx := context.WithValue(ctx, key, "test-value")
+		return handler(newCtx, req)
 	}
 
 	chain := chainInterceptors([]UnaryInterceptor{interceptor1})
 
-	info := &RPCInfo{Service: "Test", Method: "Method"}
+	ctx := NewContext(context.Background(), "Test", "Method")
 	handler := func(ctx context.Context, req any) (any, error) {
 		val := ctx.Value(key)
 		if val != "test-value" {
@@ -201,7 +201,7 @@ func TestChainInterceptors_ContextPropagation(t *testing.T) {
 		return "success", nil
 	}
 
-	res, err := chain(context.Background(), "request", info, handler)
+	res, err := chain(ctx, "request", handler)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -210,26 +210,28 @@ func TestChainInterceptors_ContextPropagation(t *testing.T) {
 	}
 }
 
-func TestChainInterceptors_InfoPassed(t *testing.T) {
-	expectedInfo := &RPCInfo{Service: "TestService", Method: "TestMethod"}
+func TestChainInterceptors_ContextAccessible(t *testing.T) {
+	expectedService := "TestService"
+	expectedMethod := "TestMethod"
 
-	interceptor := func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error) {
-		if info.Service != expectedInfo.Service {
-			t.Errorf("expected service %s, got %s", expectedInfo.Service, info.Service)
+	interceptor := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
+		if ctx.Service() != expectedService {
+			t.Errorf("expected service %s, got %s", expectedService, ctx.Service())
 		}
-		if info.Method != expectedInfo.Method {
-			t.Errorf("expected method %s, got %s", expectedInfo.Method, info.Method)
+		if ctx.Method() != expectedMethod {
+			t.Errorf("expected method %s, got %s", expectedMethod, ctx.Method())
 		}
 		return handler(ctx, req)
 	}
 
 	chain := chainInterceptors([]UnaryInterceptor{interceptor})
 
+	ctx := NewContext(context.Background(), expectedService, expectedMethod)
 	handler := func(ctx context.Context, req any) (any, error) {
 		return "success", nil
 	}
 
-	res, err := chain(context.Background(), "request", expectedInfo, handler)
+	res, err := chain(ctx, "request", handler)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}

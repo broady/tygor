@@ -128,13 +128,12 @@ reg := tygor.NewRegistry().WithErrorTransformer(func(err error) *tygor.Error {
 
 **Interceptor chain:** Global → Service → Handler. Signature:
 ```go
-type UnaryInterceptor func(ctx context.Context, req any, info *tygor.RPCInfo, handler tygor.HandlerFunc) (any, error)
+type UnaryInterceptor func(ctx *tygor.Context, req any, handler tygor.HandlerFunc) (any, error)
 ```
 
 **Context API:**
-- `RequestFromContext(ctx)`: Access `*http.Request`
-- `MethodFromContext(ctx)`: Get service/method names
-- `SetHeader(ctx, key, val)`: Set response headers
+- Interceptors receive `*tygor.Context` with `Service()`, `Method()`, `HTTPRequest()`, `HTTPWriter()` methods
+- Handlers can use `tygor.FromContext(ctx)` to extract `*Context` from `context.Context`
 
 **Code generation:**
 ```go

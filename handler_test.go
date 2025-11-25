@@ -74,7 +74,7 @@ func TestHandler_WithUnaryInterceptor(t *testing.T) {
 		return TestResponse{}, nil
 	}
 
-	interceptor := func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error) {
+	interceptor := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
 		return handler(ctx, req)
 	}
 
@@ -222,7 +222,7 @@ func TestHandler_ServeHTTP_WithUnaryInterceptor(t *testing.T) {
 		return TestResponse{Message: "ok"}, nil
 	}
 
-	interceptor := func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error) {
+	interceptor := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
 		interceptorCalled = true
 		return handler(ctx, req)
 	}
@@ -333,7 +333,7 @@ func TestHandler_ServeHTTP_InterceptorModifiesRequest(t *testing.T) {
 		return TestResponse{Message: req.Name}, nil
 	}
 
-	interceptor := func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error) {
+	interceptor := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
 		// Modify the request
 		r := req.(TestRequest)
 		r.Name = "Modified"
@@ -412,14 +412,14 @@ func TestHandler_ChainedInterceptors(t *testing.T) {
 		return TestResponse{Message: "ok"}, nil
 	}
 
-	interceptor1 := func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error) {
+	interceptor1 := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
 		callOrder = append(callOrder, "interceptor1-before")
 		res, err := handler(ctx, req)
 		callOrder = append(callOrder, "interceptor1-after")
 		return res, err
 	}
 
-	interceptor2 := func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error) {
+	interceptor2 := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
 		callOrder = append(callOrder, "interceptor2-before")
 		res, err := handler(ctx, req)
 		callOrder = append(callOrder, "interceptor2-after")
@@ -429,7 +429,7 @@ func TestHandler_ChainedInterceptors(t *testing.T) {
 	handler := Unary(fn).WithUnaryInterceptor(interceptor1).WithUnaryInterceptor(interceptor2)
 
 	// Add config interceptor as well
-	configInterceptor := func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error) {
+	configInterceptor := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
 		callOrder = append(callOrder, "config-before")
 		res, err := handler(ctx, req)
 		callOrder = append(callOrder, "config-after")

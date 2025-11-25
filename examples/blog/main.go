@@ -91,9 +91,9 @@ func getUserID(ctx context.Context) (int64, bool) {
 	return userID, ok
 }
 
-func requireAuth(ctx context.Context, req any, info *tygor.RPCInfo, handler tygor.HandlerFunc) (any, error) {
+func requireAuth(ctx *tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
 	// Extract token from request headers
-	httpReq := tygor.RequestFromContext(ctx)
+	httpReq := ctx.HTTPRequest()
 	if httpReq == nil {
 		return nil, tygor.NewError(tygor.CodeUnauthenticated, "no request in context")
 	}
@@ -120,10 +120,9 @@ func requireAuth(ctx context.Context, req any, info *tygor.RPCInfo, handler tygo
 		return nil, tygor.NewError(tygor.CodeUnauthenticated, "invalid token")
 	}
 
-	// Add user ID to context
-	ctx = context.WithValue(ctx, userIDKey, userID)
-
-	return handler(ctx, req)
+	// Add user ID to context and pass to handler
+	ctxWithUser := context.WithValue(ctx, userIDKey, userID)
+	return handler(ctxWithUser, req)
 }
 
 // --- User Service Handlers ---

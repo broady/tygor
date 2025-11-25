@@ -19,16 +19,13 @@ func TestLoggingInterceptor_Success(t *testing.T) {
 
 	interceptor := LoggingInterceptor(logger)
 
-	info := &tygor.RPCInfo{
-		Service: "TestService",
-		Method:  "TestMethod",
-	}
+	ctx := tygor.NewContext(context.Background(), "TestService", "TestMethod")
 
 	handler := func(ctx context.Context, req any) (any, error) {
 		return "response", nil
 	}
 
-	result, err := interceptor(context.Background(), "request", info, handler)
+	result, err := interceptor(ctx, "request", handler)
 
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -61,17 +58,14 @@ func TestLoggingInterceptor_Error(t *testing.T) {
 
 	interceptor := LoggingInterceptor(logger)
 
-	info := &tygor.RPCInfo{
-		Service: "TestService",
-		Method:  "TestMethod",
-	}
+	ctx := tygor.NewContext(context.Background(), "TestService", "TestMethod")
 
 	testErr := errors.New("test error")
 	handler := func(ctx context.Context, req any) (any, error) {
 		return nil, testErr
 	}
 
-	result, err := interceptor(context.Background(), "request", info, handler)
+	result, err := interceptor(ctx, "request", handler)
 
 	if err != testErr {
 		t.Errorf("expected test error, got %v", err)
@@ -97,16 +91,13 @@ func TestLoggingInterceptor_NilLogger(t *testing.T) {
 	// Should not panic with nil logger, should use default
 	interceptor := LoggingInterceptor(nil)
 
-	info := &tygor.RPCInfo{
-		Service: "TestService",
-		Method:  "TestMethod",
-	}
+	ctx := tygor.NewContext(context.Background(), "TestService", "TestMethod")
 
 	handler := func(ctx context.Context, req any) (any, error) {
 		return "response", nil
 	}
 
-	result, err := interceptor(context.Background(), "request", info, handler)
+	result, err := interceptor(ctx, "request", handler)
 
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -125,16 +116,13 @@ func TestLoggingInterceptor_LogsDuration(t *testing.T) {
 
 	interceptor := LoggingInterceptor(logger)
 
-	info := &tygor.RPCInfo{
-		Service: "TestService",
-		Method:  "TestMethod",
-	}
+	ctx := tygor.NewContext(context.Background(), "TestService", "TestMethod")
 
 	handler := func(ctx context.Context, req any) (any, error) {
 		return "response", nil
 	}
 
-	_, err := interceptor(context.Background(), "request", info, handler)
+	_, err := interceptor(ctx, "request", handler)
 
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -156,12 +144,8 @@ func TestLoggingInterceptor_PropagatesContext(t *testing.T) {
 
 	type ctxKey string
 	key := ctxKey("test-key")
-	ctx := context.WithValue(context.Background(), key, "test-value")
-
-	info := &tygor.RPCInfo{
-		Service: "TestService",
-		Method:  "TestMethod",
-	}
+	baseCtx := context.WithValue(context.Background(), key, "test-value")
+	ctx := tygor.NewContext(baseCtx, "TestService", "TestMethod")
 
 	handler := func(ctx context.Context, req any) (any, error) {
 		val := ctx.Value(key)
@@ -171,7 +155,7 @@ func TestLoggingInterceptor_PropagatesContext(t *testing.T) {
 		return "response", nil
 	}
 
-	_, err := interceptor(ctx, "request", info, handler)
+	_, err := interceptor(ctx, "request", handler)
 
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -199,16 +183,13 @@ func TestLoggingInterceptor_ServiceAndMethodInLogs(t *testing.T) {
 		t.Run(tt.service+"."+tt.method, func(t *testing.T) {
 			buf.Reset()
 
-			info := &tygor.RPCInfo{
-				Service: tt.service,
-				Method:  tt.method,
-			}
+			ctx := tygor.NewContext(context.Background(), tt.service, tt.method)
 
 			handler := func(ctx context.Context, req any) (any, error) {
 				return nil, nil
 			}
 
-			_, _ = interceptor(context.Background(), nil, info, handler)
+			_, _ = interceptor(ctx, nil, handler)
 
 			logOutput := buf.String()
 			if !strings.Contains(logOutput, tt.service) {
@@ -229,17 +210,14 @@ func TestLoggingInterceptor_ErrorDetails(t *testing.T) {
 
 	interceptor := LoggingInterceptor(logger)
 
-	info := &tygor.RPCInfo{
-		Service: "TestService",
-		Method:  "TestMethod",
-	}
+	ctx := tygor.NewContext(context.Background(), "TestService", "TestMethod")
 
 	customErr := tygor.NewError(tygor.CodeNotFound, "resource not found")
 	handler := func(ctx context.Context, req any) (any, error) {
 		return nil, customErr
 	}
 
-	_, err := interceptor(context.Background(), "request", info, handler)
+	_, err := interceptor(ctx, "request", handler)
 
 	if err != customErr {
 		t.Errorf("expected custom error, got %v", err)
@@ -263,10 +241,7 @@ func TestLoggingInterceptor_PassthroughRequest(t *testing.T) {
 
 	interceptor := LoggingInterceptor(logger)
 
-	info := &tygor.RPCInfo{
-		Service: "TestService",
-		Method:  "TestMethod",
-	}
+	ctx := tygor.NewContext(context.Background(), "TestService", "TestMethod")
 
 	type testReq struct {
 		Key string
@@ -279,7 +254,7 @@ func TestLoggingInterceptor_PassthroughRequest(t *testing.T) {
 		return "response", nil
 	}
 
-	_, err := interceptor(context.Background(), expectedReq, info, handler)
+	_, err := interceptor(ctx, expectedReq, handler)
 
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)

@@ -471,14 +471,22 @@ This ensures that only handlers created via `tygor.NewHandler` can be registered
 The library MUST support interceptors (middleware) with the following signature:
 
 ```go
-type UnaryInterceptor func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (res any, err error)
+type UnaryInterceptor func(ctx *Context, req any, handler HandlerFunc) (res any, err error)
 
 type HandlerFunc func(ctx context.Context, req any) (res any, err error)
+```
 
-type RPCInfo struct {
-    Service string
-    Method  string
+The `*Context` type provides type-safe access to RPC metadata:
+
+```go
+type Context struct {
+    context.Context  // embeds standard context
 }
+
+func (c *Context) Service() string              // service name
+func (c *Context) Method() string               // method name
+func (c *Context) HTTPRequest() *http.Request   // underlying HTTP request
+func (c *Context) HTTPWriter() http.ResponseWriter // response writer
 ```
 
 ### 10.2 Interceptor Scopes
@@ -492,10 +500,10 @@ Interceptors can be registered at three levels (executed in order):
 **Example:**
 ```go
 // Logging interceptor
-func LoggingInterceptor(ctx context.Context, req any, info *tygor.RPCInfo, handler tygor.HandlerFunc) (any, error) {
+func LoggingInterceptor(ctx *tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
     start := time.Now()
     res, err := handler(ctx, req)
-    log.Printf("%s.%s took %v", info.Service, info.Method, time.Since(start))
+    log.Printf("%s.%s took %v", ctx.Service(), ctx.Method(), time.Since(start))
     return res, err
 }
 
@@ -515,46 +523,35 @@ Interceptors MUST execute in the following order:
 
 ## 11. Context API
 
-### 11.1 Request Access
+### 11.1 Context Type
 
-The library MUST provide a function to access the underlying HTTP request:
+The library provides a `*Context` type that wraps `context.Context` and provides type-safe access to RPC metadata:
 
 ```go
-func RequestFromContext(ctx context.Context) *http.Request
+func FromContext(ctx context.Context) (*Context, bool)
 ```
 
-**Example:**
+**In interceptors:** Receive `*Context` directly with full access to RPC metadata.
+
+**In handlers:** Use `FromContext` to extract the context:
+
 ```go
 func MyHandler(ctx context.Context, req *MyRequest) (*MyResponse, error) {
-    httpReq := tygor.RequestFromContext(ctx)
-    userAgent := httpReq.Header.Get("User-Agent")
-    // ...
-}
-```
-
-### 11.2 Operation Info Access
-
-The library MUST provide a function to access operation metadata:
-
-```go
-func MethodFromContext(ctx context.Context) (service, method string)
-```
-
-### 11.3 Response Header Manipulation
-
-The library MUST provide a function to set response headers:
-
-```go
-func SetHeader(ctx context.Context, key, value string)
-```
-
-**Example:**
-```go
-func MyHandler(ctx context.Context, req *MyRequest) (*MyResponse, error) {
-    tygor.SetHeader(ctx, "X-Custom-Header", "value")
+    tc, ok := tygor.FromContext(ctx)
+    if ok {
+        userAgent := tc.HTTPRequest().Header.Get("User-Agent")
+        tc.HTTPWriter().Header().Set("X-Custom-Header", "value")
+    }
     return &MyResponse{}, nil
 }
 ```
+
+### 11.2 Context Methods
+
+- `Service() string` - Returns the service name
+- `Method() string` - Returns the method name
+- `HTTPRequest() *http.Request` - Returns the underlying HTTP request
+- `HTTPWriter() http.ResponseWriter` - Returns the response writer for setting headers
 
 ---
 
@@ -731,5 +728,5 @@ A conforming Go implementation MUST:
 - ✅ Support custom error transformers
 - ✅ Provide sealed `RPCMethod` interface
 - ✅ Support interceptors at registry/service/handler levels via `WithUnaryInterceptor`
-- ✅ Provide context API for request metadata (`RequestFromContext`, `MethodFromContext`, `SetHeader`)
+- ✅ Provide context API for request metadata (`FromContext`, `*Context` with `Service()`, `Method()`, `HTTPRequest()`, `HTTPWriter()`)
 - ✅ Generate TypeScript types and manifest
