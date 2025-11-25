@@ -20,11 +20,15 @@ const (
 	CodePermissionDenied  ErrorCode = "permission_denied"
 	CodeNotFound          ErrorCode = "not_found"
 	CodeMethodNotAllowed  ErrorCode = "method_not_allowed"
-	CodeAlreadyExists     ErrorCode = "already_exists"
+	CodeConflict          ErrorCode = "conflict"
+	CodeAlreadyExists     ErrorCode = "already_exists" // Alias for conflict, used when resource already exists
+	CodeGone              ErrorCode = "gone"
 	CodeResourceExhausted ErrorCode = "resource_exhausted"
-	CodeUnavailable       ErrorCode = "unavailable"
-	CodeInternal          ErrorCode = "internal"
 	CodeCanceled          ErrorCode = "canceled"
+	CodeInternal          ErrorCode = "internal"
+	CodeNotImplemented    ErrorCode = "not_implemented"
+	CodeUnavailable       ErrorCode = "unavailable"
+	CodeDeadlineExceeded  ErrorCode = "deadline_exceeded"
 )
 
 // Error is the standard JSON error envelope.
@@ -54,6 +58,77 @@ func Errorf(code ErrorCode, format string, args ...any) *Error {
 	}
 }
 
+// Convenience constructors for common error codes.
+// Each accepts an optional details map as the last argument.
+
+// InvalidArgument creates an invalid_argument error (400).
+func InvalidArgument(message string, details ...map[string]any) *Error {
+	return newErrorWithDetails(CodeInvalidArgument, message, details)
+}
+
+// Unauthenticated creates an unauthenticated error (401).
+func Unauthenticated(message string, details ...map[string]any) *Error {
+	return newErrorWithDetails(CodeUnauthenticated, message, details)
+}
+
+// PermissionDenied creates a permission_denied error (403).
+func PermissionDenied(message string, details ...map[string]any) *Error {
+	return newErrorWithDetails(CodePermissionDenied, message, details)
+}
+
+// NotFound creates a not_found error (404).
+func NotFound(message string, details ...map[string]any) *Error {
+	return newErrorWithDetails(CodeNotFound, message, details)
+}
+
+// Conflict creates a conflict error (409).
+func Conflict(message string, details ...map[string]any) *Error {
+	return newErrorWithDetails(CodeConflict, message, details)
+}
+
+// AlreadyExists creates an already_exists error (409).
+func AlreadyExists(message string, details ...map[string]any) *Error {
+	return newErrorWithDetails(CodeAlreadyExists, message, details)
+}
+
+// Gone creates a gone error (410).
+func Gone(message string, details ...map[string]any) *Error {
+	return newErrorWithDetails(CodeGone, message, details)
+}
+
+// ResourceExhausted creates a resource_exhausted error (429).
+func ResourceExhausted(message string, details ...map[string]any) *Error {
+	return newErrorWithDetails(CodeResourceExhausted, message, details)
+}
+
+// Internal creates an internal error (500).
+func Internal(message string, details ...map[string]any) *Error {
+	return newErrorWithDetails(CodeInternal, message, details)
+}
+
+// NotImplemented creates a not_implemented error (501).
+func NotImplemented(message string, details ...map[string]any) *Error {
+	return newErrorWithDetails(CodeNotImplemented, message, details)
+}
+
+// Unavailable creates an unavailable error (503).
+func Unavailable(message string, details ...map[string]any) *Error {
+	return newErrorWithDetails(CodeUnavailable, message, details)
+}
+
+// DeadlineExceeded creates a deadline_exceeded error (504).
+func DeadlineExceeded(message string, details ...map[string]any) *Error {
+	return newErrorWithDetails(CodeDeadlineExceeded, message, details)
+}
+
+func newErrorWithDetails(code ErrorCode, message string, details []map[string]any) *Error {
+	err := &Error{Code: code, Message: message}
+	if len(details) > 0 && details[0] != nil {
+		err.Details = details[0]
+	}
+	return err
+}
+
 // ErrorTransformer is a function that maps an application error to an RPC error.
 // If it returns nil, the default transformer logic should be applied.
 type ErrorTransformer func(error) *Error
@@ -70,7 +145,7 @@ func DefaultErrorTransformer(err error) *Error {
 	}
 
 	if errors.Is(err, context.DeadlineExceeded) {
-		return NewError(CodeUnavailable, "context deadline exceeded")
+		return NewError(CodeDeadlineExceeded, "request timeout")
 	}
 
 	if errors.Is(err, context.Canceled) {
@@ -129,16 +204,22 @@ func HTTPStatusFromCode(code ErrorCode) int {
 		return http.StatusNotFound
 	case CodeMethodNotAllowed:
 		return http.StatusMethodNotAllowed
-	case CodeAlreadyExists:
+	case CodeConflict, CodeAlreadyExists:
 		return http.StatusConflict
+	case CodeGone:
+		return http.StatusGone
 	case CodeResourceExhausted:
 		return http.StatusTooManyRequests
-	case CodeUnavailable:
-		return http.StatusServiceUnavailable
 	case CodeCanceled:
 		return 499 // Client Closed Request (Nginx standard)
 	case CodeInternal:
 		return http.StatusInternalServerError
+	case CodeNotImplemented:
+		return http.StatusNotImplemented
+	case CodeUnavailable:
+		return http.StatusServiceUnavailable
+	case CodeDeadlineExceeded:
+		return http.StatusGatewayTimeout
 	default:
 		return http.StatusInternalServerError
 	}

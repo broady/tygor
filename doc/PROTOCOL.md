@@ -221,9 +221,10 @@ The following error codes MUST be supported. Implementations MAY define addition
 | `not_found` | 404 Not Found | Requested resource does not exist |
 | `method_not_allowed` | 405 Method Not Allowed | HTTP method not allowed for this operation |
 | `conflict` | 409 Conflict | Operation conflicts with current resource state |
+| `already_exists` | 409 Conflict | Resource already exists (alias for conflict) |
 | `gone` | 410 Gone | Resource permanently deleted |
 | `resource_exhausted` | 429 Too Many Requests | Rate limit exceeded or quota exhausted |
-| `cancelled` | 499 Client Closed Request | Request cancelled by client |
+| `canceled` | 499 Client Closed Request | Request canceled by client |
 | `internal` | 500 Internal Server Error | Unspecified server error |
 | `not_implemented` | 501 Not Implemented | Operation not implemented |
 | `unavailable` | 503 Service Unavailable | Service temporarily unavailable |

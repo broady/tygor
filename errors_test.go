@@ -42,6 +42,53 @@ func TestErrorError(t *testing.T) {
 	}
 }
 
+func TestErrorConvenienceConstructors(t *testing.T) {
+	tests := []struct {
+		name     string
+		fn       func(string, ...map[string]any) *Error
+		wantCode ErrorCode
+	}{
+		{"InvalidArgument", InvalidArgument, CodeInvalidArgument},
+		{"Unauthenticated", Unauthenticated, CodeUnauthenticated},
+		{"PermissionDenied", PermissionDenied, CodePermissionDenied},
+		{"NotFound", NotFound, CodeNotFound},
+		{"Conflict", Conflict, CodeConflict},
+		{"AlreadyExists", AlreadyExists, CodeAlreadyExists},
+		{"Gone", Gone, CodeGone},
+		{"ResourceExhausted", ResourceExhausted, CodeResourceExhausted},
+		{"Internal", Internal, CodeInternal},
+		{"NotImplemented", NotImplemented, CodeNotImplemented},
+		{"Unavailable", Unavailable, CodeUnavailable},
+		{"DeadlineExceeded", DeadlineExceeded, CodeDeadlineExceeded},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Test without details
+			err := tt.fn("test message")
+			if err.Code != tt.wantCode {
+				t.Errorf("expected code %s, got %s", tt.wantCode, err.Code)
+			}
+			if err.Message != "test message" {
+				t.Errorf("expected message 'test message', got %s", err.Message)
+			}
+			if err.Details != nil {
+				t.Error("expected nil details")
+			}
+
+			// Test with details
+			details := map[string]any{"field": "value"}
+			errWithDetails := tt.fn("test message", details)
+			if errWithDetails.Details == nil {
+				t.Error("expected details to be set")
+			}
+			if errWithDetails.Details["field"] != "value" {
+				t.Error("expected details to contain field")
+			}
+		})
+	}
+}
+
 func TestDefaultErrorTransformer(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -64,8 +111,8 @@ func TestDefaultErrorTransformer(t *testing.T) {
 		{
 			name:     "context deadline exceeded",
 			input:    context.DeadlineExceeded,
-			wantCode: CodeUnavailable,
-			wantMsg:  "context deadline exceeded",
+			wantCode: CodeDeadlineExceeded,
+			wantMsg:  "request timeout",
 		},
 		{
 			name:     "context canceled",
@@ -153,11 +200,15 @@ func TestHTTPStatusFromCode(t *testing.T) {
 		{CodePermissionDenied, http.StatusForbidden},
 		{CodeNotFound, http.StatusNotFound},
 		{CodeMethodNotAllowed, http.StatusMethodNotAllowed},
+		{CodeConflict, http.StatusConflict},
 		{CodeAlreadyExists, http.StatusConflict},
+		{CodeGone, http.StatusGone},
 		{CodeResourceExhausted, http.StatusTooManyRequests},
-		{CodeUnavailable, http.StatusServiceUnavailable},
 		{CodeCanceled, 499},
 		{CodeInternal, http.StatusInternalServerError},
+		{CodeNotImplemented, http.StatusNotImplemented},
+		{CodeUnavailable, http.StatusServiceUnavailable},
+		{CodeDeadlineExceeded, http.StatusGatewayTimeout},
 		{ErrorCode("unknown"), http.StatusInternalServerError},
 	}
 

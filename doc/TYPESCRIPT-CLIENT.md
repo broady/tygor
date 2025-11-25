@@ -82,11 +82,12 @@ export interface CreateNewsParams {
 
 ### 3.3 Manifest File (`manifest.ts`)
 
-This file exports the RPC manifest interface and metadata constant.
+This file exports the RPC manifest interface and a registry object containing type metadata and runtime metadata.
 
 **Structure:**
 ```typescript
 // manifest.ts
+import { ServiceRegistry } from '@tygor/client';
 import * as types from './types';
 
 /** Type-safe RPC manifest mapping operation IDs to request/response types */
@@ -94,27 +95,30 @@ export interface RPCManifest {
   "News.List": {
     req: types.ListNewsParams;
     res: types.News[];
-    method: "GET";
-    path: "/News/List";
   };
   "News.Create": {
     req: types.CreateNewsParams;
     res: types.News;
-    method: "POST";
-    path: "/News/Create";
   };
 }
 
 /** Runtime metadata for all RPC operations */
-export const RPCMetadata = {
-  "News.List": { method: "GET" as const, path: "/News/List" },
-  "News.Create": { method: "POST" as const, path: "/News/Create" },
+const metadata = {
+  "News.List": { method: "GET", path: "/News/List" },
+  "News.Create": { method: "POST", path: "/News/Create" },
 } as const;
+
+/** Registry combining type manifest and runtime metadata */
+export const registry: ServiceRegistry<RPCManifest> = {
+  manifest: {} as RPCManifest,
+  metadata,
+};
 ```
 
 **Requirements:**
-- `RPCManifest` interface MUST map operation IDs to their type metadata
-- `RPCMetadata` constant MUST provide runtime access to HTTP method and path
+- `RPCManifest` interface MUST map operation IDs to their request/response types
+- `metadata` constant MUST provide runtime access to HTTP method and path
+- `registry` object MUST combine the manifest type and metadata for client construction
 - Operation IDs MUST follow the format `"{Service}.{Method}"`
 
 ---
@@ -885,37 +889,37 @@ export interface News {
 
 ```typescript
 // rpc/manifest.ts
+import { ServiceRegistry } from '@tygor/client';
 import * as types from './types';
 
 export interface RPCManifest {
   "News.List": {
     req: types.ListNewsParams;
     res: types.News[];
-    method: "GET";
-    path: "/News/List";
   };
 }
 
-export const RPCMetadata = {
-  "News.List": { method: "GET" as const, path: "/News/List" },
+const metadata = {
+  "News.List": { method: "GET", path: "/News/List" },
 } as const;
+
+export const registry: ServiceRegistry<RPCManifest> = {
+  manifest: {} as RPCManifest,
+  metadata,
+};
 ```
 
 **Application Code:**
 ```typescript
 // client.ts
-import { createClient } from './rpc-client';
+import { createClient } from '@tygor/client';
+import { registry } from './rpc/manifest';
 
-export const client = createClient({
-  baseURL: import.meta.env.VITE_API_URL,
-  headers: {
+export const client = createClient(registry, {
+  baseUrl: import.meta.env.VITE_API_URL,
+  headers: () => ({
     'Authorization': `Bearer ${getToken()}`,
-  },
-  onError: (error) => {
-    if (error.code === 'unauthenticated') {
-      window.location.href = '/login';
-    }
-  },
+  }),
 });
 
 // app.ts

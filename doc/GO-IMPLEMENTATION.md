@@ -84,38 +84,50 @@ func ListNews(ctx context.Context, req *db.ListNewsParams) ([]*db.News, error) {
 
 ### 3.2 Handler Construction
 
-The library MUST provide a `NewHandler` function that wraps handler functions and returns an `RPCMethod` interface.
+The library provides two constructor functions for creating handlers:
 
-**Signature:**
+**POST Handlers (mutations):**
 ```go
-func NewHandler[Req, Res any](fn func(context.Context, Req) (Res, error)) *Handler[Req, Res]
+func Unary[Req, Res any](fn func(context.Context, Req) (Res, error)) *UnaryPostHandler[Req, Res]
+```
+
+**GET Handlers (queries):**
+```go
+func UnaryGet[Req, Res any](fn func(context.Context, Req) (Res, error)) *UnaryGetHandler[Req, Res]
 ```
 
 **Fluent API:**
-The `Handler` type MUST support method chaining for configuration:
 
+`UnaryPostHandler` supports:
 ```go
-type Handler[Req, Res any] struct {
-    // internal fields
-}
+func (h *UnaryPostHandler[Req, Res]) WithUnaryInterceptor(i UnaryInterceptor) *UnaryPostHandler[Req, Res]
+func (h *UnaryPostHandler[Req, Res]) WithSkipValidation() *UnaryPostHandler[Req, Res]
+func (h *UnaryPostHandler[Req, Res]) WithMaxRequestBodySize(size uint64) *UnaryPostHandler[Req, Res]
+```
 
-func (h *Handler[Req, Res]) Method(method string) *Handler[Req, Res]
-func (h *Handler[Req, Res]) Cache(duration time.Duration) *Handler[Req, Res]
-func (h *Handler[Req, Res]) WithInterceptor(i Interceptor) *Handler[Req, Res]
-func (h *Handler[Req, Res]) WithSkipValidation() *Handler[Req, Res]
+`UnaryGetHandler` supports:
+```go
+func (h *UnaryGetHandler[Req, Res]) WithUnaryInterceptor(i UnaryInterceptor) *UnaryGetHandler[Req, Res]
+func (h *UnaryGetHandler[Req, Res]) WithSkipValidation() *UnaryGetHandler[Req, Res]
+func (h *UnaryGetHandler[Req, Res]) CacheControl(cfg CacheConfig) *UnaryGetHandler[Req, Res]
+func (h *UnaryGetHandler[Req, Res]) WithStrictQueryParams() *UnaryGetHandler[Req, Res]
 ```
 
 **Example Usage:**
 ```go
-h := tygor.NewHandler(ListNews).
-    Method("GET").
-    Cache(5 * time.Minute)
+// POST handler (default for mutations)
+tygor.Unary(CreateNews)
+
+// GET handler with caching
+tygor.UnaryGet(ListNews).CacheControl(tygor.CacheConfig{
+    MaxAge: 5 * time.Minute,
+    Public: true,
+})
 ```
 
 **Defaults:**
-- HTTP Method: `"POST"`
-- No caching
-- Validation enabled (if validator is available)
+- `Unary()`: POST method, no caching, validation enabled
+- `UnaryGet()`: GET method, no caching, validation enabled, lenient query params
 
 ---
 
@@ -157,8 +169,8 @@ func (s *Service) Register(method string, handler RPCMethod)
 ```go
 reg := tygor.NewRegistry()
 news := reg.Service("News")
-news.Register("List", tygor.NewHandler(ListNews).Method("GET"))
-news.Register("Create", tygor.NewHandler(CreateNews))
+news.Register("List", tygor.UnaryGet(ListNews))
+news.Register("Create", tygor.Unary(CreateNews))
 ```
 
 This registers operations:
@@ -188,16 +200,19 @@ The `Registry` MUST support configuration via chaining methods:
 
 ```go
 func (r *Registry) WithErrorTransformer(fn ErrorTransformer) *Registry
-func (r *Registry) WithInterceptor(i Interceptor) *Registry
-func (r *Registry) WithLogger(logger Logger) *Registry
-func (r *Registry) WithSkipValidation() *Registry
+func (r *Registry) WithMaskInternalErrors() *Registry
+func (r *Registry) WithUnaryInterceptor(i UnaryInterceptor) *Registry
+func (r *Registry) WithMiddleware(mw func(http.Handler) http.Handler) *Registry
+func (r *Registry) WithLogger(logger *slog.Logger) *Registry
+func (r *Registry) WithMaxRequestBodySize(size uint64) *Registry
 ```
 
 **Example:**
 ```go
 reg := tygor.NewRegistry().
     WithErrorTransformer(customErrorHandler).
-    WithLogger(slog.Default())
+    WithLogger(slog.Default()).
+    WithMaskInternalErrors()
 ```
 
 ### 5.2 Service Configuration
@@ -205,7 +220,7 @@ reg := tygor.NewRegistry().
 The `Service` type SHOULD support configuration methods:
 
 ```go
-func (s *Service) WithInterceptor(i Interceptor) *Service
+func (s *Service) WithUnaryInterceptor(i UnaryInterceptor) *Service
 ```
 
 ---
@@ -240,9 +255,10 @@ const (
     CodeNotFound          ErrorCode = "not_found"
     CodeMethodNotAllowed  ErrorCode = "method_not_allowed"
     CodeConflict          ErrorCode = "conflict"
+    CodeAlreadyExists     ErrorCode = "already_exists" // Alias for conflict
     CodeGone              ErrorCode = "gone"
     CodeResourceExhausted ErrorCode = "resource_exhausted"
-    CodeCancelled         ErrorCode = "cancelled"
+    CodeCanceled          ErrorCode = "canceled"
     CodeInternal          ErrorCode = "internal"
     CodeNotImplemented    ErrorCode = "not_implemented"
     CodeUnavailable       ErrorCode = "unavailable"
@@ -252,15 +268,30 @@ const (
 
 ### 6.3 Error Constructor Functions
 
-The library SHOULD provide constructor functions for common errors:
+The library provides convenience constructor functions for all error codes. Each accepts an optional `details` map:
 
 ```go
-func InvalidArgument(message string, details ...map[string]any) *Error
-func NotFound(message string, details ...map[string]any) *Error
-func PermissionDenied(message string, details ...map[string]any) *Error
-func Unauthenticated(message string, details ...map[string]any) *Error
-func Internal(message string, details ...map[string]any) *Error
-// ... etc
+func NewError(code ErrorCode, message string) *Error
+func Errorf(code ErrorCode, format string, args ...any) *Error
+
+// Convenience constructors (all accept optional details map)
+func InvalidArgument(message string, details ...map[string]any) *Error   // 400
+func Unauthenticated(message string, details ...map[string]any) *Error   // 401
+func PermissionDenied(message string, details ...map[string]any) *Error  // 403
+func NotFound(message string, details ...map[string]any) *Error          // 404
+func Conflict(message string, details ...map[string]any) *Error          // 409
+func AlreadyExists(message string, details ...map[string]any) *Error     // 409
+func Gone(message string, details ...map[string]any) *Error              // 410
+func ResourceExhausted(message string, details ...map[string]any) *Error // 429
+func Internal(message string, details ...map[string]any) *Error          // 500
+func NotImplemented(message string, details ...map[string]any) *Error    // 501
+func Unavailable(message string, details ...map[string]any) *Error       // 503
+func DeadlineExceeded(message string, details ...map[string]any) *Error  // 504
+```
+
+**Example:**
+```go
+return tygor.NotFound("user not found", map[string]any{"user_id": id})
 ```
 
 ### 6.4 Error Transformer
@@ -281,42 +312,47 @@ func DefaultErrorTransformer(err error) *Error {
     }
 
     // Already a tygor.Error
-    if e, ok := err.(*Error); ok {
-        return e
+    var rpcErr *Error
+    if errors.As(err, &rpcErr) {
+        return rpcErr
     }
 
     // Context errors
     if errors.Is(err, context.DeadlineExceeded) {
-        return &Error{Code: CodeDeadlineExceeded, Message: "request timeout"}
+        return NewError(CodeDeadlineExceeded, "request timeout")
     }
     if errors.Is(err, context.Canceled) {
-        return &Error{Code: CodeCancelled, Message: "request cancelled"}
+        return NewError(CodeCanceled, "context canceled")
     }
 
-    // Validation errors (if go-playground/validator is available)
-    if _, ok := err.(validator.ValidationErrors); ok {
-        return &Error{Code: CodeInvalidArgument, Message: "validation failed"}
+    // Validation errors (go-playground/validator)
+    var valErrs validator.ValidationErrors
+    if errors.As(err, &valErrs) {
+        details := make(map[string]any)
+        for _, ve := range valErrs {
+            details[ve.Field()] = ve.Tag()
+        }
+        return &Error{
+            Code:    CodeInvalidArgument,
+            Message: "validation failed",
+            Details: details,
+        }
     }
 
-    // Database errors
-    if errors.Is(err, sql.ErrNoRows) {
-        return &Error{Code: CodeNotFound, Message: "not found"}
-    }
-
-    // Default: internal error
-    return &Error{Code: CodeInternal, Message: "internal server error"}
+    // Default: internal error (preserves original message)
+    return NewError(CodeInternal, err.Error())
 }
 ```
 
 **Configuration:**
 ```go
 reg := tygor.NewRegistry().
-    WithErrorTransformer(func(err error) *Error {
+    WithErrorTransformer(func(err error) *tygor.Error {
         // Custom transformation
         if errors.Is(err, sql.ErrNoRows) {
             return tygor.NotFound("resource not found")
         }
-        return tygor.DefaultErrorTransformer(err)
+        return nil // Fall back to default transformer
     })
 ```
 
@@ -456,14 +492,14 @@ Interceptors can be registered at three levels (executed in order):
 **Example:**
 ```go
 // Logging interceptor
-func LoggingInterceptor(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error) {
+func LoggingInterceptor(ctx context.Context, req any, info *tygor.RPCInfo, handler tygor.HandlerFunc) (any, error) {
     start := time.Now()
     res, err := handler(ctx, req)
     log.Printf("%s.%s took %v", info.Service, info.Method, time.Since(start))
     return res, err
 }
 
-reg := tygor.NewRegistry().WithInterceptor(LoggingInterceptor)
+reg := tygor.NewRegistry().WithUnaryInterceptor(LoggingInterceptor)
 ```
 
 ### 10.3 Execution Order
@@ -632,13 +668,18 @@ package main
 import (
     "context"
     "log"
+    "log/slog"
     "net/http"
+    "time"
 
     "github.com/broady/tygor"
+    "github.com/broady/tygor/tygorgen"
     "myapp/internal/db"
 )
 
-// Handler function
+var dbPool *pgxpool.Pool // initialized elsewhere
+
+// Handler functions
 func ListNews(ctx context.Context, req *db.ListNewsParams) ([]*db.News, error) {
     queries := db.New(dbPool)
     return queries.ListNews(ctx, req)
@@ -653,12 +694,15 @@ func main() {
     // Create registry
     reg := tygor.NewRegistry().
         WithLogger(slog.Default()).
-        WithErrorTransformer(customErrors)
+        WithMaskInternalErrors()
 
     // Register services
     news := reg.Service("News")
-    news.Register("List", tygor.NewHandler(ListNews).Method("GET").Cache(5*time.Minute))
-    news.Register("Create", tygor.NewHandler(CreateNews))
+    news.Register("List", tygor.UnaryGet(ListNews).CacheControl(tygor.CacheConfig{
+        MaxAge: 5 * time.Minute,
+        Public: true,
+    }))
+    news.Register("Create", tygor.Unary(CreateNews))
 
     // Generate TypeScript types
     if err := tygorgen.Generate(reg, &tygorgen.Config{
@@ -668,7 +712,7 @@ func main() {
     }
 
     // Start server
-    log.Fatal(http.ListenAndServe(":8080", reg))
+    log.Fatal(http.ListenAndServe(":8080", reg.Handler()))
 }
 ```
 
@@ -679,13 +723,13 @@ func main() {
 A conforming Go implementation MUST:
 
 - ✅ Support `func(ctx context.Context, req Req) (Res, error)` handlers
-- ✅ Provide `NewHandler` with fluent configuration API
+- ✅ Provide `Unary()` and `UnaryGet()` handler constructors with fluent configuration
 - ✅ Provide `Registry` with `Service` namespacing
 - ✅ Implement `http.Handler` interface
 - ✅ Support GET (query string) and POST (JSON body) serialization
 - ✅ Implement default error transformer with standard error codes
 - ✅ Support custom error transformers
 - ✅ Provide sealed `RPCMethod` interface
-- ✅ Support interceptors at registry/service/handler levels
-- ✅ Provide context API for request metadata
+- ✅ Support interceptors at registry/service/handler levels via `WithUnaryInterceptor`
+- ✅ Provide context API for request metadata (`RequestFromContext`, `MethodFromContext`, `SetHeader`)
 - ✅ Generate TypeScript types and manifest

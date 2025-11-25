@@ -57,7 +57,7 @@ func(ctx context.Context, req Req) (Res, error)
 ```go
 reg := tygor.NewRegistry()
 news := reg.Service("News")
-news.Register("List", tygor.NewHandler(ListNews).Method("GET"))
+news.Register("List", tygor.UnaryGet(ListNews))
 ```
 
 **Client usage:**
@@ -109,13 +109,12 @@ Type-safe RPC calls
 
 **Handler construction (fluent API):**
 ```go
-h := tygor.NewHandler(ListNews).
-    Method("GET").
-    Cache(5 * time.Minute).
-    WithInterceptor(authInterceptor)
+h := tygor.UnaryGet(ListNews).
+    CacheControl(tygor.CacheConfig{MaxAge: 5 * time.Minute}).
+    WithUnaryInterceptor(authInterceptor)
 ```
 
-**Sealed interface pattern:** `RPCMethod` interface uses internal package types to prevent external implementation. Only `NewHandler` can produce valid handlers.
+**Sealed interface pattern:** `RPCMethod` interface uses internal package types to prevent external implementation. Only `Unary` and `UnaryGet` can produce valid handlers.
 
 **Error transformation:**
 ```go
@@ -129,7 +128,7 @@ reg := tygor.NewRegistry().WithErrorTransformer(func(err error) *tygor.Error {
 
 **Interceptor chain:** Global → Service → Handler. Signature:
 ```go
-type UnaryInterceptor func(ctx context.Context, req any, info *RPCInfo, handler HandlerFunc) (any, error)
+type UnaryInterceptor func(ctx context.Context, req any, info *tygor.RPCInfo, handler tygor.HandlerFunc) (any, error)
 ```
 
 **Context API:**
@@ -237,9 +236,9 @@ func ListNews(ctx context.Context, req *db.ListNewsParams) ([]*db.News, error) {
 func main() {
     reg := tygor.NewRegistry()
     news := reg.Service("News")
-    news.Register("List", tygor.NewHandler(ListNews).Method("GET"))
+    news.Register("List", tygor.UnaryGet(ListNews))
     tygorgen.Generate(reg, &tygorgen.Config{OutDir: "./client/src/rpc"})
-    http.ListenAndServe(":8080", reg)
+    http.ListenAndServe(":8080", reg.Handler())
 }
 ```
 
