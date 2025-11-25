@@ -163,12 +163,12 @@ func UpdatePost(ctx context.Context, req *api.UpdatePostRequest) (*api.Post, err
 postService := reg.Service("Posts")
 
 // Public endpoints
-postService.Register("Get", tygor.NewHandler(GetPost).Method("GET"))
-postService.Register("List", tygor.NewHandler(ListPosts).Method("GET"))
+postService.Register("Get", tygor.UnaryGet(GetPost))
+postService.Register("List", tygor.UnaryGet(ListPosts))
 
 // Private endpoints (require auth)
 postService.Register("Create",
-    tygor.NewHandler(CreatePost).WithInterceptor(requireAuth))
+    tygor.Unary(CreatePost).WithUnaryInterceptor(requireAuth))
 ```
 
 ### Query Parameters with Validation

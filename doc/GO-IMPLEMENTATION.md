@@ -268,30 +268,20 @@ const (
 
 ### 6.3 Error Constructor Functions
 
-The library provides convenience constructor functions for all error codes. Each accepts an optional `details` map:
+The library provides constructor functions and chainable methods for adding details:
 
 ```go
 func NewError(code ErrorCode, message string) *Error
 func Errorf(code ErrorCode, format string, args ...any) *Error
 
-// Convenience constructors (all accept optional details map)
-func InvalidArgument(message string, details ...map[string]any) *Error   // 400
-func Unauthenticated(message string, details ...map[string]any) *Error   // 401
-func PermissionDenied(message string, details ...map[string]any) *Error  // 403
-func NotFound(message string, details ...map[string]any) *Error          // 404
-func Conflict(message string, details ...map[string]any) *Error          // 409
-func AlreadyExists(message string, details ...map[string]any) *Error     // 409
-func Gone(message string, details ...map[string]any) *Error              // 410
-func ResourceExhausted(message string, details ...map[string]any) *Error // 429
-func Internal(message string, details ...map[string]any) *Error          // 500
-func NotImplemented(message string, details ...map[string]any) *Error    // 501
-func Unavailable(message string, details ...map[string]any) *Error       // 503
-func DeadlineExceeded(message string, details ...map[string]any) *Error  // 504
+func (e *Error) WithDetail(key string, value any) *Error
+func (e *Error) WithDetails(details map[string]any) *Error
 ```
 
 **Example:**
 ```go
-return tygor.NotFound("user not found", map[string]any{"user_id": id})
+return tygor.NewError(tygor.CodeNotFound, "user not found").
+    WithDetail("user_id", id)
 ```
 
 ### 6.4 Error Transformer
@@ -350,7 +340,7 @@ reg := tygor.NewRegistry().
     WithErrorTransformer(func(err error) *tygor.Error {
         // Custom transformation
         if errors.Is(err, sql.ErrNoRows) {
-            return tygor.NotFound("resource not found")
+            return tygor.NewError(tygor.CodeNotFound, "resource not found")
         }
         return nil // Fall back to default transformer
     })

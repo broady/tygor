@@ -120,7 +120,7 @@ h := tygor.UnaryGet(ListNews).
 ```go
 reg := tygor.NewRegistry().WithErrorTransformer(func(err error) *tygor.Error {
     if errors.Is(err, sql.ErrNoRows) {
-        return tygor.NotFound("resource not found")
+        return tygor.NewError(tygor.CodeNotFound, "resource not found")
     }
     return tygor.DefaultErrorTransformer(err)
 })

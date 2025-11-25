@@ -58,75 +58,38 @@ func Errorf(code ErrorCode, format string, args ...any) *Error {
 	}
 }
 
-// Convenience constructors for common error codes.
-// Each accepts an optional details map as the last argument.
-
-// InvalidArgument creates an invalid_argument error (400).
-func InvalidArgument(message string, details ...map[string]any) *Error {
-	return newErrorWithDetails(CodeInvalidArgument, message, details)
-}
-
-// Unauthenticated creates an unauthenticated error (401).
-func Unauthenticated(message string, details ...map[string]any) *Error {
-	return newErrorWithDetails(CodeUnauthenticated, message, details)
-}
-
-// PermissionDenied creates a permission_denied error (403).
-func PermissionDenied(message string, details ...map[string]any) *Error {
-	return newErrorWithDetails(CodePermissionDenied, message, details)
-}
-
-// NotFound creates a not_found error (404).
-func NotFound(message string, details ...map[string]any) *Error {
-	return newErrorWithDetails(CodeNotFound, message, details)
-}
-
-// Conflict creates a conflict error (409).
-func Conflict(message string, details ...map[string]any) *Error {
-	return newErrorWithDetails(CodeConflict, message, details)
-}
-
-// AlreadyExists creates an already_exists error (409).
-func AlreadyExists(message string, details ...map[string]any) *Error {
-	return newErrorWithDetails(CodeAlreadyExists, message, details)
-}
-
-// Gone creates a gone error (410).
-func Gone(message string, details ...map[string]any) *Error {
-	return newErrorWithDetails(CodeGone, message, details)
-}
-
-// ResourceExhausted creates a resource_exhausted error (429).
-func ResourceExhausted(message string, details ...map[string]any) *Error {
-	return newErrorWithDetails(CodeResourceExhausted, message, details)
-}
-
-// Internal creates an internal error (500).
-func Internal(message string, details ...map[string]any) *Error {
-	return newErrorWithDetails(CodeInternal, message, details)
-}
-
-// NotImplemented creates a not_implemented error (501).
-func NotImplemented(message string, details ...map[string]any) *Error {
-	return newErrorWithDetails(CodeNotImplemented, message, details)
-}
-
-// Unavailable creates an unavailable error (503).
-func Unavailable(message string, details ...map[string]any) *Error {
-	return newErrorWithDetails(CodeUnavailable, message, details)
-}
-
-// DeadlineExceeded creates a deadline_exceeded error (504).
-func DeadlineExceeded(message string, details ...map[string]any) *Error {
-	return newErrorWithDetails(CodeDeadlineExceeded, message, details)
-}
-
-func newErrorWithDetails(code ErrorCode, message string, details []map[string]any) *Error {
-	err := &Error{Code: code, Message: message}
-	if len(details) > 0 && details[0] != nil {
-		err.Details = details[0]
+// WithDetail returns a new Error with the key-value pair added to details.
+func (e *Error) WithDetail(key string, value any) *Error {
+	details := make(map[string]any, len(e.Details)+1)
+	for k, v := range e.Details {
+		details[k] = v
 	}
-	return err
+	details[key] = value
+	return &Error{
+		Code:    e.Code,
+		Message: e.Message,
+		Details: details,
+	}
+}
+
+// WithDetails returns a new Error with the provided map merged into details.
+// For multiple details, this is more efficient than chaining WithDetail calls.
+func (e *Error) WithDetails(details map[string]any) *Error {
+	if len(details) == 0 {
+		return e
+	}
+	merged := make(map[string]any, len(e.Details)+len(details))
+	for k, v := range e.Details {
+		merged[k] = v
+	}
+	for k, v := range details {
+		merged[k] = v
+	}
+	return &Error{
+		Code:    e.Code,
+		Message: e.Message,
+		Details: merged,
+	}
 }
 
 // ErrorTransformer is a function that maps an application error to an RPC error.

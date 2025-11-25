@@ -42,50 +42,95 @@ func TestErrorError(t *testing.T) {
 	}
 }
 
-func TestErrorConvenienceConstructors(t *testing.T) {
-	tests := []struct {
-		name     string
-		fn       func(string, ...map[string]any) *Error
-		wantCode ErrorCode
-	}{
-		{"InvalidArgument", InvalidArgument, CodeInvalidArgument},
-		{"Unauthenticated", Unauthenticated, CodeUnauthenticated},
-		{"PermissionDenied", PermissionDenied, CodePermissionDenied},
-		{"NotFound", NotFound, CodeNotFound},
-		{"Conflict", Conflict, CodeConflict},
-		{"AlreadyExists", AlreadyExists, CodeAlreadyExists},
-		{"Gone", Gone, CodeGone},
-		{"ResourceExhausted", ResourceExhausted, CodeResourceExhausted},
-		{"Internal", Internal, CodeInternal},
-		{"NotImplemented", NotImplemented, CodeNotImplemented},
-		{"Unavailable", Unavailable, CodeUnavailable},
-		{"DeadlineExceeded", DeadlineExceeded, CodeDeadlineExceeded},
+func TestErrorWithDetail(t *testing.T) {
+	err := NewError(CodeNotFound, "resource not found").
+		WithDetail("resource_id", 123).
+		WithDetail("resource_type", "user")
+
+	if err.Code != CodeNotFound {
+		t.Errorf("expected code %s, got %s", CodeNotFound, err.Code)
+	}
+	if err.Details == nil {
+		t.Fatal("expected details to be set")
+	}
+	if err.Details["resource_id"] != 123 {
+		t.Errorf("expected resource_id=123, got %v", err.Details["resource_id"])
+	}
+	if err.Details["resource_type"] != "user" {
+		t.Errorf("expected resource_type=user, got %v", err.Details["resource_type"])
+	}
+}
+
+func TestErrorWithDetails(t *testing.T) {
+	details := map[string]any{"field": "email", "reason": "invalid format"}
+	err := NewError(CodeInvalidArgument, "validation failed").WithDetails(details)
+
+	if err.Code != CodeInvalidArgument {
+		t.Errorf("expected code %s, got %s", CodeInvalidArgument, err.Code)
+	}
+	if err.Details == nil {
+		t.Fatal("expected details to be set")
+	}
+	if err.Details["field"] != "email" {
+		t.Errorf("expected field=email, got %v", err.Details["field"])
+	}
+	if err.Details["reason"] != "invalid format" {
+		t.Errorf("expected reason='invalid format', got %v", err.Details["reason"])
+	}
+}
+
+func TestErrorWithDetails_Nil(t *testing.T) {
+	err := NewError(CodeInternal, "error").WithDetails(nil)
+	if err.Details != nil {
+		t.Error("expected nil details when passing nil")
+	}
+}
+
+func TestErrorWithDetails_Merge(t *testing.T) {
+	err := NewError(CodeInvalidArgument, "error").
+		WithDetail("existing", "value").
+		WithDetails(map[string]any{"new": "value"})
+
+	if err.Details["existing"] != "value" {
+		t.Error("expected existing detail to be preserved")
+	}
+	if err.Details["new"] != "value" {
+		t.Error("expected new detail to be added")
+	}
+}
+
+func TestErrorWithDetail_Immutable(t *testing.T) {
+	err1 := NewError(CodeNotFound, "not found").WithDetail("a", 1)
+	err2 := err1.WithDetail("b", 2)
+
+	// err1 and err2 should be different pointers
+	if err1 == err2 {
+		t.Error("expected WithDetail to return a new Error")
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Test without details
-			err := tt.fn("test message")
-			if err.Code != tt.wantCode {
-				t.Errorf("expected code %s, got %s", tt.wantCode, err.Code)
-			}
-			if err.Message != "test message" {
-				t.Errorf("expected message 'test message', got %s", err.Message)
-			}
-			if err.Details != nil {
-				t.Error("expected nil details")
-			}
+	// err1 should not have the "b" detail
+	if _, ok := err1.Details["b"]; ok {
+		t.Error("err1 should not be mutated by err2.WithDetail")
+	}
 
-			// Test with details
-			details := map[string]any{"field": "value"}
-			errWithDetails := tt.fn("test message", details)
-			if errWithDetails.Details == nil {
-				t.Error("expected details to be set")
-			}
-			if errWithDetails.Details["field"] != "value" {
-				t.Error("expected details to contain field")
-			}
-		})
+	// err2 should have both details
+	if err2.Details["a"] != 1 || err2.Details["b"] != 2 {
+		t.Error("err2 should have both details")
+	}
+}
+
+func TestErrorWithDetails_Immutable(t *testing.T) {
+	err1 := NewError(CodeNotFound, "not found").WithDetails(map[string]any{"a": 1})
+	err2 := err1.WithDetails(map[string]any{"b": 2})
+
+	// err1 and err2 should be different pointers
+	if err1 == err2 {
+		t.Error("expected WithDetails to return a new Error")
+	}
+
+	// err1 should not have the "b" detail
+	if _, ok := err1.Details["b"]; ok {
+		t.Error("err1 should not be mutated by err2.WithDetails")
 	}
 }
 
