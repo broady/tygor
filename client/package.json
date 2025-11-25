@@ -1,6 +1,6 @@
 {
   "name": "@tygor/client",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "TypeScript runtime client for tygor RPC framework",
   "main": "./runtime.js",
   "types": "./runtime.d.ts",
