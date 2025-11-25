@@ -1,12 +1,15 @@
-![tygor](doc/tygor-banner.svg)
+![tygor banner](doc/tygor-banner.svg)
+[![Go Reference](https://pkg.go.dev/badge/github.com/broady/tygor.svg)](https://pkg.go.dev/github.com/broady/tygor)
 
 # tygor
 
 Type-safe RPC framework for Go with automatic TypeScript client generation.
 
-> [!WARNING]
-> tygor is very experimental and the API is rapidly changing.
-> Pinning the `@tygor/client` version should prevent any unexpected breakages.
+Your Go functions, served over JSON-encoded HTTP, called by a type-only client with a <3 KB bundle impact (no tree-shaking needed!)
+
+> [!IMPORTANT]
+> tygor is pre-release and the API and protocol may still change.
+> Pin the `@tygor/client` client package and `github.com/broady/tygor` Go module to the same version to avoid any breakage or incompatability.
 
 ## Features
 
@@ -21,30 +24,30 @@ Type-safe RPC framework for Go with automatic TypeScript client generation.
 
 ## Philosophy
 
-**tygor is for teams building tightly-coupled Go and TypeScript applications in monorepos.**
+**tygor is for teams building tightly-coupled Go and TypeScript applications.**
 
 If you're building a fullstack application where the Go backend and TypeScript frontend live together, tygor gives you end-to-end type safety without the ceremony of IDLs like protobuf or OpenAPI specs. You write normal Go functions, and tygor generates TypeScript types that match your actual implementation.
 
 ### Who is this for?
 
 **Use tygor if you:**
-- Build fullstack apps with Go + TypeScript in a monorepo
+- Build fullstack apps with Go + TypeScript, especially in a monorepo
 - Want type safety without learning protobuf/gRPC/OpenAPI
 - Value iteration speed and developer ergonomics
 - Want to write idiomatic Go handlers and get TypeScript types automatically
 - Are okay with incrementally improving types as your domain evolves
 
 **Don't use tygor if you:**
-- Need a public API with strict backward compatibility guarantees
+- Need a public API with strict backward compatibility guarantees of a formal IDL (protobuf, Thrift, etc.)
 - Require multi-language client support (though OpenAPI generation is planned)
-- Need the guarantees of a formal IDL (protobuf, Thrift, etc.)
-- Have microservices that need to evolve independently
 
 ### The tradeoff
 
 tygor isn't trying to be a perfect code generation tool like protobuf. Instead, it's optimized for the common case: a team iterating on a fullstack app where the backend and frontend are tightly coupled anyway. You can always add handwritten TypeScript definitions to improve type safety for your specific domain. This is often nicer than being forced into the constraints of an IDL.
 
 In the future, tygor may generate OpenAPI specs to enable client generation in other languages, giving you the best of both worlds: ergonomic Go + TypeScript for your core app, with optional compatibility for other ecosystems.
+
+If you do need backward compatability guarantees, then you need to treat your Go struct definitions in the same way you would a protobuf. There are no field tags, so renaming a field is a breaking operation! This might be where OpenAI schema generation might help flag any wire-level breaking changes in your API.
 
 ## Installation
 
