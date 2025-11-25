@@ -35,8 +35,8 @@ func TestUnary(t *testing.T) {
 	if handler == nil {
 		t.Fatal("expected non-nil handler")
 	}
-	if handler.method != "POST" {
-		t.Errorf("expected default method POST, got %s", handler.method)
+	if handler.httpMethod != "POST" {
+		t.Errorf("expected default method POST, got %s", handler.httpMethod)
 	}
 	if handler.fn == nil {
 		t.Error("expected fn to be set")
@@ -49,8 +49,8 @@ func TestHandler_Method(t *testing.T) {
 	}
 
 	handler := UnaryGet(fn)
-	if handler.method != "GET" {
-		t.Errorf("expected method GET, got %s", handler.method)
+	if handler.httpMethod != "GET" {
+		t.Errorf("expected method GET, got %s", handler.httpMethod)
 	}
 }
 
@@ -92,8 +92,8 @@ func TestHandler_Metadata(t *testing.T) {
 	handler := UnaryGet(fn).CacheControl(CacheConfig{MaxAge: 1 * time.Minute})
 	meta := handler.Metadata()
 
-	if meta.Method != "GET" {
-		t.Errorf("expected method GET, got %s", meta.Method)
+	if meta.HTTPMethod != "GET" {
+		t.Errorf("expected method GET, got %s", meta.HTTPMethod)
 	}
 	if meta.CacheTTL != 1*time.Minute {
 		t.Errorf("expected cache TTL 1m, got %v", meta.CacheTTL)

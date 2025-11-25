@@ -147,8 +147,8 @@ func (r *Registry) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	// Check HTTP Method
 	meta := handler.Metadata()
-	if req.Method != meta.Method {
-		writeError(w, Errorf(CodeMethodNotAllowed, "method %s not allowed, expected %s", req.Method, meta.Method), r.logger)
+	if req.Method != meta.HTTPMethod {
+		writeError(w, Errorf(CodeMethodNotAllowed, "method %s not allowed, expected %s", req.Method, meta.HTTPMethod), r.logger)
 		return
 	}
 

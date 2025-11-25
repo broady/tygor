@@ -4,10 +4,10 @@ import "reflect"
 
 // ExportedRoute contains metadata about a registered route for code generation.
 type ExportedRoute struct {
-	Name     string
-	Request  reflect.Type
-	Response reflect.Type
-	Method   string
+	Name       string
+	Request    reflect.Type
+	Response   reflect.Type
+	HTTPMethod string
 }
 
 // ExportRoutes returns all registered routes for code generation purposes.
@@ -20,10 +20,10 @@ func (r *Registry) ExportRoutes() map[string]ExportedRoute {
 	for k, v := range r.routes {
 		meta := v.Metadata()
 		exported[k] = ExportedRoute{
-			Name:     k,
-			Request:  meta.Request,
-			Response: meta.Response,
-			Method:   meta.Method,
+			Name:       k,
+			Request:    meta.Request,
+			Response:   meta.Response,
+			HTTPMethod: meta.HTTPMethod,
 		}
 	}
 	return exported

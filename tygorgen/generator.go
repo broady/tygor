@@ -196,7 +196,7 @@ func generateManifest(outDir string, routes map[string]tygor.ExportedRoute) erro
 	for _, key := range keys {
 		route := routes[key]
 		path := "/" + strings.Replace(key, ".", "/", 1)
-		sb.WriteString(fmt.Sprintf("  %q: { method: %q, path: %q },\n", key, route.Method, path))
+		sb.WriteString(fmt.Sprintf("  %q: { method: %q, path: %q },\n", key, route.HTTPMethod, path))
 	}
 	sb.WriteString("} as const;\n\n")
 

@@ -511,8 +511,8 @@ func TestServiceWrappedHandler_Metadata(t *testing.T) {
 	}
 
 	meta := wrapped.Metadata()
-	if meta.Method != "GET" {
-		t.Errorf("expected method GET, got %s", meta.Method)
+	if meta.HTTPMethod != "GET" {
+		t.Errorf("expected method GET, got %s", meta.HTTPMethod)
 	}
 }
 

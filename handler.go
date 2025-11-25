@@ -46,7 +46,7 @@ type RPCMethod interface {
 // This is a base type. See UnaryPostHandler and UnaryGetHandler for specific implementations.
 type UnaryHandler[Req any, Res any] struct {
 	fn             func(context.Context, Req) (Res, error)
-	method         string
+	httpMethod     string
 	interceptors   []UnaryInterceptor
 	skipValidation bool
 }
@@ -85,8 +85,8 @@ type UnaryPostHandler[Req any, Res any] struct {
 func Unary[Req any, Res any](fn func(context.Context, Req) (Res, error)) *UnaryPostHandler[Req, Res] {
 	return &UnaryPostHandler[Req, Res]{
 		UnaryHandler: UnaryHandler[Req, Res]{
-			fn:     fn,
-			method: "POST",
+			fn:         fn,
+			httpMethod: "POST",
 		},
 	}
 }
@@ -172,8 +172,8 @@ type CacheConfig struct {
 func UnaryGet[Req any, Res any](fn func(context.Context, Req) (Res, error)) *UnaryGetHandler[Req, Res] {
 	return &UnaryGetHandler[Req, Res]{
 		UnaryHandler: UnaryHandler[Req, Res]{
-			fn:     fn,
-			method: "GET",
+			fn:         fn,
+			httpMethod: "GET",
 		},
 	}
 }
@@ -249,10 +249,10 @@ func (h *UnaryHandler[Req, Res]) Metadata() *meta.MethodMetadata {
 	var req Req
 	var res Res
 	return &meta.MethodMetadata{
-		Method:   h.method,
-		Request:  reflect.TypeOf(req),
-		Response: reflect.TypeOf(res),
-		CacheTTL: 0,
+		HTTPMethod: h.httpMethod,
+		Request:    reflect.TypeOf(req),
+		Response:   reflect.TypeOf(res),
+		CacheTTL:   0,
 	}
 }
 

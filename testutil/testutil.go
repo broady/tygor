@@ -14,7 +14,7 @@ import (
 
 // RequestBuilder helps construct test HTTP requests with fluent API.
 type RequestBuilder struct {
-	method       string
+	httpMethod   string
 	path         string
 	body         []byte
 	headers      map[string]string
@@ -32,7 +32,7 @@ func NewRequest(contextSetup ...ContextSetupFunc) *RequestBuilder {
 		setup = contextSetup[0]
 	}
 	return &RequestBuilder{
-		method:       "GET",
+		httpMethod:   "GET",
 		path:         "/",
 		headers:      make(map[string]string),
 		queryParams:  make(map[string]string),
@@ -44,14 +44,14 @@ func NewRequest(contextSetup ...ContextSetupFunc) *RequestBuilder {
 
 // GET sets the HTTP method to GET.
 func (b *RequestBuilder) GET(path string) *RequestBuilder {
-	b.method = "GET"
+	b.httpMethod = "GET"
 	b.path = path
 	return b
 }
 
 // POST sets the HTTP method to POST.
 func (b *RequestBuilder) POST(path string) *RequestBuilder {
-	b.method = "POST"
+	b.httpMethod = "POST"
 	b.path = path
 	return b
 }
@@ -112,9 +112,9 @@ func (b *RequestBuilder) Build() (*http.Request, *httptest.ResponseRecorder) {
 
 	var req *http.Request
 	if bodyReader != nil {
-		req = httptest.NewRequest(b.method, path, bodyReader)
+		req = httptest.NewRequest(b.httpMethod, path, bodyReader)
 	} else {
-		req = httptest.NewRequest(b.method, path, nil)
+		req = httptest.NewRequest(b.httpMethod, path, nil)
 	}
 
 	for k, v := range b.headers {
