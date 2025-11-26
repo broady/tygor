@@ -17,5 +17,10 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
       - name: Run precommit checks
         run: make precommit

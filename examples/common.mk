@@ -6,7 +6,7 @@ SNIPPET_TOOL := go run ../cmd/snippet
 
 # Default targets (can be overridden in example Makefile)
 GO_FILES ?= main.go $(wildcard api/*.go)
-TS_FILES ?= $(wildcard client/*.ts client/src/**/*.ts)
+TS_FILES ?= $(wildcard client/*.ts client/src/*.ts client/src/rpc/*.ts)
 GEN_DIR ?= ./client/src/rpc
 
 .PHONY: all test gen run clean check fmt snippet-go snippet-ts snippets readme help
@@ -15,10 +15,18 @@ GEN_DIR ?= ./client/src/rpc
 all: gen test
 
 # Run tests
+# Copy @tygor/testing to avoid symlink issues in Docker
 test:
 	go build ./...
 	@if [ -d client ] && [ -f client/package.json ]; then \
-		cd client && npm test 2>/dev/null || true; \
+		TYGOR_ROOT=$$(cd ../.. && pwd) && \
+		(cd client && rm -rf node_modules && bun install) && \
+		mkdir -p client/node_modules/@tygor/testing && \
+		cp "$$TYGOR_ROOT/examples/testing/"*.ts "$$TYGOR_ROOT/examples/testing/"*.json client/node_modules/@tygor/testing/ && \
+		echo "Type-checking TypeScript..." && \
+		(cd client && bun run typecheck) && \
+		echo "Running integration tests..." && \
+		(cd client && bun test); \
 	fi
 
 # Generate TypeScript types

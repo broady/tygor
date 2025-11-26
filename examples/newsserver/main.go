@@ -48,6 +48,7 @@ func CreateNews(ctx context.Context, req *api.CreateNewsParams) (*api.News, erro
 // --- Main ---
 
 func main() {
+	port := flag.String("port", "8080", "Server port")
 	genFlag := flag.Bool("gen", false, "Generate TypeScript types and manifest")
 	outDir := flag.String("out", "./client/src/rpc", "Output directory for generation")
 	flag.Parse()
@@ -131,8 +132,9 @@ export const DateTime = {
 	}
 
 	// 4. Start Server
-	fmt.Println("Server listening on :8080")
-	if err := http.ListenAndServe(":8080", app.Handler()); err != nil {
+	addr := ":" + *port
+	fmt.Printf("Server listening on %s\n", addr)
+	if err := http.ListenAndServe(addr, app.Handler()); err != nil {
 		log.Fatal(err)
 	}
 }

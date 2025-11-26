@@ -116,6 +116,9 @@ examples/blog/
 ├── api/
 │   └── types.go          # Request/Response types
 ├── main.go               # Application setup and handlers
+├── client/
+│   ├── index.ts          # TypeScript client example
+│   └── src/rpc/          # Generated TypeScript types
 └── README.md             # This file
 ```
 
@@ -243,3 +246,96 @@ Example error response:
   "message": "not authorized to edit this post"
 }
 ```
+
+## TypeScript Client
+
+### Client Setup
+
+<!-- [snippet:client-setup] -->
+```typescript title="index.ts"
+// Create a basic client (for public endpoints)
+const client = createClient(registry, {
+  baseUrl: "http://localhost:8080",
+});
+```
+<!-- [/snippet:client-setup] -->
+
+### Authenticated Client
+
+<!-- [snippet:client-auth] -->
+```typescript title="index.ts"
+// Create an authenticated client
+function createAuthClient(token: string) {
+  return createClient(registry, {
+    baseUrl: "http://localhost:8080",
+    headers: () => ({
+      Authorization: `Bearer ${token}`,
+    }),
+  });
+}
+```
+<!-- [/snippet:client-auth] -->
+
+### Login Flow
+
+<!-- [snippet:client-login] -->
+```typescript title="index.ts"
+// Login to get a token
+const loginResult = await client.Users.Login({
+  email: "alice@example.com",
+  password: "anything",
+});
+console.log("Logged in as:", loginResult.user?.username);
+
+// Create authenticated client with the token
+const authClient = createAuthClient(loginResult.token);
+```
+<!-- [/snippet:client-login] -->
+
+### Making RPC Calls
+
+<!-- [snippet:client-calls] -->
+```typescript title="index.ts"
+// Public endpoint: list published posts
+const posts = await client.Posts.List({
+  limit: 10,
+  offset: 0,
+  published: true,
+});
+console.log(`Found ${posts.length} published posts`);
+
+// Authenticated endpoint: create a new post
+const newPost = await authClient.Posts.Create({
+  title: "My New Blog Post",
+  content: "This is the content of my blog post.",
+});
+console.log("Created post:", newPost.id, newPost.title);
+
+// Publish the post
+const published = await authClient.Posts.Publish({
+  post_id: newPost.id,
+});
+console.log("Published:", published.published);
+```
+<!-- [/snippet:client-calls] -->
+
+### Error Handling
+
+<!-- [snippet:client-errors] -->
+```typescript title="index.ts"
+// Error handling example
+async function handleErrors() {
+  try {
+    await client.Posts.Get({ post_id: 99999 });
+  } catch (e) {
+    if (e instanceof RPCError) {
+      // Structured error from the server
+      console.error(`Error [${e.code}]: ${e.message}`);
+      // e.details contains validation errors, etc.
+    } else {
+      throw e; // Re-throw unexpected errors
+    }
+  }
+}
+```
+<!-- [/snippet:client-errors] -->
