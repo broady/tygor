@@ -136,10 +136,10 @@ Applied at different levels:
 ```go
 // Handler-level (specific endpoints)
 postService.Register("Create",
-    tygor.Unary(CreatePost).WithUnaryInterceptor(requireAuth))
+    tygor.Exec(CreatePost).WithUnaryInterceptor(requireAuth))
 
 // Service-level (all endpoints)
-commentService := reg.Service("Comments").WithUnaryInterceptor(requireAuth)
+commentService := app.Service("Comments").WithUnaryInterceptor(requireAuth)
 ```
 
 ### Authorization in Handlers
@@ -160,15 +160,15 @@ func UpdatePost(ctx context.Context, req *api.UpdatePostRequest) (*api.Post, err
 ### Mixed Public/Private Endpoints
 
 ```go
-postService := reg.Service("Posts")
+postService := app.Service("Posts")
 
 // Public endpoints
-postService.Register("Get", tygor.UnaryGet(GetPost))
-postService.Register("List", tygor.UnaryGet(ListPosts))
+postService.Register("Get", tygor.Query(GetPost))
+postService.Register("List", tygor.Query(ListPosts))
 
 // Private endpoints (require auth)
 postService.Register("Create",
-    tygor.Unary(CreatePost).WithUnaryInterceptor(requireAuth))
+    tygor.Exec(CreatePost).WithUnaryInterceptor(requireAuth))
 ```
 
 ### Query Parameters with Validation

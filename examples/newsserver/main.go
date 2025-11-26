@@ -69,13 +69,13 @@ func main() {
 	// 2. Register Services
 	news := app.Service("News")
 
-	news.Register("List", tygor.UnaryGet(ListNews).
+	news.Register("List", tygor.Query(ListNews).
 		CacheControl(tygor.CacheConfig{
 			MaxAge: 1 * time.Minute,
 			Public: true,
 		}))
 
-	news.Register("Create", tygor.Unary(CreateNews).
+	news.Register("Create", tygor.Exec(CreateNews).
 		WithUnaryInterceptor(func(ctx *tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
 			// Example: Set a custom header
 			ctx.HTTPWriter().Header().Set("X-Created-By", "Tygorpc")

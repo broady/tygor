@@ -79,7 +79,7 @@ func TestApp_Handler(t *testing.T) {
 	fn := func(ctx context.Context, req TestRequest) (TestResponse, error) {
 		return TestResponse{Message: "ok"}, nil
 	}
-	reg.Service("Test").Register("Method", Unary(fn))
+	reg.Service("Test").Register("Method", Exec(fn))
 
 	handler := reg.Handler()
 	if handler == nil {
@@ -122,7 +122,7 @@ func TestApp_Handler_Success(t *testing.T) {
 		return TestResponse{Message: "hello " + req.Name, ID: 123}, nil
 	}
 
-	reg.Service("Test").Register("Method", Unary(fn))
+	reg.Service("Test").Register("Method", Exec(fn))
 
 	reqBody := `{"name":"John","email":"john@example.com"}`
 	req := httptest.NewRequest("POST", "/Test/Method", strings.NewReader(reqBody))
@@ -179,7 +179,7 @@ func TestApp_Handler_MethodMismatch(t *testing.T) {
 		return TestResponse{}, nil
 	}
 
-	reg.Service("Test").Register("Method", Unary(fn))
+	reg.Service("Test").Register("Method", Exec(fn))
 
 	// Try GET when handler expects POST
 	req := httptest.NewRequest("GET", "/Test/Method", nil)
@@ -204,7 +204,7 @@ func TestApp_Handler_WithPanic(t *testing.T) {
 		panic("test panic")
 	}
 
-	reg.Service("Test").Register("Method", Unary(fn))
+	reg.Service("Test").Register("Method", Exec(fn))
 
 	reqBody := `{"name":"John","email":"john@example.com"}`
 	req := httptest.NewRequest("POST", "/Test/Method", strings.NewReader(reqBody))
@@ -238,7 +238,7 @@ func TestApp_GlobalInterceptor(t *testing.T) {
 		return TestResponse{Message: "ok"}, nil
 	}
 
-	reg.Service("Test").Register("Method", Unary(fn))
+	reg.Service("Test").Register("Method", Exec(fn))
 
 	reqBody := `{"name":"John","email":"john@example.com"}`
 	req := httptest.NewRequest("POST", "/Test/Method", strings.NewReader(reqBody))
@@ -276,7 +276,7 @@ func TestService_Register(t *testing.T) {
 		return TestResponse{}, nil
 	}
 
-	handler := Unary(fn)
+	handler := Exec(fn)
 	service.Register("Method", handler)
 
 	reg.mu.RLock()
@@ -305,8 +305,8 @@ func TestApp_DuplicateRouteRegistration(t *testing.T) {
 	}
 
 	// Register the same route twice
-	reg.Service("Test").Register("Method", Unary(fn1))
-	reg.Service("Test").Register("Method", Unary(fn2))
+	reg.Service("Test").Register("Method", Exec(fn1))
+	reg.Service("Test").Register("Method", Exec(fn2))
 
 	// Verify warning was logged
 	logOutput := buf.String()
@@ -351,7 +351,7 @@ func TestService_InterceptorOrder(t *testing.T) {
 		return TestResponse{Message: "ok"}, nil
 	}
 
-	handler := Unary(fn).WithUnaryInterceptor(handlerInterceptor)
+	handler := Exec(fn).WithUnaryInterceptor(handlerInterceptor)
 	reg.Service("Test").WithUnaryInterceptor(serviceInterceptor).Register("Method", handler)
 
 	reqBody := `{"name":"John","email":"john@example.com"}`
@@ -400,7 +400,7 @@ func TestApp_ContextPropagation(t *testing.T) {
 		return TestResponse{Message: "ok"}, nil
 	}
 
-	reg.Service("Test").Register("Method", Unary(fn))
+	reg.Service("Test").Register("Method", Exec(fn))
 
 	reqBody := `{"name":"John","email":"john@example.com"}`
 	req := httptest.NewRequest("POST", "/Test/Method", strings.NewReader(reqBody))
@@ -425,8 +425,8 @@ func TestApp_MultipleServices(t *testing.T) {
 		return TestResponse{Message: "service2"}, nil
 	}
 
-	reg.Service("Service1").Register("Method1", Unary(fn1))
-	reg.Service("Service2").Register("Method2", Unary(fn2))
+	reg.Service("Service1").Register("Method1", Exec(fn1))
+	reg.Service("Service2").Register("Method2", Exec(fn2))
 
 	tests := []struct {
 		path            string
@@ -477,7 +477,7 @@ func TestApp_MiddlewareOrder(t *testing.T) {
 		return TestResponse{Message: "ok"}, nil
 	}
 
-	reg.Service("Test").Register("Method", Unary(fn))
+	reg.Service("Test").Register("Method", Exec(fn))
 
 	reqBody := `{"name":"John","email":"john@example.com"}`
 	req := httptest.NewRequest("POST", "/Test/Method", strings.NewReader(reqBody))
@@ -504,7 +504,7 @@ func TestServiceWrappedHandler_Metadata(t *testing.T) {
 		return TestResponse{}, nil
 	}
 
-	handler := UnaryGet(fn)
+	handler := Query(fn)
 
 	wrapped := &serviceWrappedHandler{
 		inner:        handler,
@@ -524,7 +524,7 @@ func TestApp_WithMaskInternalErrors_Integration(t *testing.T) {
 		return TestResponse{}, NewError(CodeInternal, "sensitive internal error")
 	}
 
-	reg.Service("Test").Register("Method", Unary(fn))
+	reg.Service("Test").Register("Method", Exec(fn))
 
 	reqBody := `{"name":"John","email":"john@example.com"}`
 	req := httptest.NewRequest("POST", "/Test/Method", strings.NewReader(reqBody))

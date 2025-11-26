@@ -88,46 +88,46 @@ The library provides two constructor functions for creating handlers:
 
 **POST Handlers (mutations):**
 ```go
-func Unary[Req, Res any](fn func(context.Context, Req) (Res, error)) *UnaryPostHandler[Req, Res]
+func Exec[Req, Res any](fn func(context.Context, Req) (Res, error)) *ExecHandler[Req, Res]
 ```
 
 **GET Handlers (queries):**
 ```go
-func UnaryGet[Req, Res any](fn func(context.Context, Req) (Res, error)) *UnaryGetHandler[Req, Res]
+func Query[Req, Res any](fn func(context.Context, Req) (Res, error)) *QueryHandler[Req, Res]
 ```
 
 **Fluent API:**
 
-`UnaryPostHandler` supports:
+`ExecHandler` supports:
 ```go
-func (h *UnaryPostHandler[Req, Res]) WithUnaryInterceptor(i UnaryInterceptor) *UnaryPostHandler[Req, Res]
-func (h *UnaryPostHandler[Req, Res]) WithSkipValidation() *UnaryPostHandler[Req, Res]
-func (h *UnaryPostHandler[Req, Res]) WithMaxRequestBodySize(size uint64) *UnaryPostHandler[Req, Res]
+func (h *ExecHandler[Req, Res]) WithUnaryInterceptor(i UnaryInterceptor) *ExecHandler[Req, Res]
+func (h *ExecHandler[Req, Res]) WithSkipValidation() *ExecHandler[Req, Res]
+func (h *ExecHandler[Req, Res]) WithMaxRequestBodySize(size uint64) *ExecHandler[Req, Res]
 ```
 
-`UnaryGetHandler` supports:
+`QueryHandler` supports:
 ```go
-func (h *UnaryGetHandler[Req, Res]) WithUnaryInterceptor(i UnaryInterceptor) *UnaryGetHandler[Req, Res]
-func (h *UnaryGetHandler[Req, Res]) WithSkipValidation() *UnaryGetHandler[Req, Res]
-func (h *UnaryGetHandler[Req, Res]) CacheControl(cfg CacheConfig) *UnaryGetHandler[Req, Res]
-func (h *UnaryGetHandler[Req, Res]) WithStrictQueryParams() *UnaryGetHandler[Req, Res]
+func (h *QueryHandler[Req, Res]) WithUnaryInterceptor(i UnaryInterceptor) *QueryHandler[Req, Res]
+func (h *QueryHandler[Req, Res]) WithSkipValidation() *QueryHandler[Req, Res]
+func (h *QueryHandler[Req, Res]) CacheControl(cfg CacheConfig) *QueryHandler[Req, Res]
+func (h *QueryHandler[Req, Res]) WithStrictQueryParams() *QueryHandler[Req, Res]
 ```
 
 **Example Usage:**
 ```go
 // POST handler (default for mutations)
-tygor.Unary(CreateNews)
+tygor.Exec(CreateNews)
 
 // GET handler with caching
-tygor.UnaryGet(ListNews).CacheControl(tygor.CacheConfig{
+tygor.Query(ListNews).CacheControl(tygor.CacheConfig{
     MaxAge: 5 * time.Minute,
     Public: true,
 })
 ```
 
 **Defaults:**
-- `Unary()`: POST method, no caching, validation enabled
-- `UnaryGet()`: GET method, no caching, validation enabled, lenient query params
+- `Exec()`: POST method, no caching, validation enabled
+- `Query()`: GET method, no caching, validation enabled, lenient query params
 
 ---
 
@@ -169,8 +169,8 @@ func (s *Service) Register(method string, handler RPCMethod)
 ```go
 app := tygor.NewApp()
 news := app.Service("News")
-news.Register("List", tygor.UnaryGet(ListNews))
-news.Register("Create", tygor.Unary(CreateNews))
+news.Register("List", tygor.Query(ListNews))
+news.Register("Create", tygor.Exec(CreateNews))
 ```
 
 This registers operations:
@@ -414,7 +414,7 @@ Validation can be disabled per-handler:
 
 ```go
 // Per-handler
-h := tygor.Unary(fn).WithSkipValidation()
+h := tygor.Exec(fn).WithSkipValidation()
 ```
 
 ---
@@ -457,7 +457,7 @@ type RPCMethod interface {
 }
 ```
 
-The implementation MUST ensure that only handlers created via `Unary()` or `UnaryGet()` can be registered with `Service.Register()`.
+The implementation MUST ensure that only handlers created via `Exec()` or `Query()` can be registered with `Service.Register()`.
 
 ---
 
@@ -692,11 +692,11 @@ func main() {
 
     // Register services
     news := app.Service("News")
-    news.Register("List", tygor.UnaryGet(ListNews).CacheControl(tygor.CacheConfig{
+    news.Register("List", tygor.Query(ListNews).CacheControl(tygor.CacheConfig{
         MaxAge: 5 * time.Minute,
         Public: true,
     }))
-    news.Register("Create", tygor.Unary(CreateNews))
+    news.Register("Create", tygor.Exec(CreateNews))
 
     // Generate TypeScript types
     if err := tygorgen.Generate(app, &tygorgen.Config{
@@ -717,7 +717,7 @@ func main() {
 A conforming Go implementation MUST:
 
 - ✅ Support `func(ctx context.Context, req Req) (Res, error)` handlers
-- ✅ Provide `Unary()` and `UnaryGet()` handler constructors with fluent configuration
+- ✅ Provide `Exec()` and `Query()` handler constructors with fluent configuration
 - ✅ Provide `App` with `Service` namespacing
 - ✅ Provide `Handler()` method returning `http.Handler`
 - ✅ Support GET (query string) and POST (JSON body) serialization

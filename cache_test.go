@@ -23,7 +23,7 @@ func TestGetHandler_CacheControl_Simple(t *testing.T) {
 		return CacheTestResponse{Message: "test"}, nil
 	}
 
-	handler := UnaryGet(fn).CacheControl(CacheConfig{MaxAge: 5 * time.Minute})
+	handler := Query(fn).CacheControl(CacheConfig{MaxAge: 5 * time.Minute})
 
 	cacheHeader := handler.getCacheControlHeader()
 	expected := "private, max-age=300"
@@ -50,7 +50,7 @@ func TestGetHandler_CacheControl_Public(t *testing.T) {
 		return CacheTestResponse{Message: "test"}, nil
 	}
 
-	handler := UnaryGet(fn).CacheControl(CacheConfig{
+	handler := Query(fn).CacheControl(CacheConfig{
 		MaxAge: 5 * time.Minute,
 		Public: true,
 	})
@@ -69,7 +69,7 @@ func TestGetHandler_CacheControl_Private(t *testing.T) {
 		return CacheTestResponse{Message: "test"}, nil
 	}
 
-	handler := UnaryGet(fn).CacheControl(CacheConfig{
+	handler := Query(fn).CacheControl(CacheConfig{
 		MaxAge: 5 * time.Minute,
 		Public: false, // Explicit private
 	})
@@ -88,7 +88,7 @@ func TestGetHandler_CacheControl_SMaxAge(t *testing.T) {
 		return CacheTestResponse{Message: "test"}, nil
 	}
 
-	handler := UnaryGet(fn).CacheControl(CacheConfig{
+	handler := Query(fn).CacheControl(CacheConfig{
 		MaxAge:  1 * time.Minute,
 		SMaxAge: 10 * time.Minute,
 		Public:  true,
@@ -110,7 +110,7 @@ func TestGetHandler_CacheControl_StaleWhileRevalidate(t *testing.T) {
 		return CacheTestResponse{Message: "test"}, nil
 	}
 
-	handler := UnaryGet(fn).CacheControl(CacheConfig{
+	handler := Query(fn).CacheControl(CacheConfig{
 		MaxAge:               5 * time.Minute,
 		StaleWhileRevalidate: 1 * time.Minute,
 		Public:               true,
@@ -131,7 +131,7 @@ func TestGetHandler_CacheControl_StaleIfError(t *testing.T) {
 		return CacheTestResponse{Message: "test"}, nil
 	}
 
-	handler := UnaryGet(fn).CacheControl(CacheConfig{
+	handler := Query(fn).CacheControl(CacheConfig{
 		MaxAge:       5 * time.Minute,
 		StaleIfError: 24 * time.Hour,
 		Public:       true,
@@ -152,7 +152,7 @@ func TestGetHandler_CacheControl_MustRevalidate(t *testing.T) {
 		return CacheTestResponse{Message: "test"}, nil
 	}
 
-	handler := UnaryGet(fn).CacheControl(CacheConfig{
+	handler := Query(fn).CacheControl(CacheConfig{
 		MaxAge:         5 * time.Minute,
 		MustRevalidate: true,
 		Public:         true,
@@ -174,7 +174,7 @@ func TestGetHandler_CacheControl_Immutable(t *testing.T) {
 		return CacheTestResponse{Message: "test"}, nil
 	}
 
-	handler := UnaryGet(fn).CacheControl(CacheConfig{
+	handler := Query(fn).CacheControl(CacheConfig{
 		MaxAge:    365 * 24 * time.Hour, // 1 year
 		Immutable: true,
 		Public:    true,
@@ -194,7 +194,7 @@ func TestGetHandler_CacheControl_AllDirectives(t *testing.T) {
 		return CacheTestResponse{Message: "test"}, nil
 	}
 
-	handler := UnaryGet(fn).CacheControl(CacheConfig{
+	handler := Query(fn).CacheControl(CacheConfig{
 		MaxAge:               5 * time.Minute,
 		SMaxAge:              10 * time.Minute,
 		StaleWhileRevalidate: 1 * time.Minute,
@@ -217,7 +217,7 @@ func TestGetHandler_CacheControl_NoCache(t *testing.T) {
 		return CacheTestResponse{Message: "test"}, nil
 	}
 
-	handler := UnaryGet(fn) // No Cache() or CacheControl() called
+	handler := Query(fn) // No Cache() or CacheControl() called
 
 	cacheHeader := handler.getCacheControlHeader()
 	if cacheHeader != "" {
@@ -242,7 +242,7 @@ func TestHandler_POST_NoCache(t *testing.T) {
 		return CacheTestResponse{Message: "created"}, nil
 	}
 
-	handler := Unary(fn) // POST handler
+	handler := Exec(fn) // POST handler
 
 	// Verify no Cache-Control header in HTTP response
 	req := httptest.NewRequest("POST", "/test", nil)
@@ -263,7 +263,7 @@ func TestGetHandler_CacheControl_CDNPattern(t *testing.T) {
 		return CacheTestResponse{Message: "test"}, nil
 	}
 
-	handler := UnaryGet(fn).CacheControl(CacheConfig{
+	handler := Query(fn).CacheControl(CacheConfig{
 		MaxAge:               1 * time.Minute, // Browser: 1 minute
 		SMaxAge:              1 * time.Hour,   // CDN: 1 hour
 		StaleWhileRevalidate: 5 * time.Minute, // Background revalidation window
@@ -277,18 +277,17 @@ func TestGetHandler_CacheControl_CDNPattern(t *testing.T) {
 	}
 }
 
-// TestGetHandler_Metadata_ReflectsCacheTTL verifies Metadata() returns correct CacheTTL
-func TestGetHandler_Metadata_ReflectsCacheTTL(t *testing.T) {
+// TestGetHandler_CacheControl_ReflectsCacheTTL verifies cacheConfig reflects MaxAge
+func TestGetHandler_CacheControl_ReflectsCacheTTL(t *testing.T) {
 	fn := func(ctx context.Context, req CacheTestRequest) (CacheTestResponse, error) {
 		return CacheTestResponse{Message: "test"}, nil
 	}
 
 	ttl := 10 * time.Minute
-	handler := UnaryGet(fn).CacheControl(CacheConfig{MaxAge: ttl})
+	handler := Query(fn).CacheControl(CacheConfig{MaxAge: ttl})
 
-	meta := handler.metadata()
-	if meta.CacheTTL != ttl {
-		t.Errorf("expected Metadata().CacheTTL = %v, got %v", ttl, meta.CacheTTL)
+	if handler.cacheConfig.MaxAge != ttl {
+		t.Errorf("expected cacheConfig.MaxAge = %v, got %v", ttl, handler.cacheConfig.MaxAge)
 	}
 }
 
@@ -298,7 +297,7 @@ func TestGetHandler_CacheControl_EndToEnd(t *testing.T) {
 		return CacheTestResponse{Message: "cached response"}, nil
 	}
 
-	handler := UnaryGet(fn).CacheControl(CacheConfig{
+	handler := Query(fn).CacheControl(CacheConfig{
 		MaxAge:               5 * time.Minute,
 		StaleWhileRevalidate: 1 * time.Minute,
 		Public:               true,

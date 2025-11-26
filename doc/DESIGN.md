@@ -57,7 +57,7 @@ func(ctx context.Context, req Req) (Res, error)
 ```go
 app := tygor.NewApp()
 news := app.Service("News")
-news.Register("List", tygor.UnaryGet(ListNews))
+news.Register("List", tygor.Query(ListNews))
 ```
 
 **Client usage:**
@@ -109,12 +109,12 @@ Type-safe API calls
 
 **Handler construction (fluent API):**
 ```go
-h := tygor.UnaryGet(ListNews).
+h := tygor.Query(ListNews).
     CacheControl(tygor.CacheConfig{MaxAge: 5 * time.Minute}).
     WithUnaryInterceptor(authInterceptor)
 ```
 
-**Sealed interface pattern:** `RPCMethod` interface uses internal package types to prevent external implementation. Only `Unary` and `UnaryGet` can produce valid handlers.
+**Sealed interface pattern:** `RPCMethod` interface uses internal package types to prevent external implementation. Only `Exec` and `Query` can produce valid handlers.
 
 **Error transformation:**
 ```go
@@ -162,7 +162,7 @@ const client = createClient({
   baseURL: 'https://api.example.com',
   headers: { 'Authorization': `Bearer ${token}` },
   fetch: customFetch,  // For Node.js, testing, middleware
-  onError: (error) => { /* handle RPC errors */ }
+  onError: (error) => { /* handle API errors */ }
 });
 ```
 
@@ -187,13 +187,13 @@ try {
 Type safety without build steps. Handler functions are type-checked at compile time. Generic `NewHandler` captures types without reflection overhead.
 
 **Why sealed `RPCMethod` interface?**
-Prevents users from implementing the interface incorrectly. Only library-constructed handlers are valid. Enforces handler construction through `NewHandler`.
+Prevents users from implementing the interface incorrectly. Only library-constructed handlers are valid. Enforces handler construction through `Exec` and `Query`.
 
 **Why separate GET/POST?**
 RESTful conventions. GET requests are cacheable, appear in logs/browser history without sensitive data. POST for mutations matches HTTP semantics.
 
 **Why proxy-based client instead of generated methods?**
-Zero boilerplate. Adding a new RPC requires no client changes—just regenerate types. Manifest provides type safety, proxy provides implementation.
+Zero boilerplate. Adding a new API endpoint requires no client changes—just regenerate types. Manifest provides type safety, proxy provides implementation.
 
 **Why `sqlc` integration?**
 Database schema is often the true source of truth. `sqlc` generates Go structs from SQL; these become RPC types directly. Eliminates duplicate type definitions.
@@ -235,7 +235,7 @@ func ListNews(ctx context.Context, req *db.ListNewsParams) ([]*db.News, error) {
 func main() {
     app := tygor.NewApp()
     news := app.Service("News")
-    news.Register("List", tygor.UnaryGet(ListNews))
+    news.Register("List", tygor.Query(ListNews))
     tygorgen.Generate(app, &tygorgen.Config{OutDir: "./client/src/rpc"})
     http.ListenAndServe(":8080", app.Handler())
 }

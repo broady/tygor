@@ -274,7 +274,7 @@ func TestGenerate_WithHandlers(t *testing.T) {
 	handler := func(ctx context.Context, req *api.CreateUserRequest) (*api.User, error) {
 		return &api.User{Username: req.Username}, nil
 	}
-	reg.Service("Users").Register("Create", tygor.Unary(handler))
+	reg.Service("Users").Register("Create", tygor.Exec(handler))
 
 	cfg := &Config{OutDir: outDir}
 
@@ -309,8 +309,8 @@ func TestGenerate_ManifestStructure(t *testing.T) {
 	listHandler := func(ctx context.Context, req *api.ListPostsParams) ([]*api.Post, error) {
 		return nil, nil
 	}
-	reg.Service("Users").Register("Create", tygor.Unary(createHandler))
-	reg.Service("Posts").Register("List", tygor.UnaryGet(listHandler))
+	reg.Service("Users").Register("Create", tygor.Exec(createHandler))
+	reg.Service("Posts").Register("List", tygor.Query(listHandler))
 
 	cfg := &Config{OutDir: outDir}
 
@@ -362,7 +362,7 @@ func TestGenerate_TypesFile(t *testing.T) {
 	handler := func(ctx context.Context, req *api.CreateUserRequest) (*api.User, error) {
 		return nil, nil
 	}
-	reg.Service("Users").Register("Create", tygor.Unary(handler))
+	reg.Service("Users").Register("Create", tygor.Exec(handler))
 
 	cfg := &Config{OutDir: outDir}
 
@@ -393,7 +393,7 @@ func TestGenerate_CustomConfig(t *testing.T) {
 	handler := func(ctx context.Context, req *api.CreateUserRequest) (*api.User, error) {
 		return nil, nil
 	}
-	reg.Service("Users").Register("Create", tygor.Unary(handler))
+	reg.Service("Users").Register("Create", tygor.Exec(handler))
 
 	cfg := &Config{
 		OutDir:           outDir,
@@ -440,7 +440,7 @@ func TestGenerate_GETParamsUseLowercaseNames(t *testing.T) {
 	listHandler := func(ctx context.Context, req *api.ListPostsParams) ([]*api.Post, error) {
 		return nil, nil
 	}
-	reg.Service("Posts").Register("List", tygor.UnaryGet(listHandler))
+	reg.Service("Posts").Register("List", tygor.Query(listHandler))
 
 	cfg := &Config{OutDir: outDir}
 

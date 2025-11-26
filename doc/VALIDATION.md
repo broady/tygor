@@ -29,7 +29,7 @@ By default, GET requests ignore unknown query parameters. This provides flexibil
 
 ```go
 // Unknown params like ?typo=value or ?analytics_id=123 are silently ignored
-Unary(ListUsers).Method("GET")
+Query(ListUsers)
 ```
 
 ### Strict Mode
@@ -43,7 +43,7 @@ type SearchParams struct {
 }
 
 // Returns error if client sends unknown query parameters
-Unary(SearchUsers).Method("GET").WithStrictQueryParams()
+Query(SearchUsers).WithStrictQueryParams()
 ```
 
 This helps during development to catch mistakes like `?usre_id=123` instead of `?user_id=123`.
@@ -65,7 +65,7 @@ func BulkUpdate(ctx context.Context, req *BulkRequest) (*BulkResponse, error) {
     // ...
 }
 
-Unary(BulkUpdate).WithSkipValidation()
+Exec(BulkUpdate).WithSkipValidation()
 ```
 
 ## Custom Validation with Interceptors
@@ -96,10 +96,10 @@ func CustomValidationInterceptor(ctx *tygor.Context, req any, handler tygor.Hand
 }
 
 // Apply globally
-registry.WithUnaryInterceptor(CustomValidationInterceptor)
+app.WithUnaryInterceptor(CustomValidationInterceptor)
 
 // Or per-handler
-Unary(Search).Method("GET").WithUnaryInterceptor(CustomValidationInterceptor)
+Query(Search).WithUnaryInterceptor(CustomValidationInterceptor)
 ```
 
 Interceptors are useful for:

@@ -12,7 +12,7 @@ import (
 	"github.com/broady/tygor/internal/meta"
 )
 
-// App is the central router for RPC handlers.
+// App is the central router for API handlers.
 // It manages route registration, middleware, interceptors, and error handling.
 // Use Handler() to get an http.Handler for use with http.ListenAndServe.
 type App struct {
@@ -109,7 +109,7 @@ func (a *App) Service(name string) *Service {
 	}
 }
 
-// serveHTTP handles incoming RPC requests (internal, called via Handler()).
+// serveHTTP handles incoming API requests (internal, called via Handler()).
 func (a *App) serveHTTP(w http.ResponseWriter, req *http.Request) {
 	defer func() {
 		if rec := recover(); rec != nil {
@@ -197,7 +197,7 @@ func (s *Service) Register(name string, handler RPCMethod) {
 	// Type assert to internal handler interface
 	h, ok := handler.(rpcHandler)
 	if !ok {
-		panic("tygor: handler must be created with Unary() or UnaryGet()")
+		panic("tygor: handler must be created with Exec() or Query()")
 	}
 
 	key := s.name + "." + name

@@ -444,31 +444,31 @@ func main() {
 
 	// User Service (public endpoints)
 	userService := app.Service("Users")
-	userService.Register("Create", tygor.Unary(CreateUser))
-	userService.Register("Login", tygor.Unary(Login))
+	userService.Register("Create", tygor.Exec(CreateUser))
+	userService.Register("Login", tygor.Exec(Login))
 
 	// Post Service (mixed public/private endpoints)
 	postService := app.Service("Posts")
 
 	// Public endpoints
-	postService.Register("Get", tygor.UnaryGet(GetPost))
-	postService.Register("List", tygor.UnaryGet(ListPosts).CacheControl(tygor.CacheConfig{
+	postService.Register("Get", tygor.Query(GetPost))
+	postService.Register("List", tygor.Query(ListPosts).CacheControl(tygor.CacheConfig{
 		MaxAge: 30 * time.Second,
 		Public: true,
 	}))
 
 	// Private endpoints (require authentication)
 	postService.Register("Create",
-		tygor.Unary(CreatePost).WithUnaryInterceptor(requireAuth))
+		tygor.Exec(CreatePost).WithUnaryInterceptor(requireAuth))
 	postService.Register("Update",
-		tygor.Unary(UpdatePost).WithUnaryInterceptor(requireAuth))
+		tygor.Exec(UpdatePost).WithUnaryInterceptor(requireAuth))
 	postService.Register("Publish",
-		tygor.Unary(PublishPost).WithUnaryInterceptor(requireAuth))
+		tygor.Exec(PublishPost).WithUnaryInterceptor(requireAuth))
 
 	// Comment Service (requires authentication)
 	commentService := app.Service("Comments").WithUnaryInterceptor(requireAuth)
-	commentService.Register("Create", tygor.Unary(CreateComment))
-	commentService.Register("List", tygor.UnaryGet(ListComments))
+	commentService.Register("Create", tygor.Exec(CreateComment))
+	commentService.Register("List", tygor.Query(ListComments))
 
 	// Generation Mode
 	if *genFlag {

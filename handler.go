@@ -32,8 +32,8 @@ func init() {
 // RPCMethod is the interface for handlers that can be registered with [Service.Register].
 //
 // Implementations:
-//   - [*UnaryPostHandler] - for POST requests (created with [Unary])
-//   - [*UnaryGetHandler] - for GET requests (created with [UnaryGet])
+//   - [*ExecHandler] - for POST requests (created with [Exec])
+//   - [*QueryHandler] - for GET requests (created with [Query])
 type RPCMethod interface {
 	// Metadata returns route metadata for code generation.
 	// The return type is internal; this method is for use by tygorgen only.
@@ -47,14 +47,14 @@ type rpcHandler interface {
 	metadata() *meta.MethodMetadata
 }
 
-// unaryBase contains common configuration shared by UnaryPostHandler and UnaryGetHandler.
-type unaryBase[Req any, Res any] struct {
+// handlerBase contains common configuration shared by ExecHandler and QueryHandler.
+type handlerBase[Req any, Res any] struct {
 	fn             func(context.Context, Req) (Res, error)
 	interceptors   []UnaryInterceptor
 	skipValidation bool
 }
 
-// UnaryPostHandler implements RPCMethod for POST requests (state-changing operations).
+// ExecHandler implements RPCMethod for POST requests (state-changing operations).
 //
 // Request Type Guidelines:
 //   - Use struct or pointer types
@@ -63,30 +63,30 @@ type unaryBase[Req any, Res any] struct {
 // Example:
 //
 //	func CreateUser(ctx context.Context, req *CreateUserRequest) (*User, error) { ... }
-//	Unary(CreateUser)
+//	Exec(CreateUser)
 //
 //	func UpdatePost(ctx context.Context, req *UpdatePostRequest) (*Post, error) { ... }
-//	Unary(UpdatePost).WithUnaryInterceptor(requireAuth)
-type UnaryPostHandler[Req any, Res any] struct {
-	unaryBase[Req, Res]
+//	Exec(UpdatePost).WithUnaryInterceptor(requireAuth)
+type ExecHandler[Req any, Res any] struct {
+	handlerBase[Req, Res]
 	maxRequestBodySize *uint64 // nil means use registry default
 }
 
-// Unary creates a new POST handler from a generic function for unary (non-streaming) RPCs.
+// Exec creates a new POST handler from a generic function for non-streaming API calls.
 //
 // The handler function signature is func(context.Context, Req) (Res, error).
 // Requests are decoded from JSON body.
 //
-// For GET requests (cacheable reads), use UnaryGet instead.
-func Unary[Req any, Res any](fn func(context.Context, Req) (Res, error)) *UnaryPostHandler[Req, Res] {
-	return &UnaryPostHandler[Req, Res]{
-		unaryBase: unaryBase[Req, Res]{
+// For GET requests (cacheable reads), use Query instead.
+func Exec[Req any, Res any](fn func(context.Context, Req) (Res, error)) *ExecHandler[Req, Res] {
+	return &ExecHandler[Req, Res]{
+		handlerBase: handlerBase[Req, Res]{
 			fn: fn,
 		},
 	}
 }
 
-// UnaryGetHandler implements RPCMethod for GET requests (cacheable read operations).
+// QueryHandler implements RPCMethod for GET requests (cacheable read operations).
 //
 // Request Type Guidelines:
 //   - Use struct types for simple cases, pointer types when you need optional fields
@@ -99,12 +99,12 @@ func Unary[Req any, Res any](fn func(context.Context, Req) (Res, error)) *UnaryP
 // Example:
 //
 //	func ListPosts(ctx context.Context, req ListPostsParams) ([]*Post, error) { ... }
-//	UnaryGet(ListPosts).CacheControl(tygor.CacheConfig{
+//	Query(ListPosts).CacheControl(tygor.CacheConfig{
 //	    MaxAge: 5 * time.Minute,
 //	    Public: true,
 //	})
-type UnaryGetHandler[Req any, Res any] struct {
-	unaryBase[Req, Res]
+type QueryHandler[Req any, Res any] struct {
+	handlerBase[Req, Res]
 	cacheConfig       *CacheConfig
 	strictQueryParams bool
 }
@@ -150,15 +150,15 @@ type CacheConfig struct {
 	Immutable bool
 }
 
-// UnaryGet creates a new GET handler from a generic function for cacheable read operations.
+// Query creates a new GET handler from a generic function for cacheable read operations.
 //
 // The handler function signature is func(context.Context, Req) (Res, error).
 // Requests are decoded from URL query parameters.
 //
 // Use CacheControl() to configure HTTP caching behavior.
-func UnaryGet[Req any, Res any](fn func(context.Context, Req) (Res, error)) *UnaryGetHandler[Req, Res] {
-	return &UnaryGetHandler[Req, Res]{
-		unaryBase: unaryBase[Req, Res]{
+func Query[Req any, Res any](fn func(context.Context, Req) (Res, error)) *QueryHandler[Req, Res] {
+	return &QueryHandler[Req, Res]{
+		handlerBase: handlerBase[Req, Res]{
 			fn: fn,
 		},
 	}
@@ -169,13 +169,13 @@ func UnaryGet[Req any, Res any](fn func(context.Context, Req) (Res, error)) *Una
 //
 // Example:
 //
-//	UnaryGet(ListPosts).CacheControl(tygor.CacheConfig{
+//	Query(ListPosts).CacheControl(tygor.CacheConfig{
 //	    MaxAge:               5 * time.Minute,
 //	    StaleWhileRevalidate: 1 * time.Minute,
 //	    Public:               true,
 //	})
 //	// Sets: Cache-Control: public, max-age=300, stale-while-revalidate=60
-func (h *UnaryGetHandler[Req, Res]) CacheControl(cfg CacheConfig) *UnaryGetHandler[Req, Res] {
+func (h *QueryHandler[Req, Res]) CacheControl(cfg CacheConfig) *QueryHandler[Req, Res] {
 	h.cacheConfig = &cfg
 	return h
 }
@@ -184,14 +184,14 @@ func (h *UnaryGetHandler[Req, Res]) CacheControl(cfg CacheConfig) *UnaryGetHandl
 // By default, unknown query parameters are ignored (lenient mode).
 // When enabled, requests with unknown query parameters will return an error.
 // This helps catch typos and enforces exact parameter expectations.
-func (h *UnaryGetHandler[Req, Res]) WithStrictQueryParams() *UnaryGetHandler[Req, Res] {
+func (h *QueryHandler[Req, Res]) WithStrictQueryParams() *QueryHandler[Req, Res] {
 	h.strictQueryParams = true
 	return h
 }
 
 // WithMaxRequestBodySize sets the maximum request body size for this handler.
 // This overrides the registry-level default. A value of 0 means no limit.
-func (h *UnaryPostHandler[Req, Res]) WithMaxRequestBodySize(size uint64) *UnaryPostHandler[Req, Res] {
+func (h *ExecHandler[Req, Res]) WithMaxRequestBodySize(size uint64) *ExecHandler[Req, Res] {
 	h.maxRequestBodySize = &size
 	return h
 }
@@ -199,7 +199,7 @@ func (h *UnaryPostHandler[Req, Res]) WithMaxRequestBodySize(size uint64) *UnaryP
 // WithUnaryInterceptor adds an interceptor to this handler.
 // Handler interceptors execute after global and service interceptors.
 // See App.WithUnaryInterceptor for the complete execution order.
-func (h *UnaryPostHandler[Req, Res]) WithUnaryInterceptor(i UnaryInterceptor) *UnaryPostHandler[Req, Res] {
+func (h *ExecHandler[Req, Res]) WithUnaryInterceptor(i UnaryInterceptor) *ExecHandler[Req, Res] {
 	h.interceptors = append(h.interceptors, i)
 	return h
 }
@@ -207,7 +207,7 @@ func (h *UnaryPostHandler[Req, Res]) WithUnaryInterceptor(i UnaryInterceptor) *U
 // WithUnaryInterceptor adds an interceptor to this handler.
 // Handler interceptors execute after global and service interceptors.
 // See App.WithUnaryInterceptor for the complete execution order.
-func (h *UnaryGetHandler[Req, Res]) WithUnaryInterceptor(i UnaryInterceptor) *UnaryGetHandler[Req, Res] {
+func (h *QueryHandler[Req, Res]) WithUnaryInterceptor(i UnaryInterceptor) *QueryHandler[Req, Res] {
 	h.interceptors = append(h.interceptors, i)
 	return h
 }
@@ -216,7 +216,7 @@ func (h *UnaryGetHandler[Req, Res]) WithUnaryInterceptor(i UnaryInterceptor) *Un
 // By default, all handlers validate requests using the validator package.
 // Use this when you need to handle validation manually or when the request
 // type has no validation tags.
-func (h *UnaryPostHandler[Req, Res]) WithSkipValidation() *UnaryPostHandler[Req, Res] {
+func (h *ExecHandler[Req, Res]) WithSkipValidation() *ExecHandler[Req, Res] {
 	h.skipValidation = true
 	return h
 }
@@ -225,13 +225,13 @@ func (h *UnaryPostHandler[Req, Res]) WithSkipValidation() *UnaryPostHandler[Req,
 // By default, all handlers validate requests using the validator package.
 // Use this when you need to handle validation manually or when the request
 // type has no validation tags.
-func (h *UnaryGetHandler[Req, Res]) WithSkipValidation() *UnaryGetHandler[Req, Res] {
+func (h *QueryHandler[Req, Res]) WithSkipValidation() *QueryHandler[Req, Res] {
 	h.skipValidation = true
 	return h
 }
 
 // Metadata implements [RPCMethod].
-func (h *UnaryPostHandler[Req, Res]) Metadata() *internal.MethodMetadata {
+func (h *ExecHandler[Req, Res]) Metadata() *internal.MethodMetadata {
 	var req Req
 	var res Res
 	return &internal.MethodMetadata{
@@ -242,7 +242,7 @@ func (h *UnaryPostHandler[Req, Res]) Metadata() *internal.MethodMetadata {
 }
 
 // Metadata implements [RPCMethod].
-func (h *UnaryGetHandler[Req, Res]) Metadata() *internal.MethodMetadata {
+func (h *QueryHandler[Req, Res]) Metadata() *internal.MethodMetadata {
 	var req Req
 	var res Res
 	return &internal.MethodMetadata{
@@ -253,36 +253,30 @@ func (h *UnaryGetHandler[Req, Res]) Metadata() *internal.MethodMetadata {
 }
 
 // metadata returns the runtime metadata for the POST handler.
-func (h *UnaryPostHandler[Req, Res]) metadata() *meta.MethodMetadata {
+func (h *ExecHandler[Req, Res]) metadata() *meta.MethodMetadata {
 	var req Req
 	var res Res
 	return &meta.MethodMetadata{
 		HTTPMethod: "POST",
 		Request:    reflect.TypeOf(req),
 		Response:   reflect.TypeOf(res),
-		CacheTTL:   0,
 	}
 }
 
 // metadata returns the runtime metadata for the GET handler.
-func (h *UnaryGetHandler[Req, Res]) metadata() *meta.MethodMetadata {
+func (h *QueryHandler[Req, Res]) metadata() *meta.MethodMetadata {
 	var req Req
 	var res Res
-	m := &meta.MethodMetadata{
+	return &meta.MethodMetadata{
 		HTTPMethod: "GET",
 		Request:    reflect.TypeOf(req),
 		Response:   reflect.TypeOf(res),
-		CacheTTL:   0,
 	}
-	if h.cacheConfig != nil {
-		m.CacheTTL = h.cacheConfig.MaxAge
-	}
-	return m
 }
 
 // getCacheControlHeader builds the Cache-Control header value from the cache config.
 // Returns empty string if no cache config is set.
-func (h *UnaryGetHandler[Req, Res]) getCacheControlHeader() string {
+func (h *QueryHandler[Req, Res]) getCacheControlHeader() string {
 	if h.cacheConfig == nil {
 		return ""
 	}
@@ -339,8 +333,8 @@ func (h *UnaryGetHandler[Req, Res]) getCacheControlHeader() string {
 	return result
 }
 
-// serveHTTP implements the RPC handler for GET requests with caching support.
-func (h *UnaryGetHandler[Req, Res]) serveHTTP(ctx *Context) {
+// serveHTTP implements the API handler for GET requests with caching support.
+func (h *QueryHandler[Req, Res]) serveHTTP(ctx *Context) {
 	decoder := func() (Req, error) {
 		var req Req
 		// Select decoder based on strictness setting
@@ -370,8 +364,8 @@ func (h *UnaryGetHandler[Req, Res]) serveHTTP(ctx *Context) {
 	h.serve(ctx, h.getCacheControlHeader(), decoder)
 }
 
-// serveHTTP implements the RPC handler for POST requests.
-func (h *UnaryPostHandler[Req, Res]) serveHTTP(ctx *Context) {
+// serveHTTP implements the API handler for POST requests.
+func (h *ExecHandler[Req, Res]) serveHTTP(ctx *Context) {
 	decoder := func() (Req, error) {
 		var req Req
 		if ctx.request.Body != nil {
@@ -396,8 +390,8 @@ func (h *UnaryPostHandler[Req, Res]) serveHTTP(ctx *Context) {
 	h.serve(ctx, "", decoder)
 }
 
-// serve implements the generic glue code for both UnaryPostHandler and UnaryGetHandler.
-func (h *unaryBase[Req, Res]) serve(ctx *Context, cacheControl string, decodeFunc func() (Req, error)) {
+// serve implements the generic glue code for both ExecHandler and QueryHandler.
+func (h *handlerBase[Req, Res]) serve(ctx *Context, cacheControl string, decodeFunc func() (Req, error)) {
 	// 1. Combine Interceptors
 	// ctx.interceptors contains: Global + Service interceptors
 	// We append Handler-level interceptors

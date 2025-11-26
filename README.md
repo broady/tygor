@@ -113,8 +113,8 @@ func CreateNews(ctx context.Context, req *CreateNewsParams) (*News, error) {
 app := tygor.NewApp()
 
 news := app.Service("News")
-news.Register("List", tygor.UnaryGet(ListNews))
-news.Register("Create", tygor.Unary(CreateNews)) // POST is default
+news.Register("List", tygor.Query(ListNews))
+news.Register("Create", tygor.Exec(CreateNews))
 
 http.ListenAndServe(":8080", app.Handler())
 ```
@@ -222,7 +222,7 @@ type ListParams struct {
     Offset *int32 `json:"offset"`
 }
 
-tygor.UnaryGet(List)
+tygor.Query(List)
 ```
 
 Query: `/News/List?limit=10&offset=20`
@@ -236,7 +236,7 @@ type CreateParams struct {
     Title string `json:"title" validate:"required"`
 }
 
-tygor.Unary(Create) // POST is default
+tygor.Exec(Create)
 ```
 
 ## Error Handling
@@ -313,7 +313,7 @@ Applied to specific handlers:
 
 ```go
 news.Register("Create",
-    tygor.Unary(CreateNews).
+    tygor.Exec(CreateNews).
         WithUnaryInterceptor(func(ctx *tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
             // Custom logic - access ctx.Service(), ctx.Method(), ctx.HTTPRequest(), etc.
             return handler(ctx, req)
@@ -366,7 +366,7 @@ Set cache headers on GET handlers using `CacheControl`:
 
 ```go
 news.Register("List",
-    tygor.UnaryGet(ListNews).
+    tygor.Query(ListNews).
         CacheControl(tygor.CacheConfig{
             MaxAge: 5 * time.Minute,
             Public: true,
