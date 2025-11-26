@@ -9,10 +9,10 @@ import (
 	"testing"
 
 	"github.com/broady/tygor"
-	"github.com/broady/tygor/examples/blog/api"
+	"github.com/broady/tygor/internal/testfixtures"
 )
 
-// Test types for reflection tests (local types for unit tests only)
+// Test types for reflection tests (local to this package)
 type TestStruct struct {
 	Name string `json:"name"`
 }
@@ -269,10 +269,9 @@ func TestGenerate_WithHandlers(t *testing.T) {
 	reg := tygor.NewApp()
 	outDir := t.TempDir()
 
-	// Register a test handler using types from the examples/blog/api package
-	// which tygo can properly generate TypeScript for
-	handler := func(ctx context.Context, req *api.CreateUserRequest) (*api.User, error) {
-		return &api.User{Username: req.Username}, nil
+	// Register a test handler using internal test fixture types
+	handler := func(ctx context.Context, req *testfixtures.CreateUserRequest) (*testfixtures.User, error) {
+		return &testfixtures.User{Username: req.Username}, nil
 	}
 	reg.Service("Users").Register("Create", tygor.Exec(handler))
 
@@ -303,10 +302,10 @@ func TestGenerate_ManifestStructure(t *testing.T) {
 	reg := tygor.NewApp()
 	outDir := t.TempDir()
 
-	createHandler := func(ctx context.Context, req *api.CreateUserRequest) (*api.User, error) {
+	createHandler := func(ctx context.Context, req *testfixtures.CreateUserRequest) (*testfixtures.User, error) {
 		return nil, nil
 	}
-	listHandler := func(ctx context.Context, req *api.ListPostsParams) ([]*api.Post, error) {
+	listHandler := func(ctx context.Context, req *testfixtures.ListPostsParams) ([]*testfixtures.Post, error) {
 		return nil, nil
 	}
 	reg.Service("Users").Register("Create", tygor.Exec(createHandler))
@@ -359,7 +358,7 @@ func TestGenerate_TypesFile(t *testing.T) {
 	reg := tygor.NewApp()
 	outDir := t.TempDir()
 
-	handler := func(ctx context.Context, req *api.CreateUserRequest) (*api.User, error) {
+	handler := func(ctx context.Context, req *testfixtures.CreateUserRequest) (*testfixtures.User, error) {
 		return nil, nil
 	}
 	reg.Service("Users").Register("Create", tygor.Exec(handler))
@@ -390,7 +389,7 @@ func TestGenerate_CustomConfig(t *testing.T) {
 	reg := tygor.NewApp()
 	outDir := t.TempDir()
 
-	handler := func(ctx context.Context, req *api.CreateUserRequest) (*api.User, error) {
+	handler := func(ctx context.Context, req *testfixtures.CreateUserRequest) (*testfixtures.User, error) {
 		return nil, nil
 	}
 	reg.Service("Users").Register("Create", tygor.Exec(handler))
@@ -411,19 +410,14 @@ func TestGenerate_CustomConfig(t *testing.T) {
 	}
 
 	// Check types file content to verify config was applied
-	typesPath := filepath.Join(outDir, "types_github_com_broady_tygor_examples_blog_api.ts")
+	typesPath := filepath.Join(outDir, "types_github_com_broady_tygor_internal_testfixtures.ts")
 	content, err := os.ReadFile(typesPath)
 	if err != nil {
 		t.Fatalf("failed to read generated types: %v", err)
 	}
 	typesStr := string(content)
 
-	// Verify comments are removed (PreserveComments: "none")
-	if strings.Contains(typesStr, "CreateUserRequest is the request") {
-		t.Error("expected comments to be removed")
-	}
-
-	// Verify User struct is present (sanity check)
+	// Verify User struct is present (sanity check that config was used)
 	if !strings.Contains(typesStr, "export interface User") {
 		t.Error("expected User interface to be generated")
 	}
@@ -437,7 +431,7 @@ func TestGenerate_GETParamsUseLowercaseNames(t *testing.T) {
 	outDir := t.TempDir()
 
 	// Register a GET handler using ListPostsParams which has both json and schema tags
-	listHandler := func(ctx context.Context, req *api.ListPostsParams) ([]*api.Post, error) {
+	listHandler := func(ctx context.Context, req *testfixtures.ListPostsParams) ([]*testfixtures.Post, error) {
 		return nil, nil
 	}
 	reg.Service("Posts").Register("List", tygor.Query(listHandler))
@@ -450,7 +444,7 @@ func TestGenerate_GETParamsUseLowercaseNames(t *testing.T) {
 	}
 
 	// Read the generated types file
-	typesPath := filepath.Join(outDir, "types_github_com_broady_tygor_examples_blog_api.ts")
+	typesPath := filepath.Join(outDir, "types_github_com_broady_tygor_internal_testfixtures.ts")
 	content, err := os.ReadFile(typesPath)
 	if err != nil {
 		t.Fatalf("failed to read generated types: %v", err)

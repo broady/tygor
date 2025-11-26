@@ -44,12 +44,26 @@ tygor/
 │   ├── runtime.ts       # TypeScript client runtime
 │   ├── runtime.test.ts  # Runtime tests
 │   └── package.json     # Published to npm as @tygor/client
-├── examples/            # Example applications
+├── examples/            # Example applications (separate Go module)
+│   ├── go.mod           # Separate module for heavier dependencies
 │   ├── newsserver/      # Simple CRUD example
-│   └── blog/            # Complex auth/authz example
+│   ├── blog/            # Complex auth/authz example
+│   └── protobuf/        # Protobuf types example
 ├── middleware/          # Built-in middleware (CORS, logging)
 ├── tygorgen/            # Code generator
 └── *.go                 # Core framework files
+```
+
+### Multi-Module Repository
+
+The `examples/` directory is a separate Go module with its own `go.mod`. This allows examples to have heavier dependencies (like protobuf) without polluting the main module's dependency tree.
+
+```bash
+# Main module tests
+go test ./...
+
+# Build examples (from examples/)
+cd examples && go build ./...
 ```
 
 ## Monorepo Setup
