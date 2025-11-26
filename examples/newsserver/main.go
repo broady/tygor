@@ -18,6 +18,7 @@ import (
 
 // --- Handlers ---
 
+// [snippet:handlers]
 func ListNews(ctx context.Context, req *api.ListNewsParams) ([]*api.News, error) {
 	// Simulate DB
 	body := "This is the body"
@@ -42,6 +43,8 @@ func CreateNews(ctx context.Context, req *api.CreateNewsParams) (*api.News, erro
 	}, nil
 }
 
+// [/snippet:handlers]
+
 // --- Main ---
 
 func main() {
@@ -54,6 +57,7 @@ func main() {
 		Level: slog.LevelInfo,
 	}))
 
+	// [snippet:app-setup]
 	// 1. Create App
 	app := tygor.NewApp().
 		WithErrorTransformer(func(err error) *tygor.Error {
@@ -65,7 +69,9 @@ func main() {
 		}).
 		WithUnaryInterceptor(middleware.LoggingInterceptor(logger)).
 		WithMiddleware(middleware.CORS(middleware.DefaultCORSConfig()))
+	// [/snippet:app-setup]
 
+	// [snippet:service-registration]
 	// 2. Register Services
 	news := app.Service("News")
 
@@ -81,6 +87,7 @@ func main() {
 			ctx.HTTPWriter().Header().Set("X-Created-By", "Tygorpc")
 			return handler(ctx, req)
 		}))
+	// [/snippet:service-registration]
 
 	// 3. Generation Mode
 	if *genFlag {

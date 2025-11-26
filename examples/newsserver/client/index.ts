@@ -2,6 +2,7 @@ import { createClient } from '@tygor/client';
 import { registry } from './src/rpc/manifest';
 import { DateTime, NewsStatusPublished, NewsStatusDraft } from './src/rpc/types';
 
+// [snippet:client-setup]
 // 1. Create the strictly typed client
 const client = createClient(
   registry,
@@ -12,16 +13,19 @@ const client = createClient(
     })
   }
 );
+// [/snippet:client-setup]
 
 async function main() {
   try {
     console.log("Fetching news...");
 
+    // [snippet:client-calls]
     // 2. Type-safe call: GET /News/List
     const newsList = await client.News.List({
       limit: 10,
       offset: 0
     });
+    // [/snippet:client-calls]
 
     console.log(`Found ${newsList.length} items:`);
     newsList.forEach(item => {

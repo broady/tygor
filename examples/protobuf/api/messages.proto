@@ -4,6 +4,8 @@ package api;
 
 option go_package = "github.com/broady/tygor/examples/protobuf/api";
 
+// [snippet:proto-messages]
+
 // CreateItemRequest is the request to create an item.
 message CreateItemRequest {
   string name = 1;
@@ -20,6 +22,7 @@ message Item {
   int64 price_cents = 4;
   repeated string tags = 5;
 }
+// [/snippet:proto-messages]
 
 // ListItemsRequest is the request to list items.
 message ListItemsRequest {

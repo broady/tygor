@@ -4,6 +4,8 @@ package api
 
 import "time"
 
+// [snippet:enum-type]
+
 // NewsStatus represents the publication status of a news article.
 type NewsStatus string
 
@@ -15,6 +17,10 @@ const (
 	// NewsStatusArchived indicates the article has been archived.
 	NewsStatusArchived NewsStatus = "archived"
 )
+
+// [/snippet:enum-type]
+
+// [snippet:response-type]
 
 // News represents a news article in the system.
 type News struct {
@@ -29,6 +35,10 @@ type News struct {
 	// CreatedAt is the timestamp when the article was created.
 	CreatedAt *time.Time `json:"created_at,omitempty"`
 }
+
+// [/snippet:response-type]
+
+// [snippet:request-types]
 
 // ListNewsParams contains pagination parameters for listing news articles.
 type ListNewsParams struct {
@@ -45,3 +55,5 @@ type CreateNewsParams struct {
 	// Body is the optional article content.
 	Body *string `json:"body,omitempty"`
 }
+
+// [/snippet:request-types]

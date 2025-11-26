@@ -91,6 +91,7 @@ func getUserID(ctx context.Context) (int64, bool) {
 	return userID, ok
 }
 
+// [snippet:auth-interceptor]
 func requireAuth(ctx *tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
 	// Extract token from request headers
 	httpReq := ctx.HTTPRequest()
@@ -124,6 +125,8 @@ func requireAuth(ctx *tygor.Context, req any, handler tygor.HandlerFunc) (any, e
 	ctxWithUser := context.WithValue(ctx, userIDKey, userID)
 	return handler(ctxWithUser, req)
 }
+
+// [/snippet:auth-interceptor]
 
 // --- User Service Handlers ---
 

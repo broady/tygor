@@ -144,12 +144,40 @@ To publish a new version of `@tygor/client`:
 
 ## Examples
 
-When modifying examples:
+Examples are in a separate Go module (`examples/go.mod`) with standardized make targets.
 
-1. Keep them simple and focused on demonstrating specific features
-2. Update the example's README.md if you change functionality
-3. Both examples import from `@tygor/client` to show real-world usage
-4. Test that examples work before submitting
+### Make Targets
+
+Each example supports:
+```bash
+make run        # Start server
+make gen        # Generate TypeScript
+make test       # Run tests
+make fmt        # Format code
+make check      # Verify generated files (for CI)
+make snippets   # Extract code snippets as markdown
+```
+
+### Snippet Markers
+
+Examples contain marked code regions for documentation extraction. Add markers around key code:
+
+```go
+// [snippet:handler-example]
+func MyHandler(ctx context.Context, req *api.Request) (*api.Response, error) {
+    // This code can be extracted to docs
+}
+// [/snippet:handler-example]
+```
+
+Extract with `make snippet-go` or `make snippet-ts`.
+
+### Guidelines
+
+1. Keep examples simple and focused on demonstrating specific features
+2. Add snippet markers around documentation-worthy code
+3. Run `make check` before submitting to ensure generated files are current
+4. Test that examples build and run before submitting
 
 ## Pull Request Process
 
