@@ -5,7 +5,7 @@
 
 Type-safe backend for Go + TypeScript apps.
 
-Write Go functions, call them from TypeScript with full type safety. No schemas, no codegen ceremony—just your types, end to end.
+Write Go functions, call them from TypeScript with full type safety. No IDL required, but works with protobuf-generated types if you prefer schema-first design.
 
 > [!IMPORTANT]
 > tygor is pre-release and the API and protocol may still change.
@@ -13,35 +13,35 @@ Write Go functions, call them from TypeScript with full type safety. No schemas,
 
 ## Features
 
-- **End-to-end type safety** — Go structs become TypeScript types automatically
-- **Standard HTTP/JSON** — Debuggable, cacheable, works with existing tools
-- **Zero ceremony** — No IDL files, no protobuf, no OpenAPI specs to maintain
-- **Tiny client footprint** — Proxy-based client with <3KB bundle impact
-- **Go-native** — Idiomatic handlers, works with any HTTP middleware
-- **Production-ready** — Structured errors, interceptors, request validation
+- **End-to-end type safety** - Go structs become TypeScript types automatically
+- **Standard HTTP/JSON** - Debuggable, cacheable (see `CacheControl`), works with existing tools
+- **Flexible** - No IDL required, but works with protobuf-generated types if you prefer schema-first
+- **Tiny client footprint** - Proxy-based client with <3KB bundle impact
+- **Go-native** - Idiomatic handlers, works with the standard `net/http` ecosystem
+- **Robust and pluggable** - Structured errors and logs, interceptors and telemetry hooks, validation
 
 ## Philosophy
 
 **tygor is for teams building fullstack Go + TypeScript applications.**
 
-If your Go backend and TypeScript frontend live together (especially in a monorepo), tygor gives you end-to-end type safety without the ceremony of IDLs like protobuf or OpenAPI specs. You write normal Go functions, and tygor generates TypeScript types that match your actual implementation.
+If your Go backend and TypeScript frontend live together (especially in a monorepo), tygor gives you end-to-end type safety without requiring an IDL. You write normal Go functions, and tygor generates TypeScript types that match your actual implementation. If you already use protobuf or prefer schema-first design, tygor works seamlessly with generated Go types.
 
 ### Who is this for?
 
 **Use tygor if you:**
 - Build fullstack apps with Go + TypeScript, especially in a monorepo
-- Want type safety without learning protobuf/gRPC/OpenAPI
+- Want type safety without the overhead of maintaining separate IDL files
 - Value iteration speed and developer ergonomics
 - Want to write idiomatic Go handlers and get TypeScript types automatically
 - Are okay with incrementally improving types as your domain evolves
 
 **Don't use tygor if you:**
-- Need a public API with strict versioning guarantees (consider OpenAPI or protobuf)
-- Require multi-language client support (OpenAPI generation is planned)
+- Need a public API with strict versioning guarantees (tygor can help here, but consider adding OpenAPI generation)
+- Require multi-language client support today (OpenAPI generation is planned)
 
 ### The tradeoff
 
-tygor optimizes for the common case: a team iterating quickly on a fullstack app where the backend and frontend are tightly coupled anyway. You can always add handwritten TypeScript definitions to improve type safety for your specific domain—often nicer than being forced into the constraints of an IDL.
+tygor optimizes for the common case: a team iterating quickly on a fullstack app where the backend and frontend are tightly coupled anyway. You can always add handwritten TypeScript definitions to improve type safety for your specific domain. It's still nicer than being forced into the constraints of an IDL.
 
 In the future, tygor may generate OpenAPI specs to enable client generation in other languages, giving you the best of both worlds: ergonomic Go + TypeScript for your core app, with optional compatibility for other ecosystems.
 
