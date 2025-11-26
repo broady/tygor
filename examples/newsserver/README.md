@@ -14,136 +14,165 @@ A simple CRUD API demonstrating tygor's basic features.
 
 ## Running the Example
 
-### 1. Start the server
-
 ```bash
-cd examples/newsserver
-go run main.go
+make run    # Start server on :8080
+make gen    # Generate TypeScript types
+make test   # Build and test
 ```
 
-Server starts on `http://localhost:8080`
-
-### 2. Try the API
-
-**List news items:**
-```bash
-curl "http://localhost:8080/News/List?limit=10&offset=0"
-```
-
-**Create a news item:**
-```bash
-curl -X POST http://localhost:8080/News/Create \
-  -H 'Content-Type: application/json' \
-  -d '{"title":"Breaking News","body":"Something happened!"}'
-```
-
-### 3. Run the TypeScript client
-
-The client demonstrates type-safe RPC calls with branded types and enums.
+Or manually:
 
 ```bash
-cd client
-npm install  # or: bun install
-bun run index.ts
+go run main.go                    # Start server
+go run main.go -gen               # Generate types
+curl http://localhost:8080/News/List?limit=10
 ```
 
-**Note**: The server must be running for the client to work.
+## Code Overview
 
-## Client Setup
+### Type Definitions
 
-The TypeScript client uses `@tygor/client` from npm:
+<!-- [snippet:enum-type] -->
+```go title="types.go"
+// NewsStatus represents the publication status of a news article.
+type NewsStatus string
 
-```typescript
-import { createClient } from '@tygor/client';
-import { registry } from './src/rpc/manifest';
+const (
+	// NewsStatusDraft indicates the article is not yet published.
+	NewsStatusDraft NewsStatus = "draft"
+	// NewsStatusPublished indicates the article is publicly visible.
+	NewsStatusPublished NewsStatus = "published"
+	// NewsStatusArchived indicates the article has been archived.
+	NewsStatusArchived NewsStatus = "archived"
+)
 
+```
+<!-- [/snippet:enum-type] -->
+
+<!-- [snippet:request-types] -->
+```go title="types.go"
+// ListNewsParams contains pagination parameters for listing news articles.
+type ListNewsParams struct {
+	// Limit is the maximum number of articles to return.
+	Limit *int32 `json:"limit" schema:"limit"`
+	// Offset is the number of articles to skip.
+	Offset *int32 `json:"offset" schema:"offset"`
+}
+
+// CreateNewsParams contains the parameters for creating a new news article.
+type CreateNewsParams struct {
+	// Title is the article headline (required, 3-100 characters).
+	Title string `json:"title" validate:"required,min=3"`
+	// Body is the optional article content.
+	Body *string `json:"body,omitempty"`
+}
+
+```
+<!-- [/snippet:request-types] -->
+
+### Handlers
+
+<!-- [snippet:handlers] -->
+```go title="main.go"
+func ListNews(ctx context.Context, req *api.ListNewsParams) ([]*api.News, error) {
+	// Simulate DB
+	body := "This is the body"
+	now := time.Now()
+	return []*api.News{
+		{ID: 1, Title: "News 1", Body: &body, Status: api.NewsStatusPublished, CreatedAt: &now},
+		{ID: 2, Title: "News 2", Status: api.NewsStatusDraft, CreatedAt: &now},
+	}, nil
+}
+
+func CreateNews(ctx context.Context, req *api.CreateNewsParams) (*api.News, error) {
+	if req.Title == "error" {
+		return nil, tygor.NewError(tygor.CodeInvalidArgument, "simulated error")
+	}
+	now := time.Now()
+	return &api.News{
+		ID:        123,
+		Title:     req.Title,
+		Body:      req.Body,
+		Status:    api.NewsStatusDraft, // New articles start as drafts
+		CreatedAt: &now,
+	}, nil
+}
+
+```
+<!-- [/snippet:handlers] -->
+
+### App Setup
+
+<!-- [snippet:app-setup] -->
+```go title="main.go"
+	// 1. Create App
+	app := tygor.NewApp().
+		WithErrorTransformer(func(err error) *tygor.Error {
+			// Example custom error mapping
+			if err.Error() == "database connection failed" {
+				return tygor.NewError(tygor.CodeUnavailable, "db down")
+			}
+			return nil
+		}).
+		WithUnaryInterceptor(middleware.LoggingInterceptor(logger)).
+		WithMiddleware(middleware.CORS(middleware.DefaultCORSConfig()))
+```
+<!-- [/snippet:app-setup] -->
+
+### Service Registration
+
+<!-- [snippet:service-registration] -->
+```go title="main.go"
+	// 2. Register Services
+	news := app.Service("News")
+
+	news.Register("List", tygor.Query(ListNews).
+		CacheControl(tygor.CacheConfig{
+			MaxAge: 1 * time.Minute,
+			Public: true,
+		}))
+
+	news.Register("Create", tygor.Exec(CreateNews).
+		WithUnaryInterceptor(func(ctx *tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
+			// Example: Set a custom header
+			ctx.HTTPWriter().Header().Set("X-Created-By", "Tygorpc")
+			return handler(ctx, req)
+		}))
+```
+<!-- [/snippet:service-registration] -->
+
+### TypeScript Client
+
+<!-- [snippet:client-setup] -->
+```typescript title="index.ts"
+// 1. Create the strictly typed client
 const client = createClient(
   registry,
-  { baseUrl: 'http://localhost:8080' }
+  {
+    baseUrl: 'http://localhost:8080',
+    headers: () => ({
+      'Authorization': 'Bearer my-token'
+    })
+  }
 );
-
-// Type-safe calls
-const news = await client.News.List({ limit: 10, offset: 0 });
 ```
-
-### For Contributors
-
-If you're working on tygor itself, the monorepo setup automatically symlinks `@tygor/client` to the local `/client` directory. Just run `npm install` at the repo root.
-
-## Code Structure
-
-```
-examples/newsserver/
-├── api/
-│   └── types.go           # Request/Response types
-├── client/
-│   ├── index.ts           # TypeScript client example
-│   ├── package.json       # Depends on @tygor/client
-│   └── src/rpc/           # Generated types (run main.go to generate)
-├── main.go                # Server implementation
-└── README.md              # This file
-```
+<!-- [/snippet:client-setup] -->
 
 ## API Endpoints
 
-### GET /News/List
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/News/List` | List news items with pagination |
+| POST | `/News/Create` | Create a new news item |
 
-Query parameters:
-- `limit` (int32, required)
-- `offset` (int32, required)
+## File Structure
 
-Returns: Array of news items
-
-### POST /News/Create
-
-Request body:
-```json
-{
-  "title": "string (required)",
-  "body": "string (optional)"
-}
 ```
-
-Returns: Created news item with ID and timestamp
-
-## Type Generation
-
-The TypeScript types are generated by running the Go server:
-
-```bash
-go run main.go
+newsserver/
+├── main.go           # Server, handlers, registration
+├── api/types.go      # Request/response types
+├── client/
+│   ├── index.ts      # TypeScript client example
+│   └── src/rpc/      # Generated types
+└── README.md
 ```
-
-This creates:
-- `client/src/rpc/types.ts` - TypeScript interfaces matching Go types
-- `client/src/rpc/manifest.ts` - API endpoint metadata and manifest
-
-## Key Concepts
-
-### Branded Types
-
-The example demonstrates branded types for additional type safety:
-
-```typescript
-// DateTime is a branded string type
-const dt: DateTime = DateTime.from("2024-01-01T00:00:00Z");
-
-// Helper functions
-DateTime.format(dt);           // Formatted string
-DateTime.toDate(dt);           // JavaScript Date object
-DateTime.from(isoString);      // Create from string
-```
-
-### Type-safe Enums
-
-```typescript
-import { NewsStatusPublished, NewsStatusDraft } from './src/rpc/types';
-
-if (item.status === NewsStatusPublished) {
-  console.log("Published!");
-}
-```
-
-## Next Steps
-
-For a more complex example with authentication and authorization, see the [blog example](../blog/README.md).

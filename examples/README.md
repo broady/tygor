@@ -27,9 +27,16 @@ make check      # Verify generated files are up-to-date (for CI)
 
 ## Snippet System
 
-Examples contain marked code regions that can be extracted as markdown snippets for documentation.
+Examples contain marked code regions that can be extracted as markdown snippets. Snippets are embedded in each example's README and kept up-to-date automatically.
 
-### Extracting Snippets
+### Updating READMEs
+
+```bash
+make readme       # Update README.md with current code snippets
+make precommit    # Run all checks including readme updates
+```
+
+### Extracting to Stdout
 
 ```bash
 make snippet-go   # Extract Go snippets
@@ -85,9 +92,20 @@ go run ./cmd/snippet main.go api/types.go
 # Extract specific snippet
 go run ./cmd/snippet -name handlers main.go
 
-# Output to file
-go run ./cmd/snippet -out snippets.md main.go
+# Inject snippets into README
+go run ./cmd/snippet -inject README.md main.go api/types.go
 ```
+
+### README Markers
+
+To embed snippets in a README, use HTML comment markers:
+
+```markdown
+<!-- [snippet:handlers] -->
+<!-- [/snippet:handlers] -->
+```
+
+The content between markers is replaced when running `make readme`.
 
 ## Module Structure
 

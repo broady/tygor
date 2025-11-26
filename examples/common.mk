@@ -9,7 +9,7 @@ GO_FILES ?= main.go $(wildcard api/*.go)
 TS_FILES ?= $(wildcard client/*.ts client/src/**/*.ts)
 GEN_DIR ?= ./client/src/rpc
 
-.PHONY: all test gen run clean check fmt snippet-go snippet-ts snippets help
+.PHONY: all test gen run clean check fmt snippet-go snippet-ts snippets readme help
 
 # Default target
 all: gen test
@@ -34,11 +34,11 @@ run:
 clean:
 	rm -rf $(GEN_DIR)
 
-# Check if generated files are up-to-date
-check: gen
-	@if [ -n "$$(git status --porcelain $(GEN_DIR))" ]; then \
-		echo "Generated files are out of date. Run 'make gen' and commit the changes."; \
-		git diff $(GEN_DIR); \
+# Check if generated files are up-to-date (only unstaged changes)
+check: gen readme
+	@if [ -n "$$(git diff --name-only $(GEN_DIR) README.md 2>/dev/null)" ]; then \
+		echo "Generated files are out of date. Run 'make gen' and 'make readme', then commit."; \
+		git diff $(GEN_DIR) README.md; \
 		exit 1; \
 	fi
 	@echo "Generated files are up-to-date."
@@ -63,6 +63,10 @@ snippet-ts:
 # Extract all snippets
 snippets: snippet-go snippet-ts
 
+# Update README with snippets
+readme:
+	@$(SNIPPET_TOOL) -inject README.md $(GO_FILES) $(TS_FILES)
+
 # Help
 help:
 	@echo "Available targets:"
@@ -76,3 +80,4 @@ help:
 	@echo "  make snippet-go - Extract Go snippets as markdown"
 	@echo "  make snippet-ts - Extract TypeScript snippets as markdown"
 	@echo "  make snippets   - Extract all snippets"
+	@echo "  make readme     - Update README.md with code snippets"

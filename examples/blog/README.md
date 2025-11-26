@@ -123,13 +123,44 @@ examples/blog/
 
 ### Authentication Interceptor
 
-```go
+<!-- [snippet:auth-interceptor] -->
+```go title="main.go"
 func requireAuth(ctx *tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
-    // Extract and validate token from Authorization header via ctx.HTTPRequest()
-    // Add user ID to context with context.WithValue
-    // Call next handler
+	// Extract token from request headers
+	httpReq := ctx.HTTPRequest()
+	if httpReq == nil {
+		return nil, tygor.NewError(tygor.CodeUnauthenticated, "no request in context")
+	}
+
+	authHeader := httpReq.Header.Get("Authorization")
+	if authHeader == "" {
+		return nil, tygor.NewError(tygor.CodeUnauthenticated, "missing authorization header")
+	}
+
+	// Extract bearer token
+	parts := strings.Split(authHeader, " ")
+	if len(parts) != 2 || parts[0] != "Bearer" {
+		return nil, tygor.NewError(tygor.CodeUnauthenticated, "invalid authorization header format")
+	}
+
+	token := parts[1]
+
+	// Look up user by token
+	dbMu.RLock()
+	userID, ok := tokens[token]
+	dbMu.RUnlock()
+
+	if !ok {
+		return nil, tygor.NewError(tygor.CodeUnauthenticated, "invalid token")
+	}
+
+	// Add user ID to context and pass to handler
+	ctxWithUser := context.WithValue(ctx, userIDKey, userID)
+	return handler(ctxWithUser, req)
 }
+
 ```
+<!-- [/snippet:auth-interceptor] -->
 
 Applied at different levels:
 

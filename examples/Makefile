@@ -2,16 +2,22 @@
 
 EXAMPLES := newsserver blog protobuf
 
-.PHONY: all test gen check fmt clean precommit $(EXAMPLES)
+.PHONY: all test gen check fmt clean readme precommit $(EXAMPLES)
 
-# Run precommit on all examples
+# Run precommit on all examples (check runs gen and readme)
 precommit:
 	@echo "Running precommit checks on all examples..."
 	@for ex in $(EXAMPLES); do \
 		echo "=== $$ex ==="; \
-		$(MAKE) -C $$ex gen test check || exit 1; \
+		$(MAKE) -C $$ex test check || exit 1; \
 	done
 	@echo "All examples OK"
+
+# Update all READMEs
+readme:
+	@for ex in $(EXAMPLES); do \
+		$(MAKE) -C $$ex readme || exit 1; \
+	done
 
 # Run tests on all examples
 test:

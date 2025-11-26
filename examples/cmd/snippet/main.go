@@ -7,14 +7,21 @@
 //	  -lang string    Override language detection
 //	  -format string  Output format: simple|mdx (default: mdx)
 //	  -out string     Output file (default: stdout)
+//	  -inject string  Inject snippets into this file (e.g., README.md)
 //
 // Snippet markers in source files:
 //
 //	// [snippet:example-name]
+//
 //	func Example() {
 //	    // code here
 //	}
 //	// [/snippet:example-name]
+//
+// README injection markers:
+//
+//	<!-- [snippet:example-name] -->
+//	<!-- [/snippet:example-name] -->
 package main
 
 import (
@@ -32,6 +39,7 @@ var (
 	langFlag   = flag.String("lang", "", "Override language detection")
 	formatFlag = flag.String("format", "mdx", "Output format: simple|mdx")
 	outFlag    = flag.String("out", "", "Output file (default: stdout)")
+	injectFlag = flag.String("inject", "", "Inject snippets into this file (e.g., README.md)")
 )
 
 // Snippet represents an extracted code snippet.
@@ -49,6 +57,10 @@ var (
 	startPattern = regexp.MustCompile(`(?://|#)\s*\[snippet:([^\]]+)\]`)
 	// Matches: // [/snippet:name] or # [/snippet:name]
 	endPattern = regexp.MustCompile(`(?://|#)\s*\[/snippet:([^\]]+)\]`)
+
+	// README markers: <!-- [snippet:name] --> and <!-- [/snippet:name] -->
+	readmeStartPattern = regexp.MustCompile(`<!--\s*\[snippet:([^\]]+)\]\s*-->`)
+	readmeEndPattern   = regexp.MustCompile(`<!--\s*\[/snippet:([^\]]+)\]\s*-->`)
 )
 
 func main() {
@@ -80,6 +92,15 @@ func main() {
 			}
 		}
 		allSnippets = filtered
+	}
+
+	// Inject mode: update a README file with snippets
+	if *injectFlag != "" {
+		if err := injectSnippets(*injectFlag, allSnippets, *formatFlag); err != nil {
+			fmt.Fprintf(os.Stderr, "Error injecting snippets: %v\n", err)
+			os.Exit(1)
+		}
+		return
 	}
 
 	// Generate output
@@ -139,6 +160,8 @@ func extractSnippets(filename string) ([]Snippet, error) {
 			}
 			current.EndLine = lineNum - 1
 			current.Content = strings.Join(contentLines, "\n")
+			// Trim leading blank line if present (from blank line after marker)
+			current.Content = strings.TrimPrefix(current.Content, "\n")
 			snippets = append(snippets, *current)
 			current = nil
 			continue
@@ -193,35 +216,103 @@ func detectLang(filename string) string {
 	}
 }
 
+func formatSnippet(s Snippet, format string) string {
+	var sb strings.Builder
+
+	switch format {
+	case "simple":
+		sb.WriteString(fmt.Sprintf("```%s\n", s.Lang))
+		sb.WriteString(s.Content)
+		sb.WriteString("\n```")
+
+	case "mdx":
+		sb.WriteString(fmt.Sprintf("```%s title=\"%s\"\n", s.Lang, s.File))
+		sb.WriteString(s.Content)
+		sb.WriteString("\n```")
+
+	default:
+		sb.WriteString(fmt.Sprintf("```%s\n", s.Lang))
+		sb.WriteString(s.Content)
+		sb.WriteString("\n```")
+	}
+
+	return sb.String()
+}
+
 func formatSnippets(snippets []Snippet, format string) string {
 	var sb strings.Builder
 
 	for i, s := range snippets {
 		if i > 0 {
-			sb.WriteString("\n")
+			sb.WriteString("\n\n")
 		}
+		sb.WriteString(formatSnippet(s, format))
+	}
 
-		switch format {
-		case "simple":
-			// Simple format with comment header
-			sb.WriteString(fmt.Sprintf("```%s\n", s.Lang))
-			sb.WriteString(fmt.Sprintf("// %s:%d-%d\n", s.File, s.StartLine, s.EndLine))
-			sb.WriteString(s.Content)
-			sb.WriteString("\n```\n")
-
-		case "mdx":
-			// MDX-style with title attribute
-			sb.WriteString(fmt.Sprintf("```%s title=\"%s:%d-%d\"\n", s.Lang, s.File, s.StartLine, s.EndLine))
-			sb.WriteString(s.Content)
-			sb.WriteString("\n```\n")
-
-		default:
-			// Default to mdx
-			sb.WriteString(fmt.Sprintf("```%s title=\"%s:%d-%d\"\n", s.Lang, s.File, s.StartLine, s.EndLine))
-			sb.WriteString(s.Content)
-			sb.WriteString("\n```\n")
-		}
+	if len(snippets) > 0 {
+		sb.WriteString("\n")
 	}
 
 	return sb.String()
+}
+
+func injectSnippets(filename string, snippets []Snippet, format string) error {
+	// Build a map of snippets by name
+	snippetMap := make(map[string]Snippet)
+	for _, s := range snippets {
+		snippetMap[s.Name] = s
+	}
+
+	// Read the file
+	content, err := os.ReadFile(filename)
+	if err != nil {
+		return err
+	}
+
+	lines := strings.Split(string(content), "\n")
+	var result []string
+	var currentSnippet string
+	var skipping bool
+
+	for _, line := range lines {
+		// Check for start marker
+		if matches := readmeStartPattern.FindStringSubmatch(line); matches != nil {
+			currentSnippet = matches[1]
+			result = append(result, line)
+
+			// Insert the snippet content
+			if s, ok := snippetMap[currentSnippet]; ok {
+				result = append(result, formatSnippet(s, format))
+			} else {
+				fmt.Fprintf(os.Stderr, "Warning: snippet %q not found\n", currentSnippet)
+			}
+			skipping = true
+			continue
+		}
+
+		// Check for end marker
+		if matches := readmeEndPattern.FindStringSubmatch(line); matches != nil {
+			if matches[1] != currentSnippet {
+				return fmt.Errorf("mismatched README markers: expected %q, got %q", currentSnippet, matches[1])
+			}
+			result = append(result, line)
+			skipping = false
+			currentSnippet = ""
+			continue
+		}
+
+		// Skip old content between markers
+		if skipping {
+			continue
+		}
+
+		result = append(result, line)
+	}
+
+	if skipping {
+		return fmt.Errorf("unclosed README snippet marker %q", currentSnippet)
+	}
+
+	// Write back
+	return os.WriteFile(filename, []byte(strings.Join(result, "\n")), 0644)
 }
