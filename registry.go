@@ -13,8 +13,7 @@ import (
 
 // App is the central router for RPC handlers.
 // It manages route registration, middleware, interceptors, and error handling.
-// App implements http.Handler and can be used directly with http.ListenAndServe
-// or wrapped with additional middleware via the Handler method.
+// Use Handler() to get an http.Handler for use with http.ListenAndServe.
 type App struct {
 	mu                 sync.RWMutex
 	routes             map[string]RPCMethod
@@ -65,7 +64,6 @@ func (r *App) WithUnaryInterceptor(i UnaryInterceptor) *App {
 
 // WithMiddleware adds an HTTP middleware to wrap the app.
 // Middleware is applied in the order added (first added is outermost).
-// Use Handler() to get the wrapped handler.
 func (r *App) WithMiddleware(mw func(http.Handler) http.Handler) *App {
 	r.middlewares = append(r.middlewares, mw)
 	return r
@@ -86,10 +84,15 @@ func (r *App) WithMaxRequestBodySize(size uint64) *App {
 	return r
 }
 
-// Handler returns the app wrapped with all configured middleware.
-// The middleware is applied in the order it was added via WithMiddleware.
+// Handler returns an http.Handler for use with http.ListenAndServe or other
+// HTTP servers. The returned handler includes all configured middleware.
+//
+// Example:
+//
+//	app := tygor.NewApp().WithMiddleware(cors)
+//	http.ListenAndServe(":8080", app.Handler())
 func (r *App) Handler() http.Handler {
-	var h http.Handler = http.HandlerFunc(r.ServeHTTP)
+	var h http.Handler = http.HandlerFunc(r.serveHTTP)
 	// Apply middleware in reverse order so first added is outermost
 	for i := len(r.middlewares) - 1; i >= 0; i-- {
 		h = r.middlewares[i](h)
@@ -105,8 +108,8 @@ func (r *App) Service(name string) *Service {
 	}
 }
 
-// ServeHTTP implements http.Handler.
-func (r *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+// serveHTTP handles incoming RPC requests (internal, called via Handler()).
+func (r *App) serveHTTP(w http.ResponseWriter, req *http.Request) {
 	defer func() {
 		if rec := recover(); rec != nil {
 			stack := debug.Stack()

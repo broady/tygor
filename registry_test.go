@@ -115,7 +115,7 @@ func TestApp_Service(t *testing.T) {
 	}
 }
 
-func TestApp_ServeHTTP_Success(t *testing.T) {
+func TestApp_Handler_Success(t *testing.T) {
 	reg := NewApp()
 
 	fn := func(ctx context.Context, req TestRequest) (TestResponse, error) {
@@ -129,25 +129,25 @@ func TestApp_ServeHTTP_Success(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	reg.ServeHTTP(w, req)
+	reg.Handler().ServeHTTP(w, req)
 
 	tygortest.AssertStatus(t, w, http.StatusOK)
 	tygortest.AssertJSONResponse(t, w, TestResponse{Message: "hello John", ID: 123})
 }
 
-func TestApp_ServeHTTP_NotFound(t *testing.T) {
+func TestApp_Handler_NotFound(t *testing.T) {
 	reg := NewApp()
 
 	req := httptest.NewRequest("POST", "/NonExistent/Method", nil)
 	w := httptest.NewRecorder()
 
-	reg.ServeHTTP(w, req)
+	reg.Handler().ServeHTTP(w, req)
 
 	tygortest.AssertStatus(t, w, http.StatusNotFound)
 	tygortest.AssertJSONError(t, w, string(CodeNotFound))
 }
 
-func TestApp_ServeHTTP_InvalidPath(t *testing.T) {
+func TestApp_Handler_InvalidPath(t *testing.T) {
 	reg := NewApp()
 
 	tests := []struct {
@@ -163,7 +163,7 @@ func TestApp_ServeHTTP_InvalidPath(t *testing.T) {
 			req := httptest.NewRequest("POST", tt.path, nil)
 			w := httptest.NewRecorder()
 
-			reg.ServeHTTP(w, req)
+			reg.Handler().ServeHTTP(w, req)
 
 			if w.Code != http.StatusNotFound {
 				t.Errorf("expected status 404, got %d", w.Code)
@@ -172,7 +172,7 @@ func TestApp_ServeHTTP_InvalidPath(t *testing.T) {
 	}
 }
 
-func TestApp_ServeHTTP_MethodMismatch(t *testing.T) {
+func TestApp_Handler_MethodMismatch(t *testing.T) {
 	reg := NewApp()
 
 	fn := func(ctx context.Context, req TestRequest) (TestResponse, error) {
@@ -185,13 +185,13 @@ func TestApp_ServeHTTP_MethodMismatch(t *testing.T) {
 	req := httptest.NewRequest("GET", "/Test/Method", nil)
 	w := httptest.NewRecorder()
 
-	reg.ServeHTTP(w, req)
+	reg.Handler().ServeHTTP(w, req)
 
 	tygortest.AssertStatus(t, w, http.StatusMethodNotAllowed)
 	tygortest.AssertJSONError(t, w, string(CodeMethodNotAllowed))
 }
 
-func TestApp_ServeHTTP_WithPanic(t *testing.T) {
+func TestApp_Handler_WithPanic(t *testing.T) {
 	// Use a test logger to verify panic logging
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{
@@ -211,7 +211,7 @@ func TestApp_ServeHTTP_WithPanic(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	reg.ServeHTTP(w, req)
+	reg.Handler().ServeHTTP(w, req)
 
 	tygortest.AssertStatus(t, w, http.StatusInternalServerError)
 	tygortest.AssertJSONError(t, w, string(CodeInternal))
@@ -245,7 +245,7 @@ func TestApp_GlobalInterceptor(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	reg.ServeHTTP(w, req)
+	reg.Handler().ServeHTTP(w, req)
 
 	if !interceptorCalled {
 		t.Error("expected global interceptor to be called")
@@ -320,7 +320,7 @@ func TestApp_DuplicateRouteRegistration(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	reg.ServeHTTP(w, req)
+	reg.Handler().ServeHTTP(w, req)
 
 	tygortest.AssertStatus(t, w, http.StatusOK)
 	tygortest.AssertJSONResponse(t, w, TestResponse{Message: "second"})
@@ -359,7 +359,7 @@ func TestService_InterceptorOrder(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	reg.ServeHTTP(w, req)
+	reg.Handler().ServeHTTP(w, req)
 
 	// Expected order: global -> service -> handler -> fn
 	expectedOrder := []string{"global", "service", "handler", "fn"}
@@ -407,7 +407,7 @@ func TestApp_ContextPropagation(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	reg.ServeHTTP(w, req)
+	reg.Handler().ServeHTTP(w, req)
 
 	if w.Header().Get("X-Custom") != "value" {
 		t.Errorf("expected custom header to be set, got %s", w.Header().Get("X-Custom"))
@@ -443,7 +443,7 @@ func TestApp_MultipleServices(t *testing.T) {
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 
-			reg.ServeHTTP(w, req)
+			reg.Handler().ServeHTTP(w, req)
 
 			tygortest.AssertStatus(t, w, http.StatusOK)
 			tygortest.AssertJSONResponse(t, w, TestResponse{Message: tt.expectedMessage})
@@ -531,7 +531,7 @@ func TestApp_WithMaskInternalErrors_Integration(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	reg.ServeHTTP(w, req)
+	reg.Handler().ServeHTTP(w, req)
 
 	var envelope struct {
 		Error *Error `json:"error"`

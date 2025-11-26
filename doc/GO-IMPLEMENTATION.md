@@ -179,15 +179,15 @@ This registers operations:
 
 ### 4.4 HTTP Integration
 
-The `App` MUST implement `http.Handler` to integrate with the standard library.
+The `App` MUST provide a `Handler()` method that returns an `http.Handler` for use with the standard library.
 
 ```go
-func (r *App) ServeHTTP(w http.ResponseWriter, req *http.Request)
+func (r *App) Handler() http.Handler
 ```
 
 **Example:**
 ```go
-http.ListenAndServe(":8080", app)
+http.ListenAndServe(":8080", app.Handler())
 ```
 
 ---
@@ -709,7 +709,7 @@ A conforming Go implementation MUST:
 - ✅ Support `func(ctx context.Context, req Req) (Res, error)` handlers
 - ✅ Provide `Unary()` and `UnaryGet()` handler constructors with fluent configuration
 - ✅ Provide `App` with `Service` namespacing
-- ✅ Implement `http.Handler` interface
+- ✅ Provide `Handler()` method returning `http.Handler`
 - ✅ Support GET (query string) and POST (JSON body) serialization
 - ✅ Implement default error transformer with standard error codes
 - ✅ Support custom error transformers
