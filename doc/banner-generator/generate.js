@@ -41,8 +41,8 @@ const line = (...children) => ({
 // Go code highlighting
 const goCode = [
   line(span(' ')),
-  line(span('func', colors.keyword), span(' ListNews(ctx, req *ListNewsReq) ([]News, '), span('error', colors.type), span(') { ... }')),
-  line(span('func', colors.keyword), span(' CreateNews(ctx, news *News) (*News, '), span('error', colors.type), span(') { ... }')),
+  line(span('func', colors.keyword), span(' ListNews(ctx, req *ListNewsParams) ([]*News, '), span('error', colors.type), span(') { ... }')),
+  line(span('func', colors.keyword), span(' CreateNews(ctx, req *CreateNewsParams) (*News, '), span('error', colors.type), span(') { ... }')),
   line(span(' ')),
   line(span('app := tygor.NewApp()')),
   line(span('news := app.Service('), span('"News"', colors.string), span(')')),
