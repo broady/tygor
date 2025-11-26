@@ -35,11 +35,8 @@ func TestUnary(t *testing.T) {
 	if handler == nil {
 		t.Fatal("expected non-nil handler")
 	}
-	if handler.httpMethod != "POST" {
-		t.Errorf("expected default method POST, got %s", handler.httpMethod)
-	}
-	if handler.fn == nil {
-		t.Error("expected fn to be set")
+	if handler.Metadata().HTTPMethod != "POST" {
+		t.Errorf("expected default method POST, got %s", handler.Metadata().HTTPMethod)
 	}
 }
 
@@ -49,8 +46,8 @@ func TestHandler_Method(t *testing.T) {
 	}
 
 	handler := UnaryGet(fn)
-	if handler.httpMethod != "GET" {
-		t.Errorf("expected method GET, got %s", handler.httpMethod)
+	if handler.Metadata().HTTPMethod != "GET" {
+		t.Errorf("expected method GET, got %s", handler.Metadata().HTTPMethod)
 	}
 }
 

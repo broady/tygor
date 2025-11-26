@@ -248,12 +248,7 @@ func TestHandler_POST_NoCache(t *testing.T) {
 
 	handler := Unary(fn) // POST handler
 
-	cacheHeader := handler.getCacheControlHeader()
-	if cacheHeader != "" {
-		t.Errorf("expected no Cache-Control header for POST, got %q", cacheHeader)
-	}
-
-	// Verify no header in HTTP response
+	// Verify no Cache-Control header in HTTP response
 	req := httptest.NewRequest("POST", "/test", nil)
 	w := httptest.NewRecorder()
 	ctx := tygortest.NewTestContext(req.Context(), w, req, "Test", "Create")
