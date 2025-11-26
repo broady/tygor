@@ -5,7 +5,7 @@
 
 ## 1. Introduction
 
-This document specifies the wire protocol for **tygor**, a type-safe RPC system. Any implementation (server or client, in any language) that conforms to this specification is interoperable with other conforming implementations.
+This document specifies the wire protocol for **tygor**, a type-safe API framework. Any implementation (server or client, in any language) that conforms to this specification is interoperable with other conforming implementations.
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in RFC 2119.
 

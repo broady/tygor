@@ -1,6 +1,6 @@
 # Tygor Specification
 
-Type-safe RPC framework for Go servers and TypeScript clients. Go structs are the single source of truth; TypeScript types are generated automatically. Designed for integration with `sqlc`-generated database types.
+Type-safe backend for Go + TypeScript apps. Go structs are the single source of truth; TypeScript types are generated automatically. Works great with `sqlc`-generated database types.
 
 ## Architecture
 
@@ -70,12 +70,12 @@ const news = await client.News.List({ limit: 10 });
 SQL query definition
   ↓ sqlc generate
 Go struct (ListNewsParams, News)
-  ↓ Use as RPC request/response types
+  ↓ Use as request/response types
 Go handler registration
   ↓ tygorgen.Generate(reg, config)
 TypeScript types (types.ts, manifest.ts)
   ↓ Consumed by proxy-based client
-Type-safe RPC calls
+Type-safe API calls
 ```
 
 ## Protocol Summary

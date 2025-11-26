@@ -118,7 +118,7 @@ const markup = {
                     type: 'div',
                     props: {
                       style: { fontSize: 20, maxWidth: 900, lineHeight: 1.4, color: 'oklch(0.55 0.15 50)' },
-                      children: 'Type-safe RPC framework for Go with automatic TypeScript client generation',
+                      children: 'Type-safe backend for Go + TypeScript apps',
                     },
                   },
                 ],
