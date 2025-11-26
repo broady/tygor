@@ -7,6 +7,7 @@ Thanks for your interest in contributing to tygor!
 ### Prerequisites
 
 - Go 1.21 or later
+- Docker (for local CI testing)
 - Node.js 18+ or Bun (for running TypeScript examples and tests)
 - npm (comes with Node.js)
 
@@ -36,10 +37,47 @@ Thanks for your interest in contributing to tygor!
    bun test
    ```
 
+## Development Workflow
+
+### Make Targets
+
+The root Makefile provides all the commands you need:
+
+```bash
+make precommit   # Run ALL checks (format, test, lint, examples) - run before committing
+make ci-local    # Run GitHub Actions workflow locally via Docker
+make test        # Run Go tests
+make lint        # Run go vet and staticcheck
+make fmt         # Format Go code
+make fmt-check   # Check formatting without modifying files
+make readme      # Update README.md with code snippets
+make check       # Verify README snippets are up-to-date
+```
+
+### Before Committing
+
+Always run `make precommit` before committing. This runs:
+1. Format check (`gofmt`)
+2. Go tests
+3. Linters (`go vet`, `staticcheck`)
+4. README snippet check
+5. All example checks
+
+### Testing CI Locally
+
+To test the GitHub Actions workflow locally before pushing:
+
+```bash
+make ci-local
+```
+
+This uses [act](https://github.com/nektos/act) to run the CI workflow in Docker, exactly as it would run on GitHub.
+
 ## Project Structure
 
 ```
 tygor/
+├── .github/workflows/   # CI workflow (runs make precommit)
 ├── client/              # @tygor/client npm package
 │   ├── runtime.ts       # TypeScript client runtime
 │   ├── runtime.test.ts  # Runtime tests
@@ -184,14 +222,17 @@ Extract with `make snippet-go` or `make snippet-ts`.
 1. Create a feature branch from `main`
 2. Make your changes with clear, focused commits
 3. Add tests for new functionality
-4. Ensure all tests pass
-5. Update documentation if needed
-6. Submit PR with a clear description of changes
+4. Run `make precommit` to ensure all checks pass
+5. Optionally run `make ci-local` to test the full CI workflow
+6. Update documentation if needed
+7. Submit PR with a clear description of changes
+
+CI will automatically run `make precommit` on your PR.
 
 ## Code Style
 
 ### Go
-- Follow standard Go conventions (`gofmt`, `go vet`)
+- Run `make fmt` to format code (CI enforces `gofmt`)
 - Keep handlers simple and focused
 - Document exported types and functions
 

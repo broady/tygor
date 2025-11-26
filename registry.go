@@ -230,7 +230,6 @@ type serviceWrappedHandler struct {
 	interceptors []UnaryInterceptor
 }
 
-
 func (h *serviceWrappedHandler) serveHTTP(ctx *Context) {
 	// Combine: Global (ctx.interceptors) + Service (h.interceptors)
 	combined := make([]UnaryInterceptor, 0, len(ctx.interceptors)+len(h.interceptors))

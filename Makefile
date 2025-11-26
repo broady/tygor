@@ -7,7 +7,7 @@ SNIPPET_TOOL := cd examples && go run ./cmd/snippet
 GO_FILES := $(wildcard *.go) $(wildcard middleware/*.go) $(wildcard tygorgen/*.go)
 DOC_FILES := $(wildcard doc/examples/quickstart/*.go)
 
-.PHONY: all test lint check readme precommit fmt help
+.PHONY: all test lint check readme precommit fmt fmt-check ci-local help
 
 # Default target
 all: test lint
@@ -19,11 +19,15 @@ test:
 # Run linters
 lint:
 	go vet ./...
-	staticcheck ./...
+	go run honnef.co/go/tools/cmd/staticcheck@latest ./...
 
 # Format code
 fmt:
 	gofmt -w .
+
+# Check formatting
+fmt-check:
+	@test -z "$$(gofmt -l .)" || (echo "Files need formatting:"; gofmt -l .; exit 1)
 
 # Update README with snippets
 # Uses -root for scoped snippet names (e.g., doc/examples/quickstart:types)
@@ -48,9 +52,13 @@ check: readme
 	@echo "All files are up-to-date."
 
 # Run all precommit checks (including examples)
-precommit: test lint check
+precommit: fmt-check test lint check
 	@$(MAKE) -C examples precommit
 	@echo "All precommit checks passed."
+
+# Run CI locally using act (https://github.com/nektos/act)
+ci-local:
+	go run github.com/nektos/act@latest --container-architecture linux/amd64
 
 # Help
 help:
@@ -62,3 +70,4 @@ help:
 	@echo "  make readme    - Update README.md with code snippets"
 	@echo "  make check     - Verify README is up-to-date"
 	@echo "  make precommit - Run all checks (test, lint, check, examples)"
+	@echo "  make ci-local  - Run GitHub Actions workflow locally via Docker (requires act)"
