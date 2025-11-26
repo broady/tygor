@@ -18,14 +18,14 @@ graph TB
     end
 
     subgraph Backend["Go Server"]
-        Registry["Registry"]
+        App["App"]
         Service["Service('News')"]
         Handler1["Handler: List"]
         Handler2["Handler: Create"]
         Func["func ListNews(ctx, *db.ListNewsParams)<br/>([]*db.News, error)"]
         DB[("PostgreSQL<br/>sqlc queries")]
 
-        Registry --> Service
+        App --> Service
         Service --> Handler1
         Service --> Handler2
         Handler1 --> Func
@@ -34,8 +34,8 @@ graph TB
 
     TSClient -->|"JSON"| GET
     TSClient -->|"JSON"| POST
-    GET --> Registry
-    POST --> Registry
+    GET --> App
+    POST --> App
 ```
 
 ## Documentation Structure
@@ -55,8 +55,8 @@ func(ctx context.Context, req Req) (Res, error)
 
 **Registration:**
 ```go
-reg := tygor.NewRegistry()
-news := reg.Service("News")
+app := tygor.NewApp()
+news := app.Service("News")
 news.Register("List", tygor.UnaryGet(ListNews))
 ```
 
@@ -118,7 +118,7 @@ h := tygor.UnaryGet(ListNews).
 
 **Error transformation:**
 ```go
-reg := tygor.NewRegistry().WithErrorTransformer(func(err error) *tygor.Error {
+app := tygor.NewApp().WithErrorTransformer(func(err error) *tygor.Error {
     if errors.Is(err, sql.ErrNoRows) {
         return tygor.NewError(tygor.CodeNotFound, "resource not found")
     }
@@ -137,7 +137,7 @@ type UnaryInterceptor func(ctx *tygor.Context, req any, handler tygor.HandlerFun
 
 **Code generation:**
 ```go
-tygorgen.Generate(reg, &tygorgen.Config{
+tygorgen.Generate(app, &tygorgen.Config{
     OutDir: "./client/src/rpc",
     TypeMappings: map[string]string{
         "time.Time": "string",
@@ -233,11 +233,11 @@ func ListNews(ctx context.Context, req *db.ListNewsParams) ([]*db.News, error) {
 }
 
 func main() {
-    reg := tygor.NewRegistry()
-    news := reg.Service("News")
+    app := tygor.NewApp()
+    news := app.Service("News")
     news.Register("List", tygor.UnaryGet(ListNews))
-    tygorgen.Generate(reg, &tygorgen.Config{OutDir: "./client/src/rpc"})
-    http.ListenAndServe(":8080", reg.Handler())
+    tygorgen.Generate(app, &tygorgen.Config{OutDir: "./client/src/rpc"})
+    http.ListenAndServe(":8080", app.Handler())
 }
 ```
 

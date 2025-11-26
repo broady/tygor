@@ -8,7 +8,7 @@ import (
 )
 
 // NewTestContext creates a context with RPC metadata for testing.
-// This is useful when testing handlers directly without going through the Registry.
+// This is useful when testing handlers directly without going through the App.
 //
 // Example:
 //

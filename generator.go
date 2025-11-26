@@ -12,7 +12,7 @@ type ExportedRoute struct {
 
 // ExportRoutes returns all registered routes for code generation purposes.
 // This is used by the generator package.
-func (r *Registry) ExportRoutes() map[string]ExportedRoute {
+func (r *App) ExportRoutes() map[string]ExportedRoute {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 

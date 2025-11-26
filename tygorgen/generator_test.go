@@ -223,7 +223,7 @@ func TestApplyConfigDefaults(t *testing.T) {
 }
 
 func TestGenerate_MissingOutDir(t *testing.T) {
-	reg := tygor.NewRegistry()
+	reg := tygor.NewApp()
 	cfg := &Config{} // Missing OutDir
 
 	err := Generate(reg, cfg)
@@ -235,8 +235,8 @@ func TestGenerate_MissingOutDir(t *testing.T) {
 	}
 }
 
-func TestGenerate_EmptyRegistry(t *testing.T) {
-	reg := tygor.NewRegistry()
+func TestGenerate_EmptyApp(t *testing.T) {
+	reg := tygor.NewApp()
 	outDir := t.TempDir()
 
 	cfg := &Config{OutDir: outDir}
@@ -266,7 +266,7 @@ func TestGenerate_EmptyRegistry(t *testing.T) {
 }
 
 func TestGenerate_WithHandlers(t *testing.T) {
-	reg := tygor.NewRegistry()
+	reg := tygor.NewApp()
 	outDir := t.TempDir()
 
 	// Register a test handler using types from the examples/blog/api package
@@ -300,7 +300,7 @@ func TestGenerate_WithHandlers(t *testing.T) {
 }
 
 func TestGenerate_ManifestStructure(t *testing.T) {
-	reg := tygor.NewRegistry()
+	reg := tygor.NewApp()
 	outDir := t.TempDir()
 
 	createHandler := func(ctx context.Context, req *api.CreateUserRequest) (*api.User, error) {
@@ -356,7 +356,7 @@ func TestGenerate_ManifestStructure(t *testing.T) {
 }
 
 func TestGenerate_TypesFile(t *testing.T) {
-	reg := tygor.NewRegistry()
+	reg := tygor.NewApp()
 	outDir := t.TempDir()
 
 	handler := func(ctx context.Context, req *api.CreateUserRequest) (*api.User, error) {
@@ -387,7 +387,7 @@ func TestGenerate_TypesFile(t *testing.T) {
 }
 
 func TestGenerate_CustomConfig(t *testing.T) {
-	reg := tygor.NewRegistry()
+	reg := tygor.NewApp()
 	outDir := t.TempDir()
 
 	handler := func(ctx context.Context, req *api.CreateUserRequest) (*api.User, error) {
@@ -433,7 +433,7 @@ func TestGenerate_CustomConfig(t *testing.T) {
 // generate TypeScript with lowercase property names (matching schema tags via json tags).
 // This ensures the TypeScript client sends query params that match what Go expects.
 func TestGenerate_GETParamsUseLowercaseNames(t *testing.T) {
-	reg := tygor.NewRegistry()
+	reg := tygor.NewApp()
 	outDir := t.TempDir()
 
 	// Register a GET handler using ListPostsParams which has both json and schema tags

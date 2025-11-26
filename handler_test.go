@@ -770,7 +770,7 @@ func TestHandler_ServeHTTP_MaxRequestBodySize_HandlerOverride(t *testing.T) {
 		POST("/test").
 		WithJSON(TestRequest{Name: "Jo", Email: "a@b.c"}).
 		ServeHandler(handler, HandlerConfig{
-			MaxRequestBodySize: 10000, // Registry default is 10KB, but handler overrides to 10 bytes
+			MaxRequestBodySize: 10000, // App default is 10KB, but handler overrides to 10 bytes
 		})
 
 	// Should return invalid_argument error
@@ -796,7 +796,7 @@ func TestHandler_ServeHTTP_MaxRequestBodySize_Unlimited(t *testing.T) {
 		POST("/test").
 		WithJSON(largeReq).
 		ServeHandler(handler, HandlerConfig{
-			MaxRequestBodySize: 50, // Registry default is 50 bytes, but handler overrides to unlimited
+			MaxRequestBodySize: 50, // App default is 50 bytes, but handler overrides to unlimited
 		})
 
 	tygortest.AssertStatus(t, w, http.StatusOK)

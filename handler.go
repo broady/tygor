@@ -28,7 +28,7 @@ func init() {
 	strictSchemaDecoder.IgnoreUnknownKeys(false)
 }
 
-// HandlerConfig contains configuration passed from Registry to handlers.
+// HandlerConfig contains configuration passed from App to handlers.
 type HandlerConfig struct {
 	ErrorTransformer   ErrorTransformer
 	MaskInternalErrors bool
@@ -199,7 +199,7 @@ func (h *UnaryGetHandler[Req, Res]) CacheControl(cfg CacheConfig) *UnaryGetHandl
 
 // WithUnaryInterceptor adds an interceptor to this handler.
 // Handler interceptors execute after global and service interceptors.
-// See Registry.WithUnaryInterceptor for the complete execution order.
+// See App.WithUnaryInterceptor for the complete execution order.
 func (h *UnaryPostHandler[Req, Res]) WithUnaryInterceptor(i UnaryInterceptor) *UnaryPostHandler[Req, Res] {
 	h.interceptors = append(h.interceptors, i)
 	return h
@@ -207,7 +207,7 @@ func (h *UnaryPostHandler[Req, Res]) WithUnaryInterceptor(i UnaryInterceptor) *U
 
 // WithUnaryInterceptor adds an interceptor to this handler.
 // Handler interceptors execute after global and service interceptors.
-// See Registry.WithUnaryInterceptor for the complete execution order.
+// See App.WithUnaryInterceptor for the complete execution order.
 func (h *UnaryGetHandler[Req, Res]) WithUnaryInterceptor(i UnaryInterceptor) *UnaryGetHandler[Req, Res] {
 	h.interceptors = append(h.interceptors, i)
 	return h
@@ -397,10 +397,10 @@ func (h *UnaryPostHandler[Req, Res]) ServeHTTP(w http.ResponseWriter, r *http.Re
 
 // serve implements the generic glue code for both UnaryPostHandler and UnaryGetHandler.
 func (h *UnaryHandler[Req, Res]) serve(w http.ResponseWriter, r *http.Request, config HandlerConfig, cacheControl string, decodeFunc func() (Req, error)) {
-	// 1. Get tygor Context (set by Registry)
+	// 1. Get tygor Context (set by App)
 	tygorCtx, ok := FromContext(r.Context())
 	if !ok {
-		// This shouldn't happen if called through Registry, but handle gracefully
+		// This shouldn't happen if called through App, but handle gracefully
 		handleError(w, NewError(CodeInternal, "missing tygor context"), config)
 		return
 	}

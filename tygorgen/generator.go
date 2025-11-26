@@ -45,7 +45,7 @@ type Config struct {
 }
 
 // Generate generates the TypeScript types and manifest for the registered services.
-func Generate(reg *tygor.Registry, cfg *Config) error {
+func Generate(app *tygor.App, cfg *Config) error {
 	if cfg.OutDir == "" {
 		return fmt.Errorf("OutDir is required")
 	}
@@ -53,8 +53,8 @@ func Generate(reg *tygor.Registry, cfg *Config) error {
 	// Apply defaults
 	cfg = applyConfigDefaults(cfg)
 
-	// Export routes from registry
-	routes := reg.ExportRoutes()
+	// Export routes from app
+	routes := app.ExportRoutes()
 
 	// 1. Discover packages from registered handlers
 	pkgPaths := make(map[string]bool)

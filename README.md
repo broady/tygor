@@ -112,19 +112,19 @@ func CreateNews(ctx context.Context, req *CreateNewsParams) (*News, error) {
 ### 3. Register services
 
 ```go
-reg := tygor.NewRegistry()
+app := tygor.NewApp()
 
-news := reg.Service("News")
+news := app.Service("News")
 news.Register("List", tygor.UnaryGet(ListNews))
 news.Register("Create", tygor.Unary(CreateNews)) // POST is default
 
-http.ListenAndServe(":8080", reg.Handler())
+http.ListenAndServe(":8080", app.Handler())
 ```
 
 ### 4. Generate TypeScript types
 
 ```go
-if err := tygorgen.Generate(reg, &tygorgen.Config{
+if err := tygorgen.Generate(app, &tygorgen.Config{
     OutDir: "./client/src/rpc",
 }); err != nil {
     log.Fatal(err)
@@ -270,7 +270,7 @@ Available error codes:
 Map application errors to RPC errors:
 
 ```go
-reg := tygor.NewRegistry().
+app := tygor.NewApp().
     WithErrorTransformer(func(err error) *tygor.Error {
         if errors.Is(err, sql.ErrNoRows) {
             return tygor.NewError(tygor.CodeNotFound, "not found")
@@ -284,7 +284,7 @@ reg := tygor.NewRegistry().
 Prevent sensitive error details from leaking in production:
 
 ```go
-reg := tygor.NewRegistry().WithMaskInternalErrors()
+app := tygor.NewApp().WithMaskInternalErrors()
 ```
 
 ## Interceptors
@@ -296,8 +296,8 @@ Interceptors provide cross-cutting concerns at different levels.
 Applied to all handlers:
 
 ```go
-reg := tygor.NewRegistry().
-    WithInterceptor(middleware.LoggingInterceptor(logger))
+app := tygor.NewApp().
+    WithUnaryInterceptor(middleware.LoggingInterceptor(logger))
 ```
 
 ### Service Interceptors
@@ -305,8 +305,8 @@ reg := tygor.NewRegistry().
 Applied to all handlers in a service:
 
 ```go
-news := reg.Service("News").
-    WithInterceptor(authInterceptor)
+news := app.Service("News").
+    WithUnaryInterceptor(authInterceptor)
 ```
 
 ### Handler Interceptors
@@ -324,13 +324,13 @@ news.Register("Create",
 
 ## Middleware
 
-HTTP middleware wraps the entire registry:
+HTTP middleware wraps the entire app:
 
 ```go
-reg := tygor.NewRegistry().
+app := tygor.NewApp().
     WithMiddleware(middleware.CORS(middleware.DefaultCORSConfig()))
 
-http.ListenAndServe(":8080", reg.Handler())
+http.ListenAndServe(":8080", app.Handler())
 ```
 
 ## Validation
@@ -428,7 +428,7 @@ func loggingInterceptor(ctx *tygor.Context, req any, handler tygor.HandlerFunc) 
 Customize TypeScript type generation for third-party types:
 
 ```go
-tygorgen.Generate(reg, &tygorgen.Config{
+tygorgen.Generate(app, &tygorgen.Config{
     OutDir: "./client/src/rpc",
     TypeMappings: map[string]string{
         "github.com/jackc/pgtype.Timestamptz": "string | null",

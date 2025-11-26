@@ -54,8 +54,8 @@ func main() {
 		Level: slog.LevelInfo,
 	}))
 
-	// 1. Create Registry
-	reg := tygor.NewRegistry().
+	// 1. Create App
+	app := tygor.NewApp().
 		WithErrorTransformer(func(err error) *tygor.Error {
 			// Example custom error mapping
 			if err.Error() == "database connection failed" {
@@ -67,7 +67,7 @@ func main() {
 		WithMiddleware(middleware.CORS(middleware.DefaultCORSConfig()))
 
 	// 2. Register Services
-	news := reg.Service("News")
+	news := app.Service("News")
 
 	news.Register("List", tygor.UnaryGet(ListNews).
 		CacheControl(tygor.CacheConfig{
@@ -88,7 +88,7 @@ func main() {
 		if err := os.MkdirAll(*outDir, 0755); err != nil {
 			log.Fatal(err)
 		}
-		if err := tygorgen.Generate(reg, &tygorgen.Config{
+		if err := tygorgen.Generate(app, &tygorgen.Config{
 			OutDir:           *outDir,
 			PreserveComments: "default",
 			EnumStyle:        "union",
@@ -125,7 +125,7 @@ export const DateTime = {
 
 	// 4. Start Server
 	fmt.Println("Server listening on :8080")
-	if err := http.ListenAndServe(":8080", reg.Handler()); err != nil {
+	if err := http.ListenAndServe(":8080", app.Handler()); err != nil {
 		log.Fatal(err)
 	}
 }

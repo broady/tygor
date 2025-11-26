@@ -131,30 +131,30 @@ tygor.UnaryGet(ListNews).CacheControl(tygor.CacheConfig{
 
 ---
 
-## 4. Registry and Service Registration
+## 4. App and Service Registration
 
-### 4.1 Registry
+### 4.1 App
 
-The library MUST provide a `Registry` type that manages services and routes.
+The library MUST provide an `App` type that manages services and routes.
 
 ```go
-type Registry struct {
+type App struct {
     // internal fields
 }
 
-func NewRegistry() *Registry
+func NewApp() *App
 ```
 
 ### 4.2 Service Namespacing
 
-The `Registry.Service(name string)` method MUST return a `Service` instance that provides a namespace for related operations.
+The `App.Service(name string)` method MUST return a `Service` instance that provides a namespace for related operations.
 
 ```go
 type Service struct {
     // internal fields
 }
 
-func (r *Registry) Service(name string) *Service
+func (r *App) Service(name string) *Service
 ```
 
 ### 4.3 Handler Registration
@@ -167,8 +167,8 @@ func (s *Service) Register(method string, handler RPCMethod)
 
 **Example:**
 ```go
-reg := tygor.NewRegistry()
-news := reg.Service("News")
+app := tygor.NewApp()
+news := app.Service("News")
 news.Register("List", tygor.UnaryGet(ListNews))
 news.Register("Create", tygor.Unary(CreateNews))
 ```
@@ -179,37 +179,37 @@ This registers operations:
 
 ### 4.4 HTTP Integration
 
-The `Registry` MUST implement `http.Handler` to integrate with the standard library.
+The `App` MUST implement `http.Handler` to integrate with the standard library.
 
 ```go
-func (r *Registry) ServeHTTP(w http.ResponseWriter, req *http.Request)
+func (r *App) ServeHTTP(w http.ResponseWriter, req *http.Request)
 ```
 
 **Example:**
 ```go
-http.ListenAndServe(":8080", reg)
+http.ListenAndServe(":8080", app)
 ```
 
 ---
 
 ## 5. Configuration API
 
-### 5.1 Registry Configuration
+### 5.1 App Configuration
 
-The `Registry` MUST support configuration via chaining methods:
+The `App` MUST support configuration via chaining methods:
 
 ```go
-func (r *Registry) WithErrorTransformer(fn ErrorTransformer) *Registry
-func (r *Registry) WithMaskInternalErrors() *Registry
-func (r *Registry) WithUnaryInterceptor(i UnaryInterceptor) *Registry
-func (r *Registry) WithMiddleware(mw func(http.Handler) http.Handler) *Registry
-func (r *Registry) WithLogger(logger *slog.Logger) *Registry
-func (r *Registry) WithMaxRequestBodySize(size uint64) *Registry
+func (r *App) WithErrorTransformer(fn ErrorTransformer) *App
+func (r *App) WithMaskInternalErrors() *App
+func (r *App) WithUnaryInterceptor(i UnaryInterceptor) *App
+func (r *App) WithMiddleware(mw func(http.Handler) http.Handler) *App
+func (r *App) WithLogger(logger *slog.Logger) *App
+func (r *App) WithMaxRequestBodySize(size uint64) *App
 ```
 
 **Example:**
 ```go
-reg := tygor.NewRegistry().
+app := tygor.NewApp().
     WithErrorTransformer(customErrorHandler).
     WithLogger(slog.Default()).
     WithMaskInternalErrors()
@@ -336,7 +336,7 @@ func DefaultErrorTransformer(err error) *Error {
 
 **Configuration:**
 ```go
-reg := tygor.NewRegistry().
+app := tygor.NewApp().
     WithErrorTransformer(func(err error) *tygor.Error {
         // Custom transformation
         if errors.Is(err, sql.ErrNoRows) {
@@ -410,14 +410,11 @@ Validation failures MUST be transformed to `CodeInvalidArgument` errors with fie
 
 ### 8.2 Disabling Validation
 
-Validation can be disabled globally or per-handler:
+Validation can be disabled per-handler:
 
 ```go
-// Global
-reg := tygor.NewRegistry().WithSkipValidation()
-
 // Per-handler
-h := tygor.NewHandler(fn).WithSkipValidation()
+h := tygor.Unary(fn).WithSkipValidation()
 ```
 
 ---
@@ -483,7 +480,7 @@ func (c *Context) HTTPWriter() http.ResponseWriter // response writer
 
 Interceptors can be registered at three levels (executed in order):
 
-1. **Registry-level (global):** Applied to all operations
+1. **App-level (global):** Applied to all operations
 2. **Service-level:** Applied to all operations in a service
 3. **Handler-level:** Applied to a specific operation
 
@@ -497,13 +494,13 @@ func LoggingInterceptor(ctx *tygor.Context, req any, handler tygor.HandlerFunc) 
     return res, err
 }
 
-reg := tygor.NewRegistry().WithUnaryInterceptor(LoggingInterceptor)
+app := tygor.NewApp().WithUnaryInterceptor(LoggingInterceptor)
 ```
 
 ### 10.3 Execution Order
 
 Interceptors MUST execute in the following order:
-1. Registry interceptors (first registered → last registered)
+1. App interceptors (first registered → last registered)
 2. Service interceptors (first registered → last registered)
 3. Handler interceptors (first registered → last registered)
 4. Actual handler
@@ -552,11 +549,11 @@ func MyHandler(ctx context.Context, req *MyRequest) (*MyResponse, error) {
 The library MUST provide a standalone `Generate` function in the `tygorgen` package:
 
 ```go
-func Generate(reg *tygor.Registry, config *Config) error
+func Generate(app *tygor.App, config *Config) error
 ```
 
 This function:
-- Takes the registry to extract registered routes
+- Takes the app to extract registered routes
 - Uses the provided configuration to control type generation
 - Generates TypeScript types and manifest files
 
@@ -610,7 +607,7 @@ The generator MUST produce:
 
 **Example:**
 ```go
-err := tygorgen.Generate(reg, &tygorgen.Config{
+err := tygorgen.Generate(app, &tygorgen.Config{
     OutDir: "./client/src/rpc",
     TypeMappings: map[string]string{
         "uuid.UUID": "string",
@@ -637,7 +634,7 @@ type Logger interface {
 ### 13.2 Logger Configuration
 
 ```go
-reg := tygor.NewRegistry().WithLogger(slog.Default())
+app := tygor.NewApp().WithLogger(slog.Default())
 ```
 
 **Logged Events:**
@@ -678,13 +675,13 @@ func CreateNews(ctx context.Context, req *db.CreateNewsParams) (*db.News, error)
 }
 
 func main() {
-    // Create registry
-    reg := tygor.NewRegistry().
+    // Create app
+    app := tygor.NewApp().
         WithLogger(slog.Default()).
         WithMaskInternalErrors()
 
     // Register services
-    news := reg.Service("News")
+    news := app.Service("News")
     news.Register("List", tygor.UnaryGet(ListNews).CacheControl(tygor.CacheConfig{
         MaxAge: 5 * time.Minute,
         Public: true,
@@ -692,14 +689,14 @@ func main() {
     news.Register("Create", tygor.Unary(CreateNews))
 
     // Generate TypeScript types
-    if err := tygorgen.Generate(reg, &tygorgen.Config{
+    if err := tygorgen.Generate(app, &tygorgen.Config{
         OutDir: "./client/src/rpc",
     }); err != nil {
         log.Fatal(err)
     }
 
     // Start server
-    log.Fatal(http.ListenAndServe(":8080", reg.Handler()))
+    log.Fatal(http.ListenAndServe(":8080", app.Handler()))
 }
 ```
 
@@ -711,12 +708,12 @@ A conforming Go implementation MUST:
 
 - ✅ Support `func(ctx context.Context, req Req) (Res, error)` handlers
 - ✅ Provide `Unary()` and `UnaryGet()` handler constructors with fluent configuration
-- ✅ Provide `Registry` with `Service` namespacing
+- ✅ Provide `App` with `Service` namespacing
 - ✅ Implement `http.Handler` interface
 - ✅ Support GET (query string) and POST (JSON body) serialization
 - ✅ Implement default error transformer with standard error codes
 - ✅ Support custom error transformers
 - ✅ Provide sealed `RPCMethod` interface
-- ✅ Support interceptors at registry/service/handler levels via `WithUnaryInterceptor`
+- ✅ Support interceptors at app/service/handler levels via `WithUnaryInterceptor`
 - ✅ Provide context API for request metadata (`FromContext`, `*Context` with `Service()`, `Method()`, `HTTPRequest()`, `HTTPWriter()`)
 - ✅ Generate TypeScript types and manifest

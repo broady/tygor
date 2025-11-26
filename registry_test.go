@@ -13,59 +13,59 @@ import (
 	"github.com/broady/tygor/internal/tygortest"
 )
 
-func TestNewRegistry(t *testing.T) {
-	reg := NewRegistry()
-	if reg == nil {
-		t.Fatal("expected non-nil registry")
+func TestNewApp(t *testing.T) {
+	app := NewApp()
+	if app == nil {
+		t.Fatal("expected non-nil app")
 	}
-	if reg.routes == nil {
+	if app.routes == nil {
 		t.Error("expected routes map to be initialized")
 	}
 }
 
-func TestRegistry_WithErrorTransformer(t *testing.T) {
+func TestApp_WithErrorTransformer(t *testing.T) {
 	transformer := func(err error) *Error {
 		return NewError(CodeInternal, "transformed")
 	}
 
-	reg := NewRegistry().WithErrorTransformer(transformer)
+	reg := NewApp().WithErrorTransformer(transformer)
 	if reg.errorTransformer == nil {
 		t.Error("expected error transformer to be set")
 	}
 }
 
-func TestRegistry_WithMaskInternalErrors(t *testing.T) {
-	reg := NewRegistry().WithMaskInternalErrors()
+func TestApp_WithMaskInternalErrors(t *testing.T) {
+	reg := NewApp().WithMaskInternalErrors()
 	if !reg.maskInternalErrors {
 		t.Error("expected maskInternalErrors to be true")
 	}
 }
 
-func TestRegistry_WithUnaryInterceptor(t *testing.T) {
+func TestApp_WithUnaryInterceptor(t *testing.T) {
 	interceptor := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
 		return handler(ctx, req)
 	}
 
-	reg := NewRegistry().WithUnaryInterceptor(interceptor)
+	reg := NewApp().WithUnaryInterceptor(interceptor)
 	if len(reg.interceptors) != 1 {
 		t.Errorf("expected 1 interceptor, got %d", len(reg.interceptors))
 	}
 }
 
-func TestRegistry_WithMiddleware(t *testing.T) {
+func TestApp_WithMiddleware(t *testing.T) {
 	middleware := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			next.ServeHTTP(w, r)
 		})
 	}
 
-	reg := NewRegistry().WithMiddleware(middleware)
+	reg := NewApp().WithMiddleware(middleware)
 	if len(reg.middlewares) != 1 {
 		t.Errorf("expected 1 middleware, got %d", len(reg.middlewares))
 	}
 }
 
-func TestRegistry_Handler(t *testing.T) {
+func TestApp_Handler(t *testing.T) {
 	middlewareCalled := false
 	middleware := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -74,7 +74,7 @@ func TestRegistry_Handler(t *testing.T) {
 		})
 	}
 
-	reg := NewRegistry().WithMiddleware(middleware)
+	reg := NewApp().WithMiddleware(middleware)
 
 	fn := func(ctx context.Context, req TestRequest) (TestResponse, error) {
 		return TestResponse{Message: "ok"}, nil
@@ -100,8 +100,8 @@ func TestRegistry_Handler(t *testing.T) {
 	tygortest.AssertJSONResponse(t, w, TestResponse{Message: "ok"})
 }
 
-func TestRegistry_Service(t *testing.T) {
-	reg := NewRegistry()
+func TestApp_Service(t *testing.T) {
+	reg := NewApp()
 	service := reg.Service("TestService")
 
 	if service == nil {
@@ -115,8 +115,8 @@ func TestRegistry_Service(t *testing.T) {
 	}
 }
 
-func TestRegistry_ServeHTTP_Success(t *testing.T) {
-	reg := NewRegistry()
+func TestApp_ServeHTTP_Success(t *testing.T) {
+	reg := NewApp()
 
 	fn := func(ctx context.Context, req TestRequest) (TestResponse, error) {
 		return TestResponse{Message: "hello " + req.Name, ID: 123}, nil
@@ -135,8 +135,8 @@ func TestRegistry_ServeHTTP_Success(t *testing.T) {
 	tygortest.AssertJSONResponse(t, w, TestResponse{Message: "hello John", ID: 123})
 }
 
-func TestRegistry_ServeHTTP_NotFound(t *testing.T) {
-	reg := NewRegistry()
+func TestApp_ServeHTTP_NotFound(t *testing.T) {
+	reg := NewApp()
 
 	req := httptest.NewRequest("POST", "/NonExistent/Method", nil)
 	w := httptest.NewRecorder()
@@ -147,8 +147,8 @@ func TestRegistry_ServeHTTP_NotFound(t *testing.T) {
 	tygortest.AssertJSONError(t, w, string(CodeNotFound))
 }
 
-func TestRegistry_ServeHTTP_InvalidPath(t *testing.T) {
-	reg := NewRegistry()
+func TestApp_ServeHTTP_InvalidPath(t *testing.T) {
+	reg := NewApp()
 
 	tests := []struct {
 		name string
@@ -172,8 +172,8 @@ func TestRegistry_ServeHTTP_InvalidPath(t *testing.T) {
 	}
 }
 
-func TestRegistry_ServeHTTP_MethodMismatch(t *testing.T) {
-	reg := NewRegistry()
+func TestApp_ServeHTTP_MethodMismatch(t *testing.T) {
+	reg := NewApp()
 
 	fn := func(ctx context.Context, req TestRequest) (TestResponse, error) {
 		return TestResponse{}, nil
@@ -191,14 +191,14 @@ func TestRegistry_ServeHTTP_MethodMismatch(t *testing.T) {
 	tygortest.AssertJSONError(t, w, string(CodeMethodNotAllowed))
 }
 
-func TestRegistry_ServeHTTP_WithPanic(t *testing.T) {
+func TestApp_ServeHTTP_WithPanic(t *testing.T) {
 	// Use a test logger to verify panic logging
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{
 		Level: slog.LevelError,
 	}))
 
-	reg := NewRegistry().WithLogger(logger)
+	reg := NewApp().WithLogger(logger)
 
 	fn := func(ctx context.Context, req TestRequest) (TestResponse, error) {
 		panic("test panic")
@@ -223,10 +223,10 @@ func TestRegistry_ServeHTTP_WithPanic(t *testing.T) {
 	}
 }
 
-func TestRegistry_GlobalInterceptor(t *testing.T) {
+func TestApp_GlobalInterceptor(t *testing.T) {
 	interceptorCalled := false
 
-	reg := NewRegistry().WithUnaryInterceptor(func(ctx *Context, req any, handler HandlerFunc) (any, error) {
+	reg := NewApp().WithUnaryInterceptor(func(ctx *Context, req any, handler HandlerFunc) (any, error) {
 		interceptorCalled = true
 		if ctx.Service() != "Test" || ctx.Method() != "Method" {
 			t.Errorf("unexpected RPC info: service=%s, method=%s", ctx.Service(), ctx.Method())
@@ -255,7 +255,7 @@ func TestRegistry_GlobalInterceptor(t *testing.T) {
 }
 
 func TestService_WithUnaryInterceptor(t *testing.T) {
-	reg := NewRegistry()
+	reg := NewApp()
 
 	interceptor := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
 		return handler(ctx, req)
@@ -269,7 +269,7 @@ func TestService_WithUnaryInterceptor(t *testing.T) {
 }
 
 func TestService_Register(t *testing.T) {
-	reg := NewRegistry()
+	reg := NewApp()
 	service := reg.Service("Test")
 
 	fn := func(ctx context.Context, req TestRequest) (TestResponse, error) {
@@ -287,14 +287,14 @@ func TestService_Register(t *testing.T) {
 	}
 }
 
-func TestRegistry_DuplicateRouteRegistration(t *testing.T) {
+func TestApp_DuplicateRouteRegistration(t *testing.T) {
 	// Use a test logger to verify duplicate registration warning
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{
 		Level: slog.LevelWarn,
 	}))
 
-	reg := NewRegistry().WithLogger(logger)
+	reg := NewApp().WithLogger(logger)
 
 	fn1 := func(ctx context.Context, req TestRequest) (TestResponse, error) {
 		return TestResponse{Message: "first"}, nil
@@ -344,7 +344,7 @@ func TestService_InterceptorOrder(t *testing.T) {
 		return handler(ctx, req)
 	}
 
-	reg := NewRegistry().WithUnaryInterceptor(globalInterceptor)
+	reg := NewApp().WithUnaryInterceptor(globalInterceptor)
 
 	fn := func(ctx context.Context, req TestRequest) (TestResponse, error) {
 		callOrder = append(callOrder, "fn")
@@ -373,8 +373,8 @@ func TestService_InterceptorOrder(t *testing.T) {
 	}
 }
 
-func TestRegistry_ContextPropagation(t *testing.T) {
-	reg := NewRegistry()
+func TestApp_ContextPropagation(t *testing.T) {
+	reg := NewApp()
 
 	fn := func(ctx context.Context, req TestRequest) (TestResponse, error) {
 		// Verify context has request, writer, and RPC info via FromContext
@@ -414,8 +414,8 @@ func TestRegistry_ContextPropagation(t *testing.T) {
 	}
 }
 
-func TestRegistry_MultipleServices(t *testing.T) {
-	reg := NewRegistry()
+func TestApp_MultipleServices(t *testing.T) {
+	reg := NewApp()
 
 	fn1 := func(ctx context.Context, req TestRequest) (TestResponse, error) {
 		return TestResponse{Message: "service1"}, nil
@@ -451,7 +451,7 @@ func TestRegistry_MultipleServices(t *testing.T) {
 	}
 }
 
-func TestRegistry_MiddlewareOrder(t *testing.T) {
+func TestApp_MiddlewareOrder(t *testing.T) {
 	var callOrder []string
 
 	mw1 := func(next http.Handler) http.Handler {
@@ -470,7 +470,7 @@ func TestRegistry_MiddlewareOrder(t *testing.T) {
 		})
 	}
 
-	reg := NewRegistry().WithMiddleware(mw1).WithMiddleware(mw2)
+	reg := NewApp().WithMiddleware(mw1).WithMiddleware(mw2)
 
 	fn := func(ctx context.Context, req TestRequest) (TestResponse, error) {
 		callOrder = append(callOrder, "handler")
@@ -517,8 +517,8 @@ func TestServiceWrappedHandler_Metadata(t *testing.T) {
 	}
 }
 
-func TestRegistry_WithMaskInternalErrors_Integration(t *testing.T) {
-	reg := NewRegistry().WithMaskInternalErrors()
+func TestApp_WithMaskInternalErrors_Integration(t *testing.T) {
+	reg := NewApp().WithMaskInternalErrors()
 
 	fn := func(ctx context.Context, req TestRequest) (TestResponse, error) {
 		return TestResponse{}, NewError(CodeInternal, "sensitive internal error")

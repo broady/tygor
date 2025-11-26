@@ -437,18 +437,18 @@ func main() {
 	}))
 	slog.SetDefault(logger)
 
-	// Create registry with global middleware and interceptors
-	reg := tygor.NewRegistry().
+	// Create app with global middleware and interceptors
+	app := tygor.NewApp().
 		WithUnaryInterceptor(middleware.LoggingInterceptor(logger)).
 		WithMiddleware(middleware.CORS(middleware.DefaultCORSConfig()))
 
 	// User Service (public endpoints)
-	userService := reg.Service("Users")
+	userService := app.Service("Users")
 	userService.Register("Create", tygor.Unary(CreateUser))
 	userService.Register("Login", tygor.Unary(Login))
 
 	// Post Service (mixed public/private endpoints)
-	postService := reg.Service("Posts")
+	postService := app.Service("Posts")
 
 	// Public endpoints
 	postService.Register("Get", tygor.UnaryGet(GetPost))
@@ -466,7 +466,7 @@ func main() {
 		tygor.Unary(PublishPost).WithUnaryInterceptor(requireAuth))
 
 	// Comment Service (requires authentication)
-	commentService := reg.Service("Comments").WithUnaryInterceptor(requireAuth)
+	commentService := app.Service("Comments").WithUnaryInterceptor(requireAuth)
 	commentService.Register("Create", tygor.Unary(CreateComment))
 	commentService.Register("List", tygor.UnaryGet(ListComments))
 
@@ -476,7 +476,7 @@ func main() {
 		if err := os.MkdirAll(*outDir, 0755); err != nil {
 			log.Fatal(err)
 		}
-		if err := tygorgen.Generate(reg, &tygorgen.Config{
+		if err := tygorgen.Generate(app, &tygorgen.Config{
 			OutDir: *outDir,
 		}); err != nil {
 			log.Fatalf("Generation failed: %v", err)
@@ -499,7 +499,7 @@ func main() {
 	fmt.Printf("  curl -X POST http://localhost:%s/Posts/Create -H 'Authorization: Bearer demo-token-alice' -H 'Content-Type: application/json' -d '{\"title\":\"My New Post\",\"content\":\"This is the content of my post.\"}'\n", *port)
 	fmt.Println()
 
-	if err := http.ListenAndServe(addr, reg.Handler()); err != nil {
+	if err := http.ListenAndServe(addr, app.Handler()); err != nil {
 		log.Fatal(err)
 	}
 }

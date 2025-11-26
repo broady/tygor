@@ -11,11 +11,11 @@ import (
 	"github.com/broady/tygor/internal/meta"
 )
 
-// Registry is the central router for RPC handlers.
+// App is the central router for RPC handlers.
 // It manages route registration, middleware, interceptors, and error handling.
-// Registry implements http.Handler and can be used directly with http.ListenAndServe
+// App implements http.Handler and can be used directly with http.ListenAndServe
 // or wrapped with additional middleware via the Handler method.
-type Registry struct {
+type App struct {
 	mu                 sync.RWMutex
 	routes             map[string]RPCMethod
 	errorTransformer   ErrorTransformer
@@ -26,16 +26,16 @@ type Registry struct {
 	maxRequestBodySize uint64
 }
 
-func NewRegistry() *Registry {
-	return &Registry{
+func NewApp() *App {
+	return &App{
 		routes:             make(map[string]RPCMethod),
 		maxRequestBodySize: 1 << 20, // 1MB default
 	}
 }
 
 // WithErrorTransformer adds a custom error transformer.
-// It returns the registry for chaining.
-func (r *Registry) WithErrorTransformer(fn ErrorTransformer) *Registry {
+// It returns the app for chaining.
+func (r *App) WithErrorTransformer(fn ErrorTransformer) *App {
 	r.errorTransformer = fn
 	return r
 }
@@ -43,7 +43,7 @@ func (r *Registry) WithErrorTransformer(fn ErrorTransformer) *Registry {
 // WithMaskInternalErrors enables masking of internal error messages.
 // This is useful in production to avoid leaking sensitive information.
 // The original error is still available to interceptors and logging.
-func (r *Registry) WithMaskInternalErrors() *Registry {
+func (r *App) WithMaskInternalErrors() *App {
 	r.maskInternalErrors = true
 	return r
 }
@@ -52,28 +52,28 @@ func (r *Registry) WithMaskInternalErrors() *Registry {
 // Global interceptors are executed before service-level and handler-level interceptors.
 //
 // Interceptor execution order:
-//  1. Global interceptors (added via Registry.WithUnaryInterceptor)
+//  1. Global interceptors (added via App.WithUnaryInterceptor)
 //  2. Service interceptors (added via Service.WithUnaryInterceptor)
 //  3. Handler interceptors (added via Handler.WithUnaryInterceptor)
 //  4. Handler function
 //
 // Within each level, interceptors execute in the order they were added.
-func (r *Registry) WithUnaryInterceptor(i UnaryInterceptor) *Registry {
+func (r *App) WithUnaryInterceptor(i UnaryInterceptor) *App {
 	r.interceptors = append(r.interceptors, i)
 	return r
 }
 
-// WithMiddleware adds an HTTP middleware to wrap the registry.
+// WithMiddleware adds an HTTP middleware to wrap the app.
 // Middleware is applied in the order added (first added is outermost).
 // Use Handler() to get the wrapped handler.
-func (r *Registry) WithMiddleware(mw func(http.Handler) http.Handler) *Registry {
+func (r *App) WithMiddleware(mw func(http.Handler) http.Handler) *App {
 	r.middlewares = append(r.middlewares, mw)
 	return r
 }
 
-// WithLogger sets a custom logger for the registry.
+// WithLogger sets a custom logger for the app.
 // If not set, slog.Default() will be used.
-func (r *Registry) WithLogger(logger *slog.Logger) *Registry {
+func (r *App) WithLogger(logger *slog.Logger) *App {
 	r.logger = logger
 	return r
 }
@@ -81,14 +81,14 @@ func (r *Registry) WithLogger(logger *slog.Logger) *Registry {
 // WithMaxRequestBodySize sets the default maximum request body size for all handlers.
 // Individual handlers can override this with Handler.WithMaxRequestBodySize.
 // A value of 0 means no limit. Default is 1MB (1 << 20).
-func (r *Registry) WithMaxRequestBodySize(size uint64) *Registry {
+func (r *App) WithMaxRequestBodySize(size uint64) *App {
 	r.maxRequestBodySize = size
 	return r
 }
 
-// Handler returns the registry wrapped with all configured middleware.
+// Handler returns the app wrapped with all configured middleware.
 // The middleware is applied in the order it was added via WithMiddleware.
-func (r *Registry) Handler() http.Handler {
+func (r *App) Handler() http.Handler {
 	var h http.Handler = http.HandlerFunc(r.ServeHTTP)
 	// Apply middleware in reverse order so first added is outermost
 	for i := len(r.middlewares) - 1; i >= 0; i-- {
@@ -98,7 +98,7 @@ func (r *Registry) Handler() http.Handler {
 }
 
 // Service returns a Service namespace.
-func (r *Registry) Service(name string) *Service {
+func (r *App) Service(name string) *Service {
 	return &Service{
 		registry: r,
 		name:     name,
@@ -106,7 +106,7 @@ func (r *Registry) Service(name string) *Service {
 }
 
 // ServeHTTP implements http.Handler.
-func (r *Registry) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+func (r *App) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	defer func() {
 		if rec := recover(); rec != nil {
 			stack := debug.Stack()
@@ -171,14 +171,14 @@ func (r *Registry) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 }
 
 type Service struct {
-	registry     *Registry
+	registry     *App
 	name         string
 	interceptors []UnaryInterceptor
 }
 
 // WithUnaryInterceptor adds an interceptor to this service.
 // Service interceptors execute after global interceptors but before handler interceptors.
-// See Registry.WithUnaryInterceptor for the complete execution order.
+// See App.WithUnaryInterceptor for the complete execution order.
 func (s *Service) WithUnaryInterceptor(i UnaryInterceptor) *Service {
 	s.interceptors = append(s.interceptors, i)
 	return s
@@ -207,10 +207,10 @@ func (s *Service) Register(name string, handler RPCMethod) {
 	// We need to wrap the handler or somehow attach the service interceptors?
 	// The handler.ServeHTTP takes a list of prefix interceptors.
 	// But `Register` is called ONCE. `ServeHTTP` is called MANY times.
-	// The `prefixInterceptors` passed to `handler.ServeHTTP` in `Registry.ServeHTTP`
+	// The `prefixInterceptors` passed to `handler.ServeHTTP` in `App.ServeHTTP`
 	// are the Global ones.
 	// We need to include the Service ones too.
-	// But Registry doesn't store Service objects, it stores routes map[string]RPCMethod.
+	// But App doesn't store Service objects, it stores routes map[string]RPCMethod.
 	// We lose the Service object after registration.
 	// So we must Wrap the RPCMethod to include the Service interceptors.
 
