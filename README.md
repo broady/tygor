@@ -254,7 +254,7 @@ func CreateNews(ctx context.Context, req *CreateNewsParams) (*News, error) {
 }
 ```
 
-Available error codes:
+Available error codes and their HTTP status code mapping (not exhaustive):
 - `CodeOK` (200)
 - `CodeInvalidArgument` (400)
 - `CodeUnauthenticated` (401)
