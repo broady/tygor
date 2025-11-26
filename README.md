@@ -72,43 +72,48 @@ yarn add @tygor/client
 
 ### 1. Define your types
 
+<!-- [snippet:doc/examples/quickstart:types] -->
 ```go
-package api
-
 type News struct {
-    ID        int32      `json:"id"`
-    Title     string     `json:"title"`
-    Body      *string    `json:"body"`
-    CreatedAt *time.Time `json:"created_at"`
+	ID        int32      `json:"id"`
+	Title     string     `json:"title"`
+	Body      *string    `json:"body"`
+	CreatedAt *time.Time `json:"created_at"`
 }
 
 type ListNewsParams struct {
-    Limit  *int32 `json:"limit"`
-    Offset *int32 `json:"offset"`
+	Limit  *int32 `json:"limit"`
+	Offset *int32 `json:"offset"`
 }
 
 type CreateNewsParams struct {
-    Title string  `json:"title" validate:"required,min=3"`
-    Body  *string `json:"body"`
+	Title string  `json:"title" validate:"required,min=3"`
+	Body  *string `json:"body"`
 }
+
 ```
+<!-- [/snippet:doc/examples/quickstart:types] -->
 
 ### 2. Implement handlers
 
+<!-- [snippet:doc/examples/quickstart:handlers] -->
 ```go
 func ListNews(ctx context.Context, req *ListNewsParams) ([]*News, error) {
-    // Your implementation
-    return news, nil
+	// Your implementation
+	return nil, nil
 }
 
 func CreateNews(ctx context.Context, req *CreateNewsParams) (*News, error) {
-    // Your implementation
-    return &news, nil
+	// Your implementation
+	return nil, nil
 }
+
 ```
+<!-- [/snippet:doc/examples/quickstart:handlers] -->
 
 ### 3. Register services
 
+<!-- [snippet:doc/examples/quickstart:registration] -->
 ```go
 app := tygor.NewApp()
 
@@ -118,16 +123,19 @@ news.Register("Create", tygor.Exec(CreateNews))
 
 http.ListenAndServe(":8080", app.Handler())
 ```
+<!-- [/snippet:doc/examples/quickstart:registration] -->
 
 ### 4. Generate TypeScript types
 
+<!-- [snippet:doc/examples/quickstart:generation] -->
 ```go
 if err := tygorgen.Generate(app, &tygorgen.Config{
-    OutDir: "./client/src/rpc",
+	OutDir: "./client/src/rpc",
 }); err != nil {
-    log.Fatal(err)
+	log.Fatal(err)
 }
 ```
+<!-- [/snippet:doc/examples/quickstart:generation] -->
 
 This generates TypeScript types and a manifest describing all available API methods.
 

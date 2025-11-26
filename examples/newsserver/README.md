@@ -105,17 +105,17 @@ func CreateNews(ctx context.Context, req *api.CreateNewsParams) (*api.News, erro
 
 <!-- [snippet:app-setup] -->
 ```go title="main.go"
-	// 1. Create App
-	app := tygor.NewApp().
-		WithErrorTransformer(func(err error) *tygor.Error {
-			// Example custom error mapping
-			if err.Error() == "database connection failed" {
-				return tygor.NewError(tygor.CodeUnavailable, "db down")
-			}
-			return nil
-		}).
-		WithUnaryInterceptor(middleware.LoggingInterceptor(logger)).
-		WithMiddleware(middleware.CORS(middleware.DefaultCORSConfig()))
+// 1. Create App
+app := tygor.NewApp().
+	WithErrorTransformer(func(err error) *tygor.Error {
+		// Example custom error mapping
+		if err.Error() == "database connection failed" {
+			return tygor.NewError(tygor.CodeUnavailable, "db down")
+		}
+		return nil
+	}).
+	WithUnaryInterceptor(middleware.LoggingInterceptor(logger)).
+	WithMiddleware(middleware.CORS(middleware.DefaultCORSConfig()))
 ```
 <!-- [/snippet:app-setup] -->
 
@@ -123,21 +123,21 @@ func CreateNews(ctx context.Context, req *api.CreateNewsParams) (*api.News, erro
 
 <!-- [snippet:service-registration] -->
 ```go title="main.go"
-	// 2. Register Services
-	news := app.Service("News")
+// 2. Register Services
+news := app.Service("News")
 
-	news.Register("List", tygor.Query(ListNews).
-		CacheControl(tygor.CacheConfig{
-			MaxAge: 1 * time.Minute,
-			Public: true,
-		}))
+news.Register("List", tygor.Query(ListNews).
+	CacheControl(tygor.CacheConfig{
+		MaxAge: 1 * time.Minute,
+		Public: true,
+	}))
 
-	news.Register("Create", tygor.Exec(CreateNews).
-		WithUnaryInterceptor(func(ctx *tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
-			// Example: Set a custom header
-			ctx.HTTPWriter().Header().Set("X-Created-By", "Tygorpc")
-			return handler(ctx, req)
-		}))
+news.Register("Create", tygor.Exec(CreateNews).
+	WithUnaryInterceptor(func(ctx *tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
+		// Example: Set a custom header
+		ctx.HTTPWriter().Header().Set("X-Created-By", "Tygorpc")
+		return handler(ctx, req)
+	}))
 ```
 <!-- [/snippet:service-registration] -->
 

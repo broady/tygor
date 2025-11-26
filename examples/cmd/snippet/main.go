@@ -8,6 +8,7 @@
 //	  -format string  Output format: simple|mdx (default: mdx)
 //	  -out string     Output file (default: stdout)
 //	  -inject string  Inject snippets into this file (e.g., README.md)
+//	  -root string    Root directory for scoping snippet names (e.g., dir:name)
 //
 // Snippet markers in source files:
 //
@@ -22,6 +23,15 @@
 //
 //	<!-- [snippet:example-name] -->
 //	<!-- [/snippet:example-name] -->
+//
+// Scoped snippets:
+//
+// When -root is specified, snippet names are scoped by directory path relative to root.
+// For example, with -root /repo and file /repo/examples/newsserver/main.go:
+//
+//	Source marker:  // [snippet:handlers]
+//	Scoped name:    examples/newsserver:handlers
+//	README marker:  <!-- [snippet:examples/newsserver:handlers] -->
 package main
 
 import (
@@ -40,6 +50,7 @@ var (
 	formatFlag = flag.String("format", "mdx", "Output format: simple|mdx")
 	outFlag    = flag.String("out", "", "Output file (default: stdout)")
 	injectFlag = flag.String("inject", "", "Inject snippets into this file (e.g., README.md)")
+	rootFlag   = flag.String("root", "", "Root directory for scoping snippet names (e.g., dir:name)")
 )
 
 // Snippet represents an extracted code snippet.
@@ -74,8 +85,19 @@ func main() {
 
 	var allSnippets []Snippet
 
+	// Resolve root directory for scoping
+	root := *rootFlag
+	if root != "" {
+		var err error
+		root, err = filepath.Abs(root)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error resolving root path: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
 	for _, file := range flag.Args() {
-		snippets, err := extractSnippets(file)
+		snippets, err := extractSnippets(file, root)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error processing %s: %v\n", file, err)
 			os.Exit(1)
@@ -117,12 +139,27 @@ func main() {
 	}
 }
 
-func extractSnippets(filename string) ([]Snippet, error) {
+func extractSnippets(filename string, root string) ([]Snippet, error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
+
+	// Compute scope prefix from file path relative to root
+	scopePrefix := ""
+	if root != "" {
+		absFile, err := filepath.Abs(filename)
+		if err == nil {
+			if rel, err := filepath.Rel(root, absFile); err == nil {
+				// Use directory path as scope (e.g., "examples/newsserver")
+				dir := filepath.Dir(rel)
+				if dir != "." {
+					scopePrefix = filepath.ToSlash(dir) + ":"
+				}
+			}
+		}
+	}
 
 	var snippets []Snippet
 	var current *Snippet
@@ -141,7 +178,7 @@ func extractSnippets(filename string) ([]Snippet, error) {
 				return nil, fmt.Errorf("line %d: nested snippet %q inside %q", lineNum, matches[1], current.Name)
 			}
 			current = &Snippet{
-				Name:      matches[1],
+				Name:      scopePrefix + matches[1], // Scoped name: "dir:name"
 				File:      filepath.Base(filename),
 				StartLine: lineNum + 1, // Content starts on next line
 				Lang:      detectLang(filename),
@@ -155,13 +192,17 @@ func extractSnippets(filename string) ([]Snippet, error) {
 			if current == nil {
 				return nil, fmt.Errorf("line %d: end marker for %q without start", lineNum, matches[1])
 			}
-			if matches[1] != current.Name {
+			// Compare against unscoped name (source files use simple names)
+			expectedEnd := scopePrefix + matches[1]
+			if expectedEnd != current.Name {
 				return nil, fmt.Errorf("line %d: end marker %q doesn't match start %q", lineNum, matches[1], current.Name)
 			}
 			current.EndLine = lineNum - 1
 			current.Content = strings.Join(contentLines, "\n")
 			// Trim leading blank line if present (from blank line after marker)
 			current.Content = strings.TrimPrefix(current.Content, "\n")
+			// Dedent: remove common leading whitespace
+			current.Content = dedent(current.Content)
 			snippets = append(snippets, *current)
 			current = nil
 			continue
@@ -182,6 +223,39 @@ func extractSnippets(filename string) ([]Snippet, error) {
 	}
 
 	return snippets, nil
+}
+
+// dedent removes common leading whitespace from all lines.
+func dedent(s string) string {
+	lines := strings.Split(s, "\n")
+	if len(lines) == 0 {
+		return s
+	}
+
+	// Find minimum indentation (ignoring empty lines)
+	minIndent := -1
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		indent := len(line) - len(strings.TrimLeft(line, " \t"))
+		if minIndent < 0 || indent < minIndent {
+			minIndent = indent
+		}
+	}
+
+	if minIndent <= 0 {
+		return s
+	}
+
+	// Remove the common indentation
+	for i, line := range lines {
+		if len(line) >= minIndent {
+			lines[i] = line[minIndent:]
+		}
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 func detectLang(filename string) string {

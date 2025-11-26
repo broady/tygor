@@ -37,8 +37,12 @@ clean:
 # Check if generated files are up-to-date (only unstaged changes)
 check: gen readme
 	@if [ -n "$$(git diff --name-only $(GEN_DIR) README.md 2>/dev/null)" ]; then \
-		echo "Generated files are out of date. Run 'make gen' and 'make readme', then commit."; \
-		git diff $(GEN_DIR) README.md; \
+		echo ""; \
+		echo "ERROR: Generated files were out of sync with source code."; \
+		echo "The files have been updated. Please commit the changes:"; \
+		echo ""; \
+		git --no-pager diff --stat $(GEN_DIR) README.md; \
+		echo ""; \
 		exit 1; \
 	fi
 	@echo "Generated files are up-to-date."
