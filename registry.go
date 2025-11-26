@@ -9,7 +9,6 @@ import (
 	"sync"
 
 	"github.com/broady/tygor/internal"
-	"github.com/broady/tygor/internal/meta"
 )
 
 // App is the central router for API handlers.
@@ -242,7 +241,7 @@ func (h *serviceWrappedHandler) serveHTTP(ctx *Context) {
 	h.inner.serveHTTP(ctx)
 }
 
-func (h *serviceWrappedHandler) metadata() *meta.MethodMetadata {
+func (h *serviceWrappedHandler) metadata() *internal.MethodMetadata {
 	return h.inner.metadata()
 }
 

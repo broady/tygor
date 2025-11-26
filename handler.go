@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/broady/tygor/internal"
-	"github.com/broady/tygor/internal/meta"
 	"github.com/go-playground/validator/v10"
 	"github.com/gorilla/schema"
 )
@@ -44,7 +43,7 @@ type RPCMethod interface {
 type rpcHandler interface {
 	RPCMethod
 	serveHTTP(ctx *Context)
-	metadata() *meta.MethodMetadata
+	metadata() *internal.MethodMetadata
 }
 
 // handlerBase contains common configuration shared by ExecHandler and QueryHandler.
@@ -253,10 +252,10 @@ func (h *QueryHandler[Req, Res]) Metadata() *internal.MethodMetadata {
 }
 
 // metadata returns the runtime metadata for the POST handler.
-func (h *ExecHandler[Req, Res]) metadata() *meta.MethodMetadata {
+func (h *ExecHandler[Req, Res]) metadata() *internal.MethodMetadata {
 	var req Req
 	var res Res
-	return &meta.MethodMetadata{
+	return &internal.MethodMetadata{
 		HTTPMethod: "POST",
 		Request:    reflect.TypeOf(req),
 		Response:   reflect.TypeOf(res),
@@ -264,10 +263,10 @@ func (h *ExecHandler[Req, Res]) metadata() *meta.MethodMetadata {
 }
 
 // metadata returns the runtime metadata for the GET handler.
-func (h *QueryHandler[Req, Res]) metadata() *meta.MethodMetadata {
+func (h *QueryHandler[Req, Res]) metadata() *internal.MethodMetadata {
 	var req Req
 	var res Res
-	return &meta.MethodMetadata{
+	return &internal.MethodMetadata{
 		HTTPMethod: "GET",
 		Request:    reflect.TypeOf(req),
 		Response:   reflect.TypeOf(res),
