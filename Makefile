@@ -1,4 +1,5 @@
 # Root Makefile for tygor
+MAKEFLAGS += -j
 
 # Snippet tool (runs from examples module)
 SNIPPET_TOOL := cd examples && go run ./cmd/snippet
@@ -19,7 +20,7 @@ test:
 # Run linters
 lint:
 	go vet ./...
-	go run honnef.co/go/tools/cmd/staticcheck@latest ./...
+	go run honnef.co/go/tools/cmd/staticcheck@v0.6.1 ./...
 
 # Format code
 fmt:
@@ -51,9 +52,15 @@ check: readme
 	fi
 	@echo "All files are up-to-date."
 
-# Run all precommit checks (including examples)
-precommit: fmt-check test lint check
-	@$(MAKE) -C examples precommit
+# Precommit sub-targets (for parallel execution, all depend on fmt-check)
+.PHONY: precommit-test precommit-lint precommit-check precommit-examples
+precommit-test: fmt-check ; @$(MAKE) test
+precommit-lint: fmt-check ; @$(MAKE) lint
+precommit-check: fmt-check ; @$(MAKE) check
+precommit-examples: fmt-check ; @$(MAKE) -C examples precommit
+
+# Run all precommit checks in parallel (fmt-check runs first)
+precommit: precommit-test precommit-lint precommit-check precommit-examples
 	@echo "All precommit checks passed."
 
 # Run CI locally using act (https://github.com/nektos/act)

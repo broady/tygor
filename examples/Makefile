@@ -1,16 +1,20 @@
 # Root Makefile for all examples
+MAKEFLAGS += -j
 
 EXAMPLES := newsserver blog protobuf
 
 .PHONY: all test gen check fmt clean readme precommit $(EXAMPLES)
 
-# Run precommit on all examples (check runs gen and readme)
-precommit:
-	@echo "Running precommit checks on all examples..."
-	@for ex in $(EXAMPLES); do \
-		echo "=== $$ex ==="; \
-		$(MAKE) -C $$ex test check || exit 1; \
-	done
+# Generate precommit targets for each example (enables parallel execution)
+define precommit-target
+.PHONY: precommit-$(1)
+precommit-$(1):
+	@echo "=== $(1) ===" && $$(MAKE) -C $(1) test check
+endef
+$(foreach ex,$(EXAMPLES),$(eval $(call precommit-target,$(ex))))
+
+# Run precommit on all examples in parallel
+precommit: $(addprefix precommit-,$(EXAMPLES))
 	@echo "All examples OK"
 
 # Update all READMEs
