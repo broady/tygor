@@ -1,6 +1,7 @@
 package tygor
 
 import (
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 
@@ -66,9 +67,44 @@ func (tr *TestRequestBuilder) Build() (*http.Request, *httptest.ResponseRecorder
 	return tr.RequestBuilder.Build()
 }
 
+// testContextConfig holds configuration for creating test contexts.
+type testContextConfig struct {
+	errorTransformer   ErrorTransformer
+	maskInternalErrors bool
+	interceptors       []UnaryInterceptor
+	logger             *slog.Logger
+	maxRequestBodySize uint64
+}
+
 // ServeHandler builds the request and serves it to a tygor handler.
-func (tr *TestRequestBuilder) ServeHandler(handler RPCMethod, config HandlerConfig) *httptest.ResponseRecorder {
+// For testing, it accepts a testContextConfig to configure the context.
+func (tr *TestRequestBuilder) ServeHandler(handler RPCMethod, config testContextConfig) *httptest.ResponseRecorder {
 	req, w := tr.Build()
-	handler.ServeHTTP(w, req, config)
+	h := handler.(rpcHandler)
+
+	// Extract tygor context from request and add config
+	ctx, _ := FromContext(req.Context())
+	ctx.errorTransformer = config.errorTransformer
+	ctx.maskInternalErrors = config.maskInternalErrors
+	ctx.interceptors = config.interceptors
+	ctx.logger = config.logger
+	ctx.maxRequestBodySize = config.maxRequestBodySize
+
+	h.serveHTTP(ctx)
 	return w
+}
+
+// newTestContext creates a Context for testing with the given request/response and config.
+func newTestContext(w http.ResponseWriter, r *http.Request, config testContextConfig) *Context {
+	// Get existing context or create new one
+	ctx, ok := FromContext(r.Context())
+	if !ok {
+		ctx = newContext(r.Context(), w, r, "TestService", "TestMethod")
+	}
+	ctx.errorTransformer = config.errorTransformer
+	ctx.maskInternalErrors = config.maskInternalErrors
+	ctx.interceptors = config.interceptors
+	ctx.logger = config.logger
+	ctx.maxRequestBodySize = config.maxRequestBodySize
+	return ctx
 }

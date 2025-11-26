@@ -35,8 +35,8 @@ func TestUnary(t *testing.T) {
 	if handler == nil {
 		t.Fatal("expected non-nil handler")
 	}
-	if handler.Metadata().HTTPMethod != "POST" {
-		t.Errorf("expected default method POST, got %s", handler.Metadata().HTTPMethod)
+	if handler.metadata().HTTPMethod != "POST" {
+		t.Errorf("expected default method POST, got %s", handler.metadata().HTTPMethod)
 	}
 }
 
@@ -46,8 +46,8 @@ func TestHandler_Method(t *testing.T) {
 	}
 
 	handler := UnaryGet(fn)
-	if handler.Metadata().HTTPMethod != "GET" {
-		t.Errorf("expected method GET, got %s", handler.Metadata().HTTPMethod)
+	if handler.metadata().HTTPMethod != "GET" {
+		t.Errorf("expected method GET, got %s", handler.metadata().HTTPMethod)
 	}
 }
 
@@ -87,7 +87,7 @@ func TestHandler_Metadata(t *testing.T) {
 	}
 
 	handler := UnaryGet(fn).CacheControl(CacheConfig{MaxAge: 1 * time.Minute})
-	meta := handler.Metadata()
+	meta := handler.metadata()
 
 	if meta.HTTPMethod != "GET" {
 		t.Errorf("expected method GET, got %s", meta.HTTPMethod)
@@ -113,7 +113,7 @@ func TestHandler_ServeHTTP_POST_Success(t *testing.T) {
 	w := NewTestRequest().
 		POST("/test").
 		WithJSON(TestRequest{Name: "John", Email: "john@example.com"}).
-		ServeHandler(handler, HandlerConfig{})
+		ServeHandler(handler, testContextConfig{})
 
 	tygortest.AssertStatus(t, w, http.StatusOK)
 	tygortest.AssertJSONResponse(t, w, TestResponse{Message: "hello John", ID: 123})
@@ -130,7 +130,7 @@ func TestHandler_ServeHTTP_POST_ValidationError(t *testing.T) {
 	w := NewTestRequest().
 		POST("/test").
 		WithJSON(map[string]string{"name": "Jo", "email": "invalid"}).
-		ServeHandler(handler, HandlerConfig{})
+		ServeHandler(handler, testContextConfig{})
 
 	tygortest.AssertStatus(t, w, http.StatusBadRequest)
 	tygortest.AssertJSONError(t, w, string(CodeInvalidArgument))
@@ -146,7 +146,7 @@ func TestHandler_ServeHTTP_POST_InvalidJSON(t *testing.T) {
 	w := NewTestRequest().
 		POST("/test").
 		WithBody(`{invalid json}`).
-		ServeHandler(handler, HandlerConfig{})
+		ServeHandler(handler, testContextConfig{})
 
 	tygortest.AssertStatus(t, w, http.StatusBadRequest)
 	tygortest.AssertJSONError(t, w, string(CodeInvalidArgument))
@@ -168,7 +168,7 @@ func TestHandler_ServeHTTP_GET_WithQueryParams(t *testing.T) {
 		GET("/test").
 		WithQuery("name", "John").
 		WithQuery("email", "john@example.com").
-		ServeHandler(handler, HandlerConfig{})
+		ServeHandler(handler, testContextConfig{})
 
 	tygortest.AssertStatus(t, w, http.StatusOK)
 	tygortest.AssertJSONResponse(t, w, TestResponse{Message: "hello John"})
@@ -185,7 +185,7 @@ func TestHandler_ServeHTTP_HandlerError(t *testing.T) {
 	w := NewTestRequest().
 		POST("/test").
 		WithJSON(TestRequest{Name: "John", Email: "john@example.com"}).
-		ServeHandler(handler, HandlerConfig{})
+		ServeHandler(handler, testContextConfig{})
 
 	tygortest.AssertStatus(t, w, http.StatusNotFound)
 	errResp := tygortest.AssertJSONError(t, w, string(CodeNotFound))
@@ -206,7 +206,7 @@ func TestHandler_ServeHTTP_WithCacheControl(t *testing.T) {
 		GET("/test").
 		WithQuery("name", "John").
 		WithQuery("email", "john@example.com").
-		ServeHandler(handler, HandlerConfig{})
+		ServeHandler(handler, testContextConfig{})
 
 	tygortest.AssertStatus(t, w, http.StatusOK)
 	tygortest.AssertHeader(t, w, "Cache-Control", "private, max-age=60")
@@ -229,7 +229,7 @@ func TestHandler_ServeHTTP_WithUnaryInterceptor(t *testing.T) {
 	NewTestRequest().
 		POST("/test").
 		WithJSON(TestRequest{Name: "John", Email: "john@example.com"}).
-		ServeHandler(handler, HandlerConfig{})
+		ServeHandler(handler, testContextConfig{})
 
 	if !interceptorCalled {
 		t.Error("expected interceptor to be called")
@@ -246,8 +246,8 @@ func TestHandler_ServeHTTP_MaskInternalErrors(t *testing.T) {
 	w := NewTestRequest().
 		POST("/test").
 		WithJSON(TestRequest{Name: "John", Email: "john@example.com"}).
-		ServeHandler(handler, HandlerConfig{
-			MaskInternalErrors: true,
+		ServeHandler(handler, testContextConfig{
+			maskInternalErrors: true,
 		})
 
 	errResp := tygortest.AssertJSONError(t, w, string(CodeInternal))
@@ -271,8 +271,8 @@ func TestHandler_ServeHTTP_CustomErrorTransformer(t *testing.T) {
 	w := NewTestRequest().
 		POST("/test").
 		WithJSON(TestRequest{Name: "John", Email: "john@example.com"}).
-		ServeHandler(handler, HandlerConfig{
-			ErrorTransformer: func(err error) *Error {
+		ServeHandler(handler, testContextConfig{
+			errorTransformer: func(err error) *Error {
 				if err == customErr {
 					return NewError(CodeUnavailable, "custom mapped error")
 				}
@@ -300,7 +300,7 @@ func TestHandler_ServeHTTP_EmptyBody(t *testing.T) {
 	w := NewTestRequest().
 		POST("/test").
 		WithBody("{}").
-		ServeHandler(handler, HandlerConfig{})
+		ServeHandler(handler, testContextConfig{})
 
 	tygortest.AssertStatus(t, w, http.StatusOK)
 	tygortest.AssertJSONResponse(t, w, TestResponse{Message: "ok"})
@@ -319,7 +319,7 @@ func TestHandler_ServeHTTP_PointerRequest(t *testing.T) {
 	w := NewTestRequest().
 		POST("/test").
 		WithJSON(TestRequest{Name: "John", Email: "john@example.com"}).
-		ServeHandler(handler, HandlerConfig{})
+		ServeHandler(handler, testContextConfig{})
 
 	tygortest.AssertStatus(t, w, http.StatusOK)
 	tygortest.AssertJSONResponse(t, w, TestResponse{Message: "hello John"})
@@ -342,7 +342,7 @@ func TestHandler_ServeHTTP_InterceptorModifiesRequest(t *testing.T) {
 	w := NewTestRequest().
 		POST("/test").
 		WithJSON(TestRequest{Name: "Original", Email: "test@example.com"}).
-		ServeHandler(handler, HandlerConfig{})
+		ServeHandler(handler, testContextConfig{})
 
 	tygortest.AssertJSONResponse(t, w, TestResponse{Message: "Modified"})
 }
@@ -356,17 +356,18 @@ func TestHandleError(t *testing.T) {
 	t.Run("with custom error transformer", func(t *testing.T) {
 		testErr := errors.New("test error")
 		w := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", "/test", nil)
 
-		config := HandlerConfig{
-			ErrorTransformer: func(err error) *Error {
+		ctx := newTestContext(w, req, testContextConfig{
+			errorTransformer: func(err error) *Error {
 				if err == testErr {
 					return NewError(CodeUnavailable, "transformed")
 				}
 				return nil
 			},
-		}
+		})
 
-		handleError(w, testErr, config)
+		handleError(ctx, testErr)
 
 		var envelope errorEnvelopeTest
 		json.NewDecoder(w.Body).Decode(&envelope)
@@ -382,15 +383,16 @@ func TestHandleError(t *testing.T) {
 	t.Run("fallback to default transformer", func(t *testing.T) {
 		testErr := errors.New("test error")
 		w := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", "/test", nil)
 
-		config := HandlerConfig{
-			ErrorTransformer: func(err error) *Error {
+		ctx := newTestContext(w, req, testContextConfig{
+			errorTransformer: func(err error) *Error {
 				// Return nil to use default transformer
 				return nil
 			},
-		}
+		})
 
-		handleError(w, testErr, config)
+		handleError(ctx, testErr)
 
 		var envelope errorEnvelopeTest
 		json.NewDecoder(w.Body).Decode(&envelope)
@@ -436,8 +438,8 @@ func TestHandler_ChainedInterceptors(t *testing.T) {
 	NewTestRequest().
 		POST("/test").
 		WithJSON(TestRequest{Name: "John", Email: "john@example.com"}).
-		ServeHandler(handler, HandlerConfig{
-			Interceptors: []UnaryInterceptor{configInterceptor},
+		ServeHandler(handler, testContextConfig{
+			interceptors: []UnaryInterceptor{configInterceptor},
 		})
 
 	// Expected order: config -> interceptor1 -> interceptor2 -> handler -> interceptor2 -> interceptor1 -> config
@@ -479,7 +481,7 @@ func TestHandler_ServeHTTP_GET_PointerRequest(t *testing.T) {
 	w := NewTestRequest().
 		GET("/test").
 		WithQuery("name", "John").
-		ServeHandler(handler, HandlerConfig{})
+		ServeHandler(handler, testContextConfig{})
 
 	tygortest.AssertStatus(t, w, http.StatusOK)
 	tygortest.AssertJSONResponse(t, w, TestResponse{Message: "hello John"})
@@ -497,7 +499,7 @@ func TestHandler_WithSkipValidation(t *testing.T) {
 	w := NewTestRequest().
 		POST("/test").
 		WithJSON(map[string]string{"name": "Jo", "email": "invalid"}).
-		ServeHandler(handler, HandlerConfig{})
+		ServeHandler(handler, testContextConfig{})
 
 	// Should succeed because validation is skipped
 	tygortest.AssertStatus(t, w, http.StatusOK)
@@ -518,10 +520,9 @@ func TestHandler_ServeHTTP_GET_ArrayParams(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/test?ids=1&ids=2&ids=3", nil)
 	w := httptest.NewRecorder()
-	ctx := tygortest.NewTestContext(req.Context(), w, req, "TestService", "TestMethod")
-	req = req.WithContext(ctx)
+	ctx := newTestContext(w, req, testContextConfig{})
 
-	handler.ServeHTTP(w, req, HandlerConfig{})
+	handler.serveHTTP(ctx)
 
 	tygortest.AssertStatus(t, w, http.StatusOK)
 	tygortest.AssertJSONResponse(t, w, TestResponse{Message: "ids: 1,2,3"})
@@ -544,10 +545,9 @@ func TestHandler_ServeHTTP_GET_IntArrayParams(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/test?num=10&num=20&num=30", nil)
 	w := httptest.NewRecorder()
-	ctx := tygortest.NewTestContext(req.Context(), w, req, "TestService", "TestMethod")
-	req = req.WithContext(ctx)
+	ctx := newTestContext(w, req, testContextConfig{})
 
-	handler.ServeHTTP(w, req, HandlerConfig{})
+	handler.serveHTTP(ctx)
 
 	tygortest.AssertStatus(t, w, http.StatusOK)
 	tygortest.AssertJSONResponse(t, w, TestResponse{ID: 60})
@@ -578,10 +578,9 @@ func TestHandler_ServeHTTP_GET_SpecialCharacters(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest("GET", tt.query, nil)
 			w := httptest.NewRecorder()
-			ctx := tygortest.NewTestContext(req.Context(), w, req, "TestService", "TestMethod")
-			req = req.WithContext(ctx)
+			ctx := newTestContext(w, req, testContextConfig{})
 
-			handler.ServeHTTP(w, req, HandlerConfig{})
+			handler.serveHTTP(ctx)
 
 			tygortest.AssertStatus(t, w, http.StatusOK)
 			tygortest.AssertJSONResponse(t, w, TestResponse{Message: tt.expected})
@@ -601,7 +600,7 @@ func TestHandler_ServeHTTP_EmptyStructResponse(t *testing.T) {
 	w := NewTestRequest().
 		POST("/test").
 		WithJSON(TestRequest{Name: "John", Email: "john@example.com"}).
-		ServeHandler(handler, HandlerConfig{})
+		ServeHandler(handler, testContextConfig{})
 
 	tygortest.AssertStatus(t, w, http.StatusOK)
 	// Empty struct should encode as {"result": {}}
@@ -618,7 +617,7 @@ func TestHandler_ServeHTTP_NilPointerResponse(t *testing.T) {
 	w := NewTestRequest().
 		POST("/test").
 		WithJSON(TestRequest{Name: "John", Email: "john@example.com"}).
-		ServeHandler(handler, HandlerConfig{})
+		ServeHandler(handler, testContextConfig{})
 
 	tygortest.AssertStatus(t, w, http.StatusOK)
 	// Nil pointer should encode as {"result": null}
@@ -650,8 +649,8 @@ func TestHandler_ServeHTTP_ResponseEncodingError(t *testing.T) {
 	NewTestRequest().
 		POST("/test").
 		WithJSON(TestRequest{Name: "John", Email: "john@example.com"}).
-		ServeHandler(handler, HandlerConfig{
-			Logger: logger,
+		ServeHandler(handler, testContextConfig{
+			logger: logger,
 		})
 
 	// Verify error was logged
@@ -678,7 +677,7 @@ func TestHandler_ServeHTTP_GET_StrictQueryParams_RejectsUnknown(t *testing.T) {
 		GET("/test").
 		WithQuery("name", "John").
 		WithQuery("unknown", "value"). // This should cause an error with strict mode
-		ServeHandler(handler, HandlerConfig{})
+		ServeHandler(handler, testContextConfig{})
 
 	// With strict query params, unknown params should return an error
 	tygortest.AssertStatus(t, w, http.StatusBadRequest)
@@ -703,7 +702,7 @@ func TestHandler_ServeHTTP_GET_StrictQueryParams_AllowsKnown(t *testing.T) {
 		GET("/test").
 		WithQuery("name", "John").
 		WithQuery("email", "john@example.com").
-		ServeHandler(handler, HandlerConfig{})
+		ServeHandler(handler, testContextConfig{})
 
 	// Should succeed - all params are known
 	tygortest.AssertStatus(t, w, http.StatusOK)
@@ -726,8 +725,8 @@ func TestHandler_ServeHTTP_MaxRequestBodySize_ExceedsLimit(t *testing.T) {
 	w := NewTestRequest().
 		POST("/test").
 		WithJSON(largeReq).
-		ServeHandler(handler, HandlerConfig{
-			MaxRequestBodySize: 50, // 50 bytes limit
+		ServeHandler(handler, testContextConfig{
+			maxRequestBodySize: 50, // 50 bytes limit
 		})
 
 	// Should return invalid_argument error when body exceeds limit
@@ -746,8 +745,8 @@ func TestHandler_ServeHTTP_MaxRequestBodySize_WithinLimit(t *testing.T) {
 	w := NewTestRequest().
 		POST("/test").
 		WithJSON(TestRequest{Name: "John", Email: "john@example.com"}).
-		ServeHandler(handler, HandlerConfig{
-			MaxRequestBodySize: 1000, // 1KB limit
+		ServeHandler(handler, testContextConfig{
+			maxRequestBodySize: 1000, // 1KB limit
 		})
 
 	tygortest.AssertStatus(t, w, http.StatusOK)
@@ -766,8 +765,8 @@ func TestHandler_ServeHTTP_MaxRequestBodySize_HandlerOverride(t *testing.T) {
 	w := NewTestRequest().
 		POST("/test").
 		WithJSON(TestRequest{Name: "Jo", Email: "a@b.c"}).
-		ServeHandler(handler, HandlerConfig{
-			MaxRequestBodySize: 10000, // App default is 10KB, but handler overrides to 10 bytes
+		ServeHandler(handler, testContextConfig{
+			maxRequestBodySize: 10000, // App default is 10KB, but handler overrides to 10 bytes
 		})
 
 	// Should return invalid_argument error
@@ -792,8 +791,8 @@ func TestHandler_ServeHTTP_MaxRequestBodySize_Unlimited(t *testing.T) {
 	w := NewTestRequest().
 		POST("/test").
 		WithJSON(largeReq).
-		ServeHandler(handler, HandlerConfig{
-			MaxRequestBodySize: 50, // App default is 50 bytes, but handler overrides to unlimited
+		ServeHandler(handler, testContextConfig{
+			maxRequestBodySize: 50, // App default is 50 bytes, but handler overrides to unlimited
 		})
 
 	tygortest.AssertStatus(t, w, http.StatusOK)
@@ -814,8 +813,8 @@ func TestHandler_ServeHTTP_MaxRequestBodySize_DefaultLimit(t *testing.T) {
 			Name:  "ThisIsAReallyLongNameThatExceedsTheDefaultLimit",
 			Email: "test@example.com",
 		}).
-		ServeHandler(handler, HandlerConfig{
-			MaxRequestBodySize: 20, // Very small default
+		ServeHandler(handler, testContextConfig{
+			maxRequestBodySize: 20, // Very small default
 		})
 
 	// Should return invalid_argument error
@@ -837,7 +836,7 @@ func TestHandler_GET_TagBehavior(t *testing.T) {
 		w := NewTestRequest().
 			GET("/test").
 			WithQuery("myvalue", "hello").
-			ServeHandler(UnaryGet(fn), HandlerConfig{})
+			ServeHandler(UnaryGet(fn), testContextConfig{})
 
 		tygortest.AssertStatus(t, w, http.StatusOK)
 		tygortest.AssertJSONResponse(t, w, TestResponse{Message: "hello"})
@@ -854,7 +853,7 @@ func TestHandler_GET_TagBehavior(t *testing.T) {
 		w := NewTestRequest().
 			GET("/test").
 			WithQuery("myjsonvalue", "hello").
-			ServeHandler(UnaryGet(fn), HandlerConfig{})
+			ServeHandler(UnaryGet(fn), testContextConfig{})
 
 		tygortest.AssertStatus(t, w, http.StatusOK)
 		// Value should be empty because json tag is ignored by gorilla/schema
@@ -872,7 +871,7 @@ func TestHandler_GET_TagBehavior(t *testing.T) {
 		w := NewTestRequest().
 			GET("/test").
 			WithQuery("Value", "hello").
-			ServeHandler(UnaryGet(fn), HandlerConfig{})
+			ServeHandler(UnaryGet(fn), testContextConfig{})
 
 		tygortest.AssertStatus(t, w, http.StatusOK)
 		tygortest.AssertJSONResponse(t, w, TestResponse{Message: "hello"})
@@ -889,7 +888,7 @@ func TestHandler_GET_TagBehavior(t *testing.T) {
 		w := NewTestRequest().
 			GET("/test").
 			WithQuery("value", "hello").
-			ServeHandler(UnaryGet(fn), HandlerConfig{})
+			ServeHandler(UnaryGet(fn), testContextConfig{})
 
 		tygortest.AssertStatus(t, w, http.StatusOK)
 		tygortest.AssertJSONResponse(t, w, TestResponse{Message: "hello"})

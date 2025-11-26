@@ -2,6 +2,7 @@ package tygor
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 
 	"github.com/broady/tygor/internal/rpccontext"
@@ -18,6 +19,13 @@ type Context struct {
 	method  string
 	request *http.Request
 	writer  http.ResponseWriter
+
+	// Internal fields for handler execution (not exposed via public methods)
+	errorTransformer   ErrorTransformer
+	maskInternalErrors bool
+	interceptors       []UnaryInterceptor
+	logger             *slog.Logger
+	maxRequestBodySize uint64
 }
 
 // Service returns the name of the service being called.

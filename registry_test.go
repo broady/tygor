@@ -511,7 +511,7 @@ func TestServiceWrappedHandler_Metadata(t *testing.T) {
 		interceptors: []UnaryInterceptor{},
 	}
 
-	meta := wrapped.Metadata()
+	meta := wrapped.metadata()
 	if meta.HTTPMethod != "GET" {
 		t.Errorf("expected method GET, got %s", meta.HTTPMethod)
 	}

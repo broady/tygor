@@ -149,28 +149,30 @@ func (r *App) serveHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Type assert to internal handler interface
+	h, ok := handler.(rpcHandler)
+	if !ok {
+		writeError(w, NewError(CodeInternal, "invalid handler type"), r.logger)
+		return
+	}
+
 	// Check HTTP Method
-	meta := handler.Metadata()
+	meta := h.metadata()
 	if req.Method != meta.HTTPMethod {
 		writeError(w, Errorf(CodeMethodNotAllowed, "method %s not allowed, expected %s", req.Method, meta.HTTPMethod), r.logger)
 		return
 	}
 
-	// Create tygor Context with RPC metadata
+	// Create tygor Context with RPC metadata and config
 	ctx := newContext(req.Context(), w, req, service, method)
-	req = req.WithContext(ctx)
-
-	// Build config with registry-level settings
-	config := HandlerConfig{
-		ErrorTransformer:   r.errorTransformer,
-		MaskInternalErrors: r.maskInternalErrors,
-		Interceptors:       r.interceptors,
-		Logger:             r.logger,
-		MaxRequestBodySize: r.maxRequestBodySize,
-	}
+	ctx.errorTransformer = r.errorTransformer
+	ctx.maskInternalErrors = r.maskInternalErrors
+	ctx.interceptors = r.interceptors
+	ctx.logger = r.logger
+	ctx.maxRequestBodySize = r.maxRequestBodySize
 
 	// Execute handler
-	handler.ServeHTTP(w, req, config)
+	h.serveHTTP(ctx)
 }
 
 type Service struct {
@@ -191,6 +193,12 @@ func (s *Service) WithUnaryInterceptor(i UnaryInterceptor) *Service {
 // If a handler is already registered for this service and method, it will be replaced
 // and a warning will be logged.
 func (s *Service) Register(name string, handler RPCMethod) {
+	// Type assert to internal handler interface
+	h, ok := handler.(rpcHandler)
+	if !ok {
+		panic("tygor: handler must be created with Unary() or UnaryGet()")
+	}
+
 	key := s.name + "." + name
 	s.registry.mu.Lock()
 	defer s.registry.mu.Unlock()
@@ -207,18 +215,9 @@ func (s *Service) Register(name string, handler RPCMethod) {
 			slog.String("route", key))
 	}
 
-	// We need to wrap the handler or somehow attach the service interceptors?
-	// The handler.ServeHTTP takes a list of prefix interceptors.
-	// But `Register` is called ONCE. `ServeHTTP` is called MANY times.
-	// The `prefixInterceptors` passed to `handler.ServeHTTP` in `App.ServeHTTP`
-	// are the Global ones.
-	// We need to include the Service ones too.
-	// But App doesn't store Service objects, it stores routes map[string]RPCMethod.
-	// We lose the Service object after registration.
-	// So we must Wrap the RPCMethod to include the Service interceptors.
-
+	// Wrap the handler to include service interceptors
 	wrappedHandler := &serviceWrappedHandler{
-		inner:        handler,
+		inner:        h,
 		interceptors: s.interceptors,
 	}
 
@@ -226,27 +225,24 @@ func (s *Service) Register(name string, handler RPCMethod) {
 }
 
 type serviceWrappedHandler struct {
-	inner        RPCMethod
+	inner        rpcHandler
 	interceptors []UnaryInterceptor
 }
 
-func (h *serviceWrappedHandler) ServeHTTP(w http.ResponseWriter, r *http.Request, config HandlerConfig) {
-	// Combine: Global (config.Interceptors) + Service (h.interceptors)
-	combined := make([]UnaryInterceptor, 0, len(config.Interceptors)+len(h.interceptors))
-	combined = append(combined, config.Interceptors...)
+func (h *serviceWrappedHandler) IsRPCMethod() {}
+
+func (h *serviceWrappedHandler) serveHTTP(ctx *Context) {
+	// Combine: Global (ctx.interceptors) + Service (h.interceptors)
+	combined := make([]UnaryInterceptor, 0, len(ctx.interceptors)+len(h.interceptors))
+	combined = append(combined, ctx.interceptors...)
 	combined = append(combined, h.interceptors...)
 
-	// Build new config with combined interceptors
-	serviceConfig := HandlerConfig{
-		ErrorTransformer:   config.ErrorTransformer,
-		MaskInternalErrors: config.MaskInternalErrors,
-		Interceptors:       combined,
-		Logger:             config.Logger,
-	}
+	// Update context with combined interceptors
+	ctx.interceptors = combined
 
-	h.inner.ServeHTTP(w, r, serviceConfig)
+	h.inner.serveHTTP(ctx)
 }
 
-func (h *serviceWrappedHandler) Metadata() *meta.MethodMetadata {
-	return h.inner.Metadata()
+func (h *serviceWrappedHandler) metadata() *meta.MethodMetadata {
+	return h.inner.metadata()
 }

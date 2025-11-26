@@ -18,7 +18,8 @@ func (r *App) ExportRoutes() map[string]ExportedRoute {
 
 	exported := make(map[string]ExportedRoute)
 	for k, v := range r.routes {
-		meta := v.Metadata()
+		h := v.(rpcHandler)
+		meta := h.metadata()
 		exported[k] = ExportedRoute{
 			Name:       k,
 			Request:    meta.Request,

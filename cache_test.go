@@ -6,8 +6,6 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
-
-	"github.com/broady/tygor/internal/tygortest"
 )
 
 type CacheTestRequest struct {
@@ -36,10 +34,9 @@ func TestGetHandler_CacheControl_Simple(t *testing.T) {
 	// Verify header is set in HTTP response
 	req := httptest.NewRequest("GET", "/test?query=hello", nil)
 	w := httptest.NewRecorder()
-	ctx := tygortest.NewTestContext(req.Context(), w, req, "Test", "Cache")
-	req = req.WithContext(ctx)
+	ctx := newTestContext(w, req, testContextConfig{})
 
-	handler.ServeHTTP(w, req, HandlerConfig{})
+	handler.serveHTTP(ctx)
 
 	if w.Header().Get("Cache-Control") != expected {
 		t.Errorf("expected Cache-Control header %q, got %q", expected, w.Header().Get("Cache-Control"))
@@ -230,10 +227,9 @@ func TestGetHandler_CacheControl_NoCache(t *testing.T) {
 	// Verify no header in HTTP response
 	req := httptest.NewRequest("GET", "/test?query=hello", nil)
 	w := httptest.NewRecorder()
-	ctx := tygortest.NewTestContext(req.Context(), w, req, "Test", "NoCache")
-	req = req.WithContext(ctx)
+	ctx := newTestContext(w, req, testContextConfig{})
 
-	handler.ServeHTTP(w, req, HandlerConfig{})
+	handler.serveHTTP(ctx)
 
 	if w.Header().Get("Cache-Control") != "" {
 		t.Errorf("expected no Cache-Control header, got %q", w.Header().Get("Cache-Control"))
@@ -251,10 +247,9 @@ func TestHandler_POST_NoCache(t *testing.T) {
 	// Verify no Cache-Control header in HTTP response
 	req := httptest.NewRequest("POST", "/test", nil)
 	w := httptest.NewRecorder()
-	ctx := tygortest.NewTestContext(req.Context(), w, req, "Test", "Create")
-	req = req.WithContext(ctx)
+	ctx := newTestContext(w, req, testContextConfig{})
 
-	handler.ServeHTTP(w, req, HandlerConfig{})
+	handler.serveHTTP(ctx)
 
 	if w.Header().Get("Cache-Control") != "" {
 		t.Errorf("expected no Cache-Control header for POST, got %q", w.Header().Get("Cache-Control"))
@@ -291,7 +286,7 @@ func TestGetHandler_Metadata_ReflectsCacheTTL(t *testing.T) {
 	ttl := 10 * time.Minute
 	handler := UnaryGet(fn).CacheControl(CacheConfig{MaxAge: ttl})
 
-	meta := handler.Metadata()
+	meta := handler.metadata()
 	if meta.CacheTTL != ttl {
 		t.Errorf("expected Metadata().CacheTTL = %v, got %v", ttl, meta.CacheTTL)
 	}
@@ -311,10 +306,9 @@ func TestGetHandler_CacheControl_EndToEnd(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/test?query=hello", nil)
 	w := httptest.NewRecorder()
-	ctx := tygortest.NewTestContext(req.Context(), w, req, "Test", "List")
-	req = req.WithContext(ctx)
+	ctx := newTestContext(w, req, testContextConfig{})
 
-	handler.ServeHTTP(w, req, HandlerConfig{})
+	handler.serveHTTP(ctx)
 
 	// Verify status
 	if w.Code != http.StatusOK {

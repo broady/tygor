@@ -28,20 +28,22 @@ func init() {
 	strictSchemaDecoder.IgnoreUnknownKeys(false)
 }
 
-// HandlerConfig contains configuration passed from App to handlers.
-type HandlerConfig struct {
-	ErrorTransformer   ErrorTransformer
-	MaskInternalErrors bool
-	Interceptors       []UnaryInterceptor
-	Logger             *slog.Logger
-	MaxRequestBodySize uint64
+// RPCMethod is the interface for handlers that can be registered with [Service.Register].
+//
+// Implementations:
+//   - [*UnaryPostHandler] - for POST requests (created with [Unary])
+//   - [*UnaryGetHandler] - for GET requests (created with [UnaryGet])
+type RPCMethod interface {
+	// IsRPCMethod is a marker method that identifies valid handler types.
+	// It is not meant to be called directly.
+	IsRPCMethod()
 }
 
-// RPCMethod is the interface for registered handlers.
-// It is exported so users can pass it to Register, but sealed so they cannot implement it.
-type RPCMethod interface {
-	ServeHTTP(w http.ResponseWriter, r *http.Request, config HandlerConfig)
-	Metadata() *meta.MethodMetadata
+// rpcHandler is the internal interface used by the framework to serve requests.
+type rpcHandler interface {
+	RPCMethod
+	serveHTTP(ctx *Context)
+	metadata() *meta.MethodMetadata
 }
 
 // unaryBase contains common configuration shared by UnaryPostHandler and UnaryGetHandler.
@@ -227,8 +229,14 @@ func (h *UnaryGetHandler[Req, Res]) WithSkipValidation() *UnaryGetHandler[Req, R
 	return h
 }
 
-// Metadata returns the runtime metadata for the POST handler.
-func (h *UnaryPostHandler[Req, Res]) Metadata() *meta.MethodMetadata {
+// IsRPCMethod implements [RPCMethod].
+func (h *UnaryPostHandler[Req, Res]) IsRPCMethod() {}
+
+// IsRPCMethod implements [RPCMethod].
+func (h *UnaryGetHandler[Req, Res]) IsRPCMethod() {}
+
+// metadata returns the runtime metadata for the POST handler.
+func (h *UnaryPostHandler[Req, Res]) metadata() *meta.MethodMetadata {
 	var req Req
 	var res Res
 	return &meta.MethodMetadata{
@@ -239,8 +247,8 @@ func (h *UnaryPostHandler[Req, Res]) Metadata() *meta.MethodMetadata {
 	}
 }
 
-// Metadata returns the runtime metadata for the GET handler.
-func (h *UnaryGetHandler[Req, Res]) Metadata() *meta.MethodMetadata {
+// metadata returns the runtime metadata for the GET handler.
+func (h *UnaryGetHandler[Req, Res]) metadata() *meta.MethodMetadata {
 	var req Req
 	var res Res
 	m := &meta.MethodMetadata{
@@ -314,8 +322,8 @@ func (h *UnaryGetHandler[Req, Res]) getCacheControlHeader() string {
 	return result
 }
 
-// ServeHTTP implements the RPC handler for GET requests with caching support.
-func (h *UnaryGetHandler[Req, Res]) ServeHTTP(w http.ResponseWriter, r *http.Request, config HandlerConfig) {
+// serveHTTP implements the RPC handler for GET requests with caching support.
+func (h *UnaryGetHandler[Req, Res]) serveHTTP(ctx *Context) {
 	decoder := func() (Req, error) {
 		var req Req
 		// Select decoder based on strictness setting
@@ -330,28 +338,28 @@ func (h *UnaryGetHandler[Req, Res]) ServeHTTP(w http.ResponseWriter, r *http.Req
 			val := reflect.New(reqType.Elem())
 			// val is *Elem.
 			// Decode into it
-			if err := decoder.Decode(val.Interface(), r.URL.Query()); err != nil {
+			if err := decoder.Decode(val.Interface(), ctx.request.URL.Query()); err != nil {
 				return req, Errorf(CodeInvalidArgument, "failed to decode query: %v", err)
 			}
 			req = val.Interface().(Req)
 		} else {
 			// Req is a struct. &req is *Req.
-			if err := decoder.Decode(&req, r.URL.Query()); err != nil {
+			if err := decoder.Decode(&req, ctx.request.URL.Query()); err != nil {
 				return req, Errorf(CodeInvalidArgument, "failed to decode query: %v", err)
 			}
 		}
 		return req, nil
 	}
-	h.serve(w, r, config, h.getCacheControlHeader(), decoder)
+	h.serve(ctx, h.getCacheControlHeader(), decoder)
 }
 
-// ServeHTTP implements the RPC handler for POST requests.
-func (h *UnaryPostHandler[Req, Res]) ServeHTTP(w http.ResponseWriter, r *http.Request, config HandlerConfig) {
+// serveHTTP implements the RPC handler for POST requests.
+func (h *UnaryPostHandler[Req, Res]) serveHTTP(ctx *Context) {
 	decoder := func() (Req, error) {
 		var req Req
-		if r.Body != nil {
+		if ctx.request.Body != nil {
 			// Determine effective body size limit
-			effectiveLimit := config.MaxRequestBodySize
+			effectiveLimit := ctx.maxRequestBodySize
 			if h.maxRequestBodySize != nil {
 				effectiveLimit = *h.maxRequestBodySize
 			}
@@ -359,38 +367,30 @@ func (h *UnaryPostHandler[Req, Res]) ServeHTTP(w http.ResponseWriter, r *http.Re
 			// Apply body size limit if > 0
 			// 0 means unlimited for backwards compatibility
 			if effectiveLimit > 0 {
-				r.Body = http.MaxBytesReader(w, r.Body, int64(effectiveLimit))
+				ctx.request.Body = http.MaxBytesReader(ctx.writer, ctx.request.Body, int64(effectiveLimit))
 			}
 
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			if err := json.NewDecoder(ctx.request.Body).Decode(&req); err != nil {
 				return req, Errorf(CodeInvalidArgument, "failed to decode body: %v", err)
 			}
 		}
 		return req, nil
 	}
-	h.serve(w, r, config, "", decoder)
+	h.serve(ctx, "", decoder)
 }
 
 // serve implements the generic glue code for both UnaryPostHandler and UnaryGetHandler.
-func (h *unaryBase[Req, Res]) serve(w http.ResponseWriter, r *http.Request, config HandlerConfig, cacheControl string, decodeFunc func() (Req, error)) {
-	// 1. Get tygor Context (set by App)
-	tygorCtx, ok := FromContext(r.Context())
-	if !ok {
-		// This shouldn't happen if called through App, but handle gracefully
-		handleError(w, NewError(CodeInternal, "missing tygor context"), config)
-		return
-	}
-
-	// 2. Combine Interceptors
-	// Config contains: Global + Service interceptors
+func (h *unaryBase[Req, Res]) serve(ctx *Context, cacheControl string, decodeFunc func() (Req, error)) {
+	// 1. Combine Interceptors
+	// ctx.interceptors contains: Global + Service interceptors
 	// We append Handler-level interceptors
-	allInterceptors := make([]UnaryInterceptor, 0, len(config.Interceptors)+len(h.interceptors))
-	allInterceptors = append(allInterceptors, config.Interceptors...)
+	allInterceptors := make([]UnaryInterceptor, 0, len(ctx.interceptors)+len(h.interceptors))
+	allInterceptors = append(allInterceptors, ctx.interceptors...)
 	allInterceptors = append(allInterceptors, h.interceptors...)
 
 	chain := chainInterceptors(allInterceptors)
 
-	// 3. Decode Request
+	// 2. Decode Request
 	req, decodeErr := func() (Req, error) {
 		req, err := decodeFunc()
 		if err != nil {
@@ -406,65 +406,65 @@ func (h *unaryBase[Req, Res]) serve(w http.ResponseWriter, r *http.Request, conf
 	}()
 
 	if decodeErr != nil {
-		handleError(w, decodeErr, config)
+		handleError(ctx, decodeErr)
 		return
 	}
 
-	// 4. Execute Chain
+	// 3. Execute Chain
 	// The chain eventually calls the user function.
 
-	finalHandler := func(ctx context.Context, reqAny any) (any, error) {
+	finalHandler := func(c context.Context, reqAny any) (any, error) {
 		// Type assertion should be safe here because we only pass 'req' (type Req) into the chain.
 		reqTyped, ok := reqAny.(Req)
 		if !ok {
 			return nil, Errorf(CodeInternal, "interceptor modified request type incorrectly")
 		}
-		return h.fn(ctx, reqTyped)
+		return h.fn(c, reqTyped)
 	}
 
 	var res any
 	var err error
 
 	if chain != nil {
-		res, err = chain(tygorCtx, req, finalHandler)
+		res, err = chain(ctx, req, finalHandler)
 	} else {
-		res, err = finalHandler(tygorCtx, req)
+		res, err = finalHandler(ctx, req)
 	}
 
 	if err != nil {
-		handleError(w, err, config)
+		handleError(ctx, err)
 		return
 	}
 
-	// 5. Write Response
-	w.Header().Set("Content-Type", "application/json")
+	// 4. Write Response
+	ctx.writer.Header().Set("Content-Type", "application/json")
 	if cacheControl != "" {
-		w.Header().Set("Cache-Control", cacheControl)
+		ctx.writer.Header().Set("Cache-Control", cacheControl)
 	}
 
-	if err := encodeResponse(w, res); err != nil {
+	if err := encodeResponse(ctx.writer, res); err != nil {
 		// Response may be partially written, nothing we can do. Log for debugging.
-		logger := config.Logger
+		logger := ctx.logger
 		if logger == nil {
 			logger = slog.Default()
 		}
 		logger.Error("failed to encode response",
-			slog.String("service", tygorCtx.Service()),
-			slog.String("method", tygorCtx.Method()),
+			slog.String("service", ctx.Service()),
+			slog.String("method", ctx.Method()),
 			slog.Any("error", err))
 	}
 }
 
-func handleError(w http.ResponseWriter, err error, config HandlerConfig) {
+func handleError(ctx *Context, err error) {
 	var rpcErr *Error
-	if config.ErrorTransformer != nil {
-		rpcErr = config.ErrorTransformer(err)
+	if ctx.errorTransformer != nil {
+		rpcErr = ctx.errorTransformer(err)
 	}
 	if rpcErr == nil {
 		rpcErr = DefaultErrorTransformer(err)
 	}
-	if config.MaskInternalErrors && rpcErr.Code == CodeInternal {
+	if ctx.maskInternalErrors && rpcErr.Code == CodeInternal {
 		rpcErr.Message = "internal server error"
 	}
-	writeError(w, rpcErr, config.Logger)
+	writeError(ctx.writer, rpcErr, ctx.logger)
 }
