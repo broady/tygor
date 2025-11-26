@@ -4,7 +4,9 @@ import (
 	"context"
 )
 
-// HandlerFunc represents the next handler in the chain.
+// HandlerFunc represents the next handler in an interceptor chain.
+// It is passed to [UnaryInterceptor] functions to invoke the next interceptor
+// or the final handler.
 type HandlerFunc func(ctx context.Context, req any) (res any, err error)
 
 // UnaryInterceptor is a hook that wraps RPC handler execution for unary (non-streaming) calls.
