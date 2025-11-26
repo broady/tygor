@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/broady/tygor/internal"
 	"github.com/broady/tygor/internal/meta"
 	"github.com/go-playground/validator/v10"
 	"github.com/gorilla/schema"
@@ -34,9 +35,9 @@ func init() {
 //   - [*UnaryPostHandler] - for POST requests (created with [Unary])
 //   - [*UnaryGetHandler] - for GET requests (created with [UnaryGet])
 type RPCMethod interface {
-	// IsRPCMethod is a marker method that identifies valid handler types.
-	// It is not meant to be called directly.
-	IsRPCMethod()
+	// Metadata returns route metadata for code generation.
+	// The return type is internal; this method is for use by tygorgen only.
+	Metadata() *internal.MethodMetadata
 }
 
 // rpcHandler is the internal interface used by the framework to serve requests.
@@ -229,11 +230,27 @@ func (h *UnaryGetHandler[Req, Res]) WithSkipValidation() *UnaryGetHandler[Req, R
 	return h
 }
 
-// IsRPCMethod implements [RPCMethod].
-func (h *UnaryPostHandler[Req, Res]) IsRPCMethod() {}
+// Metadata implements [RPCMethod].
+func (h *UnaryPostHandler[Req, Res]) Metadata() *internal.MethodMetadata {
+	var req Req
+	var res Res
+	return &internal.MethodMetadata{
+		HTTPMethod: "POST",
+		Request:    reflect.TypeOf(req),
+		Response:   reflect.TypeOf(res),
+	}
+}
 
-// IsRPCMethod implements [RPCMethod].
-func (h *UnaryGetHandler[Req, Res]) IsRPCMethod() {}
+// Metadata implements [RPCMethod].
+func (h *UnaryGetHandler[Req, Res]) Metadata() *internal.MethodMetadata {
+	var req Req
+	var res Res
+	return &internal.MethodMetadata{
+		HTTPMethod: "GET",
+		Request:    reflect.TypeOf(req),
+		Response:   reflect.TypeOf(res),
+	}
+}
 
 // metadata returns the runtime metadata for the POST handler.
 func (h *UnaryPostHandler[Req, Res]) metadata() *meta.MethodMetadata {

@@ -1,31 +1,18 @@
 package tygor
 
-import "reflect"
+import "github.com/broady/tygor/internal"
 
-// ExportedRoute contains metadata about a registered route for code generation.
-type ExportedRoute struct {
-	Name       string
-	Request    reflect.Type
-	Response   reflect.Type
-	HTTPMethod string
-}
+// Routes returns route metadata for code generation.
+// The return type is internal; this method is for use by tygorgen only.
+func (a *App) Routes() internal.RouteMap {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
 
-// ExportRoutes returns all registered routes for code generation purposes.
-// This is used by the generator package.
-func (r *App) ExportRoutes() map[string]ExportedRoute {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	exported := make(map[string]ExportedRoute)
-	for k, v := range r.routes {
-		h := v.(rpcHandler)
-		meta := h.metadata()
-		exported[k] = ExportedRoute{
-			Name:       k,
-			Request:    meta.Request,
-			Response:   meta.Response,
-			HTTPMethod: meta.HTTPMethod,
-		}
+	routes := make(internal.RouteMap)
+	for name, method := range a.routes {
+		md := method.Metadata()
+		md.Name = name
+		routes[name] = md
 	}
-	return exported
+	return routes
 }

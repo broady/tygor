@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/broady/tygor/internal"
 	"github.com/broady/tygor/internal/meta"
 )
 
@@ -34,17 +35,17 @@ func NewApp() *App {
 
 // WithErrorTransformer adds a custom error transformer.
 // It returns the app for chaining.
-func (r *App) WithErrorTransformer(fn ErrorTransformer) *App {
-	r.errorTransformer = fn
-	return r
+func (a *App) WithErrorTransformer(fn ErrorTransformer) *App {
+	a.errorTransformer = fn
+	return a
 }
 
 // WithMaskInternalErrors enables masking of internal error messages.
 // This is useful in production to avoid leaking sensitive information.
 // The original error is still available to interceptors and logging.
-func (r *App) WithMaskInternalErrors() *App {
-	r.maskInternalErrors = true
-	return r
+func (a *App) WithMaskInternalErrors() *App {
+	a.maskInternalErrors = true
+	return a
 }
 
 // WithUnaryInterceptor adds a global interceptor.
@@ -57,31 +58,31 @@ func (r *App) WithMaskInternalErrors() *App {
 //  4. Handler function
 //
 // Within each level, interceptors execute in the order they were added.
-func (r *App) WithUnaryInterceptor(i UnaryInterceptor) *App {
-	r.interceptors = append(r.interceptors, i)
-	return r
+func (a *App) WithUnaryInterceptor(i UnaryInterceptor) *App {
+	a.interceptors = append(a.interceptors, i)
+	return a
 }
 
 // WithMiddleware adds an HTTP middleware to wrap the app.
 // Middleware is applied in the order added (first added is outermost).
-func (r *App) WithMiddleware(mw func(http.Handler) http.Handler) *App {
-	r.middlewares = append(r.middlewares, mw)
-	return r
+func (a *App) WithMiddleware(mw func(http.Handler) http.Handler) *App {
+	a.middlewares = append(a.middlewares, mw)
+	return a
 }
 
 // WithLogger sets a custom logger for the app.
 // If not set, slog.Default() will be used.
-func (r *App) WithLogger(logger *slog.Logger) *App {
-	r.logger = logger
-	return r
+func (a *App) WithLogger(logger *slog.Logger) *App {
+	a.logger = logger
+	return a
 }
 
 // WithMaxRequestBodySize sets the default maximum request body size for all handlers.
 // Individual handlers can override this with Handler.WithMaxRequestBodySize.
 // A value of 0 means no limit. Default is 1MB (1 << 20).
-func (r *App) WithMaxRequestBodySize(size uint64) *App {
-	r.maxRequestBodySize = size
-	return r
+func (a *App) WithMaxRequestBodySize(size uint64) *App {
+	a.maxRequestBodySize = size
+	return a
 }
 
 // Handler returns an http.Handler for use with http.ListenAndServe or other
@@ -91,36 +92,36 @@ func (r *App) WithMaxRequestBodySize(size uint64) *App {
 //
 //	app := tygor.NewApp().WithMiddleware(cors)
 //	http.ListenAndServe(":8080", app.Handler())
-func (r *App) Handler() http.Handler {
-	var h http.Handler = http.HandlerFunc(r.serveHTTP)
+func (a *App) Handler() http.Handler {
+	var h http.Handler = http.HandlerFunc(a.serveHTTP)
 	// Apply middleware in reverse order so first added is outermost
-	for i := len(r.middlewares) - 1; i >= 0; i-- {
-		h = r.middlewares[i](h)
+	for i := len(a.middlewares) - 1; i >= 0; i-- {
+		h = a.middlewares[i](h)
 	}
 	return h
 }
 
 // Service returns a Service namespace.
-func (r *App) Service(name string) *Service {
+func (a *App) Service(name string) *Service {
 	return &Service{
-		registry: r,
+		registry: a,
 		name:     name,
 	}
 }
 
 // serveHTTP handles incoming RPC requests (internal, called via Handler()).
-func (r *App) serveHTTP(w http.ResponseWriter, req *http.Request) {
+func (a *App) serveHTTP(w http.ResponseWriter, req *http.Request) {
 	defer func() {
 		if rec := recover(); rec != nil {
 			stack := debug.Stack()
-			logger := r.logger
+			logger := a.logger
 			if logger == nil {
 				logger = slog.Default()
 			}
 			logger.Error("PANIC recovered",
 				slog.Any("panic", rec),
 				slog.String("stack", string(stack)))
-			writeError(w, NewError(CodeInternal, fmt.Sprintf("internal server error (panic): %v", rec)), r.logger)
+			writeError(w, NewError(CodeInternal, fmt.Sprintf("internal server error (panic): %v", rec)), a.logger)
 		}
 	}()
 
@@ -130,7 +131,7 @@ func (r *App) serveHTTP(w http.ResponseWriter, req *http.Request) {
 	// Normalize path
 	parts := strings.Split(path, "/")
 	if len(parts) < 2 {
-		writeError(w, NewError(CodeNotFound, "route not found"), r.logger)
+		writeError(w, NewError(CodeNotFound, "route not found"), a.logger)
 		return
 	}
 
@@ -140,36 +141,36 @@ func (r *App) serveHTTP(w http.ResponseWriter, req *http.Request) {
 	// But the URL is /Service/Method.
 	key := service + "." + method
 
-	r.mu.RLock()
-	handler, ok := r.routes[key]
-	r.mu.RUnlock()
+	a.mu.RLock()
+	handler, ok := a.routes[key]
+	a.mu.RUnlock()
 
 	if !ok {
-		writeError(w, NewError(CodeNotFound, "route not found"), r.logger)
+		writeError(w, NewError(CodeNotFound, "route not found"), a.logger)
 		return
 	}
 
 	// Type assert to internal handler interface
 	h, ok := handler.(rpcHandler)
 	if !ok {
-		writeError(w, NewError(CodeInternal, "invalid handler type"), r.logger)
+		writeError(w, NewError(CodeInternal, "invalid handler type"), a.logger)
 		return
 	}
 
 	// Check HTTP Method
 	meta := h.metadata()
 	if req.Method != meta.HTTPMethod {
-		writeError(w, Errorf(CodeMethodNotAllowed, "method %s not allowed, expected %s", req.Method, meta.HTTPMethod), r.logger)
+		writeError(w, Errorf(CodeMethodNotAllowed, "method %s not allowed, expected %s", req.Method, meta.HTTPMethod), a.logger)
 		return
 	}
 
 	// Create tygor Context with RPC metadata and config
 	ctx := newContext(req.Context(), w, req, service, method)
-	ctx.errorTransformer = r.errorTransformer
-	ctx.maskInternalErrors = r.maskInternalErrors
-	ctx.interceptors = r.interceptors
-	ctx.logger = r.logger
-	ctx.maxRequestBodySize = r.maxRequestBodySize
+	ctx.errorTransformer = a.errorTransformer
+	ctx.maskInternalErrors = a.maskInternalErrors
+	ctx.interceptors = a.interceptors
+	ctx.logger = a.logger
+	ctx.maxRequestBodySize = a.maxRequestBodySize
 
 	// Execute handler
 	h.serveHTTP(ctx)
@@ -229,7 +230,6 @@ type serviceWrappedHandler struct {
 	interceptors []UnaryInterceptor
 }
 
-func (h *serviceWrappedHandler) IsRPCMethod() {}
 
 func (h *serviceWrappedHandler) serveHTTP(ctx *Context) {
 	// Combine: Global (ctx.interceptors) + Service (h.interceptors)
@@ -245,4 +245,8 @@ func (h *serviceWrappedHandler) serveHTTP(ctx *Context) {
 
 func (h *serviceWrappedHandler) metadata() *meta.MethodMetadata {
 	return h.inner.metadata()
+}
+
+func (h *serviceWrappedHandler) Metadata() *internal.MethodMetadata {
+	return h.inner.Metadata()
 }
