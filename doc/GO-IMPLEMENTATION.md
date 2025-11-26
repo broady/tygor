@@ -423,31 +423,41 @@ h := tygor.Unary(fn).WithSkipValidation()
 
 ### 9.1 Sealed `RPCMethod` Interface
 
-The `RPCMethod` interface MUST be sealed to prevent external implementations. This is achieved by having the `Metadata()` method return a type from an internal package.
+The `RPCMethod` interface MUST be sealed to prevent external implementations. This can be achieved through any mechanism that prevents external packages from satisfying the interface, such as:
 
-**`internal/meta` Package:**
+1. **Internal type in method signature**: A method returning an internal package type (e.g., `Metadata() *internal.Type`)
+2. **Marker method with internal assertion**: A public marker method combined with runtime type assertion to an internal interface
+3. **Unexported method**: An unexported method that external packages cannot implement
+
+**Example using marker method:**
 ```go
-package meta
+package tygor
 
-type MethodMetadata struct {
-    HTTPMethod   string
-    CacheDuration time.Duration
-    ReqType      reflect.Type
-    ResType      reflect.Type
+// RPCMethod is the public interface for handler registration.
+type RPCMethod interface {
+    IsRPCMethod() // Marker method
+}
+
+// rpcHandler is the internal interface used by the framework.
+// External packages cannot implement this because Service.Register
+// type-asserts to this interface.
+type rpcHandler interface {
+    RPCMethod
+    serveHTTP(ctx *Context)
+    metadata() *meta.MethodMetadata
 }
 ```
 
-**Root Package:**
+**Example using internal type:**
 ```go
 package tygor
 
 type RPCMethod interface {
-    ServeHTTP(http.ResponseWriter, *http.Request)
     Metadata() *meta.MethodMetadata // Cannot be implemented outside this module
 }
 ```
 
-This ensures that only handlers created via `tygor.NewHandler` can be registered.
+The implementation MUST ensure that only handlers created via `Unary()` or `UnaryGet()` can be registered with `Service.Register()`.
 
 ---
 
