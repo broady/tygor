@@ -228,8 +228,8 @@ func TestApp_GlobalInterceptor(t *testing.T) {
 
 	reg := NewApp().WithUnaryInterceptor(func(ctx *Context, req any, handler HandlerFunc) (any, error) {
 		interceptorCalled = true
-		if ctx.Service() != "Test" || ctx.Method() != "Method" {
-			t.Errorf("unexpected RPC info: service=%s, method=%s", ctx.Service(), ctx.Method())
+		if ctx.EndpointID() != "Test.Method" {
+			t.Errorf("unexpected endpoint: %s", ctx.EndpointID())
 		}
 		return handler(ctx, req)
 	})
@@ -377,7 +377,7 @@ func TestApp_ContextPropagation(t *testing.T) {
 	reg := NewApp()
 
 	fn := func(ctx context.Context, req TestRequest) (TestResponse, error) {
-		// Verify context has request, writer, and RPC info via FromContext
+		// Verify context has request, writer, and service info via FromContext
 		tc, ok := FromContext(ctx)
 		if !ok {
 			t.Fatal("expected tygor context")
@@ -387,11 +387,8 @@ func TestApp_ContextPropagation(t *testing.T) {
 			t.Error("expected request in context")
 		}
 
-		if tc.Service() != "Test" {
-			t.Errorf("expected service 'Test', got %s", tc.Service())
-		}
-		if tc.Method() != "Method" {
-			t.Errorf("expected method 'Method', got %s", tc.Method())
+		if tc.EndpointID() != "Test.Method" {
+			t.Errorf("expected endpoint 'Test.Method', got %s", tc.EndpointID())
 		}
 
 		// Test setting header via HTTPWriter

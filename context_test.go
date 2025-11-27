@@ -14,11 +14,11 @@ func TestContext_Service(t *testing.T) {
 	}
 }
 
-func TestContext_Method(t *testing.T) {
+func TestContext_EndpointID(t *testing.T) {
 	ctx := NewContext(context.Background(), "TestService", "TestMethod")
 
-	if ctx.Method() != "TestMethod" {
-		t.Errorf("expected method 'TestMethod', got %s", ctx.Method())
+	if ctx.EndpointID() != "TestService.TestMethod" {
+		t.Errorf("expected endpoint 'TestService.TestMethod', got %s", ctx.EndpointID())
 	}
 }
 
@@ -63,11 +63,8 @@ func TestFromContext_Found(t *testing.T) {
 	if !ok {
 		t.Fatal("expected FromContext to return true")
 	}
-	if tc.Service() != "TestService" {
-		t.Errorf("expected service 'TestService', got %s", tc.Service())
-	}
-	if tc.Method() != "TestMethod" {
-		t.Errorf("expected method 'TestMethod', got %s", tc.Method())
+	if tc.EndpointID() != "TestService.TestMethod" {
+		t.Errorf("expected endpoint 'TestService.TestMethod', got %s", tc.EndpointID())
 	}
 }
 
@@ -103,11 +100,8 @@ func TestFromContext_AfterWithValue(t *testing.T) {
 func TestNewContext(t *testing.T) {
 	ctx := NewContext(context.Background(), "TestService", "TestMethod")
 
-	if ctx.Service() != "TestService" {
-		t.Errorf("expected service 'TestService', got %s", ctx.Service())
-	}
-	if ctx.Method() != "TestMethod" {
-		t.Errorf("expected method 'TestMethod', got %s", ctx.Method())
+	if ctx.EndpointID() != "TestService.TestMethod" {
+		t.Errorf("expected endpoint 'TestService.TestMethod', got %s", ctx.EndpointID())
 	}
 
 	// HTTPRequest and HTTPWriter should be nil when created via NewContext

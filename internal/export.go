@@ -4,7 +4,7 @@ package internal
 
 import "reflect"
 
-// MethodMetadata holds runtime metadata for a registered RPC method.
+// MethodMetadata holds runtime metadata for a registered service method.
 type MethodMetadata struct {
 	Name       string
 	HTTPMethod string

@@ -16,7 +16,7 @@ import (
 // Use Handler() to get an http.Handler for use with http.ListenAndServe.
 type App struct {
 	mu                 sync.RWMutex
-	routes             map[string]RPCMethod
+	routes             map[string]Endpoint
 	errorTransformer   ErrorTransformer
 	maskInternalErrors bool
 	interceptors       []UnaryInterceptor
@@ -27,7 +27,7 @@ type App struct {
 
 func NewApp() *App {
 	return &App{
-		routes:             make(map[string]RPCMethod),
+		routes:             make(map[string]Endpoint),
 		maxRequestBodySize: 1 << 20, // 1MB default
 	}
 }
@@ -150,7 +150,7 @@ func (a *App) serveHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Type assert to internal handler interface
-	h, ok := handler.(rpcHandler)
+	h, ok := handler.(endpointHandler)
 	if !ok {
 		writeError(w, NewError(CodeInternal, "invalid handler type"), a.logger)
 		return
@@ -163,7 +163,7 @@ func (a *App) serveHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Create tygor Context with RPC metadata and config
+	// Create tygor Context with request metadata and config
 	ctx := newContext(req.Context(), w, req, service, method)
 	ctx.errorTransformer = a.errorTransformer
 	ctx.maskInternalErrors = a.maskInternalErrors
@@ -192,9 +192,9 @@ func (s *Service) WithUnaryInterceptor(i UnaryInterceptor) *Service {
 // Register registers a handler for the given operation name.
 // If a handler is already registered for this service and method, it will be replaced
 // and a warning will be logged.
-func (s *Service) Register(name string, handler RPCMethod) {
+func (s *Service) Register(name string, handler Endpoint) {
 	// Type assert to internal handler interface
-	h, ok := handler.(rpcHandler)
+	h, ok := handler.(endpointHandler)
 	if !ok {
 		panic("tygor: handler must be created with Exec() or Query()")
 	}
@@ -225,7 +225,7 @@ func (s *Service) Register(name string, handler RPCMethod) {
 }
 
 type serviceWrappedHandler struct {
-	inner        rpcHandler
+	inner        endpointHandler
 	interceptors []UnaryInterceptor
 }
 

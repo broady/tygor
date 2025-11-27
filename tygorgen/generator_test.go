@@ -260,8 +260,8 @@ func TestGenerate_EmptyApp(t *testing.T) {
 
 	// Verify manifest content for empty registry
 	content, _ := os.ReadFile(manifestPath)
-	if !strings.Contains(string(content), "RPCManifest") {
-		t.Error("manifest.ts missing RPCManifest interface")
+	if !strings.Contains(string(content), "Manifest") {
+		t.Error("manifest.ts missing Manifest interface")
 	}
 }
 
@@ -331,8 +331,8 @@ func TestGenerate_ManifestStructure(t *testing.T) {
 	}
 
 	// Verify interface definition
-	if !strings.Contains(manifestStr, "export interface RPCManifest") {
-		t.Error("manifest.ts missing RPCManifest interface")
+	if !strings.Contains(manifestStr, "export interface Manifest") {
+		t.Error("manifest.ts missing Manifest interface")
 	}
 
 	// Verify routes

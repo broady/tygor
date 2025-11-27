@@ -1,5 +1,5 @@
 import { describe, test, expect, mock } from "bun:test";
-import { createClient, TygorError, RPCError, TransportError, ServiceRegistry } from "./runtime";
+import { createClient, TygorError, ServerError, TransportError, ServiceRegistry } from "./runtime";
 
 // Helper to create a mock response
 function mockResponse(status: number, body: any, statusText = "") {
@@ -14,20 +14,20 @@ function mockResponse(status: number, body: any, statusText = "") {
 }
 
 describe("TygorError hierarchy", () => {
-  test("RPCError has correct properties", () => {
-    const error = new RPCError("not_found", "Resource not found", 404);
-    expect(error.name).toBe("RPCError");
-    expect(error.kind).toBe("rpc");
+  test("ServerError has correct properties", () => {
+    const error = new ServerError("not_found", "Resource not found", 404);
+    expect(error.name).toBe("ServerError");
+    expect(error.kind).toBe("server");
     expect(error.code).toBe("not_found");
     expect(error.message).toBe("Resource not found");
     expect(error.httpStatus).toBe(404);
     expect(error.details).toBeUndefined();
     expect(error).toBeInstanceOf(TygorError);
-    expect(error).toBeInstanceOf(RPCError);
+    expect(error).toBeInstanceOf(ServerError);
   });
 
-  test("RPCError with details", () => {
-    const error = new RPCError("validation_error", "Invalid input", 400, {
+  test("ServerError with details", () => {
+    const error = new ServerError("validation_error", "Invalid input", 400, {
       field: "email",
       reason: "invalid format",
     });
@@ -48,19 +48,19 @@ describe("TygorError hierarchy", () => {
   });
 
   test("can discriminate error types", () => {
-    const rpcError: TygorError = new RPCError("not_found", "Not found", 404);
+    const serverError: TygorError = new ServerError("not_found", "Not found", 404);
     const transportError: TygorError = new TransportError("Bad Gateway", 502);
 
     // instanceof narrowing
-    if (rpcError instanceof RPCError) {
-      expect(rpcError.code).toBe("not_found");
+    if (serverError instanceof ServerError) {
+      expect(serverError.code).toBe("not_found");
     }
     if (transportError instanceof TransportError) {
       expect(transportError.httpStatus).toBe(502);
     }
 
     // kind discriminant
-    expect(rpcError.kind).toBe("rpc");
+    expect(serverError.kind).toBe("server");
     expect(transportError.kind).toBe("transport");
   });
 });
@@ -155,7 +155,7 @@ describe("createClient", () => {
     expect(result).toEqual({ data: "success" });
   });
 
-  test("error response with valid JSON error envelope (RPCError)", async () => {
+  test("error response with valid JSON error envelope (ServerError)", async () => {
     const mockFetch = mock(async () => mockResponse(400, {
       error: {
         code: "invalid_input",
@@ -171,8 +171,8 @@ describe("createClient", () => {
       await client.Test.Get({ id: "123" });
       expect.unreachable("Should have thrown an error");
     } catch (e: any) {
-      expect(e).toBeInstanceOf(RPCError);
-      expect(e.kind).toBe("rpc");
+      expect(e).toBeInstanceOf(ServerError);
+      expect(e.kind).toBe("server");
       expect(e.code).toBe("invalid_input");
       expect(e.message).toBe("Email is required");
       expect(e.httpStatus).toBe(400);
@@ -234,7 +234,7 @@ describe("createClient", () => {
       await client.Test.Get({ id: "123" });
       expect.unreachable("Should have thrown an error");
     } catch (e: any) {
-      expect(e).toBeInstanceOf(RPCError);
+      expect(e).toBeInstanceOf(ServerError);
       expect(e.code).toBe("unknown");
       expect(e.message).toBe("Something went wrong");
     }
@@ -252,18 +252,18 @@ describe("createClient", () => {
       await client.Test.Get({ id: "123" });
       expect.unreachable("Should have thrown an error");
     } catch (e: any) {
-      expect(e).toBeInstanceOf(RPCError);
+      expect(e).toBeInstanceOf(ServerError);
       expect(e.code).toBe("forbidden");
       expect(e.message).toBe("Unknown error");
     }
   });
 
-  test("throws error for unknown RPC method", () => {
+  test("throws error for unknown service method", () => {
     const client = createClient(mockRegistry, { baseUrl: "http://localhost:8080" });
 
     expect(() => {
       (client as any).Unknown.Method({ test: true });
-    }).toThrow("Unknown RPC method: Unknown.Method");
+    }).toThrow("Unknown service method: Unknown.Method");
   });
 
   test("GET request handles array parameters", async () => {

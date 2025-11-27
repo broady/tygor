@@ -2,7 +2,7 @@
 import { ServiceRegistry } from '@tygor/client';
 import * as types from './types';
 
-export interface RPCManifest {
+export interface Manifest {
   "News.Create": {
     req: types.CreateNewsParams;
     res: types.News;
@@ -18,7 +18,7 @@ const metadata = {
   "News.List": { method: "GET", path: "/News/List" },
 } as const;
 
-export const registry: ServiceRegistry<RPCManifest> = {
-  manifest: {} as RPCManifest,
+export const registry: ServiceRegistry<Manifest> = {
+  manifest: {} as Manifest,
   metadata,
 };

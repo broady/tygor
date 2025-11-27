@@ -177,7 +177,7 @@ func generateManifest(outDir string, routes internal.RouteMap) error {
 	}
 	sort.Strings(keys)
 
-	sb.WriteString("export interface RPCManifest {\n")
+	sb.WriteString("export interface Manifest {\n")
 	for _, key := range keys {
 		route := routes[key]
 		reqType := getTypeName(route.Request)
@@ -199,8 +199,8 @@ func generateManifest(outDir string, routes internal.RouteMap) error {
 	}
 	sb.WriteString("} as const;\n\n")
 
-	sb.WriteString("export const registry: ServiceRegistry<RPCManifest> = {\n")
-	sb.WriteString("  manifest: {} as RPCManifest,\n")
+	sb.WriteString("export const registry: ServiceRegistry<Manifest> = {\n")
+	sb.WriteString("  manifest: {} as Manifest,\n")
 	sb.WriteString("  metadata,\n")
 	sb.WriteString("};\n")
 

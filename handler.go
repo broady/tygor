@@ -28,20 +28,20 @@ func init() {
 	strictSchemaDecoder.IgnoreUnknownKeys(false)
 }
 
-// RPCMethod is the interface for handlers that can be registered with [Service.Register].
+// Endpoint is the interface for handlers that can be registered with [Service.Register].
 //
 // Implementations:
 //   - [*ExecHandler] - for POST requests (created with [Exec])
 //   - [*QueryHandler] - for GET requests (created with [Query])
-type RPCMethod interface {
+type Endpoint interface {
 	// Metadata returns route metadata for code generation.
 	// The return type is internal; this method is for use by tygorgen only.
 	Metadata() *internal.MethodMetadata
 }
 
-// rpcHandler is the internal interface used by the framework to serve requests.
-type rpcHandler interface {
-	RPCMethod
+// endpointHandler is the internal interface used by the framework to serve requests.
+type endpointHandler interface {
+	Endpoint
 	serveHTTP(ctx *Context)
 	metadata() *internal.MethodMetadata
 }
@@ -53,7 +53,7 @@ type handlerBase[Req any, Res any] struct {
 	skipValidation bool
 }
 
-// ExecHandler implements RPCMethod for POST requests (state-changing operations).
+// ExecHandler implements Endpoint for POST requests (state-changing operations).
 //
 // Request Type Guidelines:
 //   - Use struct or pointer types
@@ -85,7 +85,7 @@ func Exec[Req any, Res any](fn func(context.Context, Req) (Res, error)) *ExecHan
 	}
 }
 
-// QueryHandler implements RPCMethod for GET requests (cacheable read operations).
+// QueryHandler implements Endpoint for GET requests (cacheable read operations).
 //
 // Request Type Guidelines:
 //   - Use struct types for simple cases, pointer types when you need optional fields
@@ -229,7 +229,7 @@ func (h *QueryHandler[Req, Res]) WithSkipValidation() *QueryHandler[Req, Res] {
 	return h
 }
 
-// Metadata implements [RPCMethod].
+// Metadata implements [Endpoint].
 func (h *ExecHandler[Req, Res]) Metadata() *internal.MethodMetadata {
 	var req Req
 	var res Res
@@ -240,7 +240,7 @@ func (h *ExecHandler[Req, Res]) Metadata() *internal.MethodMetadata {
 	}
 }
 
-// Metadata implements [RPCMethod].
+// Metadata implements [Endpoint].
 func (h *QueryHandler[Req, Res]) Metadata() *internal.MethodMetadata {
 	var req Req
 	var res Res
@@ -459,22 +459,21 @@ func (h *handlerBase[Req, Res]) serve(ctx *Context, cacheControl string, decodeF
 			logger = slog.Default()
 		}
 		logger.Error("failed to encode response",
-			slog.String("service", ctx.Service()),
-			slog.String("method", ctx.Method()),
+			slog.String("endpoint", ctx.EndpointID()),
 			slog.Any("error", err))
 	}
 }
 
 func handleError(ctx *Context, err error) {
-	var rpcErr *Error
+	var svcErr *Error
 	if ctx.errorTransformer != nil {
-		rpcErr = ctx.errorTransformer(err)
+		svcErr = ctx.errorTransformer(err)
 	}
-	if rpcErr == nil {
-		rpcErr = DefaultErrorTransformer(err)
+	if svcErr == nil {
+		svcErr = DefaultErrorTransformer(err)
 	}
-	if ctx.maskInternalErrors && rpcErr.Code == CodeInternal {
-		rpcErr.Message = "internal server error"
+	if ctx.maskInternalErrors && svcErr.Code == CodeInternal {
+		svcErr.Message = "internal server error"
 	}
-	writeError(ctx.writer, rpcErr, ctx.logger)
+	writeError(ctx.writer, svcErr, ctx.logger)
 }

@@ -212,21 +212,19 @@ func TestChainInterceptors_ContextPropagation(t *testing.T) {
 
 func TestChainInterceptors_ContextAccessible(t *testing.T) {
 	expectedService := "TestService"
-	expectedMethod := "TestMethod"
+	expectedName := "TestMethod"
+	expectedEndpointID := expectedService + "." + expectedName
 
 	interceptor := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
-		if ctx.Service() != expectedService {
-			t.Errorf("expected service %s, got %s", expectedService, ctx.Service())
-		}
-		if ctx.Method() != expectedMethod {
-			t.Errorf("expected method %s, got %s", expectedMethod, ctx.Method())
+		if ctx.EndpointID() != expectedEndpointID {
+			t.Errorf("expected endpoint %s, got %s", expectedEndpointID, ctx.EndpointID())
 		}
 		return handler(ctx, req)
 	}
 
 	chain := chainInterceptors([]UnaryInterceptor{interceptor})
 
-	ctx := NewContext(context.Background(), expectedService, expectedMethod)
+	ctx := NewContext(context.Background(), expectedService, expectedName)
 	handler := func(ctx context.Context, req any) (any, error) {
 		return "success", nil
 	}

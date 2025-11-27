@@ -268,10 +268,10 @@ func TestErrorCode_HTTPStatus(t *testing.T) {
 }
 
 func TestWriteError(t *testing.T) {
-	rpcErr := NewError(CodeNotFound, "resource not found")
+	svcErr := NewError(CodeNotFound, "resource not found")
 	w := httptest.NewRecorder()
 
-	writeError(w, rpcErr, nil)
+	writeError(w, svcErr, nil)
 
 	tygortest.AssertStatus(t, w, http.StatusNotFound)
 	tygortest.AssertHeader(t, w, "Content-Type", "application/json")
@@ -295,7 +295,7 @@ func (fw *failingWriter) WriteHeader(statusCode int) {
 }
 
 func TestWriteError_EncodingFailure(t *testing.T) {
-	rpcErr := NewError(CodeInternal, "test error")
+	svcErr := NewError(CodeInternal, "test error")
 	w := &failingWriter{}
 
 	// Use a test logger to verify error logging
@@ -304,7 +304,7 @@ func TestWriteError_EncodingFailure(t *testing.T) {
 		Level: slog.LevelError,
 	}))
 
-	writeError(w, rpcErr, logger)
+	writeError(w, svcErr, logger)
 
 	// Verify error was logged
 	logOutput := buf.String()

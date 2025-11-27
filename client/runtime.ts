@@ -1,24 +1,24 @@
 /**
  * TygorError is the base class for all tygor client errors.
- * Use instanceof to narrow to RPCError or TransportError.
+ * Use instanceof to narrow to ServerError or TransportError.
  */
 export abstract class TygorError extends Error {
-  abstract readonly kind: "rpc" | "transport";
+  abstract readonly kind: "server" | "transport";
 }
 
 /**
- * RPCError represents an application-level error returned by the tygor server.
+ * ServerError represents an application-level error returned by the tygor server.
  * These have a structured code, message, and optional details.
  */
-export class RPCError extends TygorError {
-  readonly kind = "rpc" as const;
+export class ServerError extends TygorError {
+  readonly kind = "server" as const;
   code: string;
   details?: Record<string, any>;
   httpStatus: number;
 
   constructor(code: string, message: string, httpStatus: number, details?: Record<string, any>) {
     super(message);
-    this.name = "RPCError";
+    this.name = "ServerError";
     this.code = code;
     this.httpStatus = httpStatus;
     this.details = details;
@@ -43,7 +43,7 @@ export class TransportError extends TygorError {
 }
 
 /**
- * RPCResponse is the discriminated union type for RPC responses.
+ * Response is the discriminated union type for service responses.
  * Use this with the "never throw" client pattern:
  *
  * @example
@@ -54,7 +54,7 @@ export class TransportError extends TygorError {
  *   console.log(response.result.name);
  * }
  */
-export type RPCResponse<T> =
+export type Response<T> =
   | { result: T; error?: never }
   | { result?: never; error: { code: string; message: string; details?: Record<string, any> } };
 
@@ -65,7 +65,7 @@ export type Empty = null;
 
 export type FetchFunction = (url: string, init?: RequestInit) => Promise<Response>;
 
-export interface RPCConfig {
+export interface ClientConfig {
   baseUrl: string;
   headers?: () => Record<string, string>;
   fetch?: FetchFunction;
@@ -78,7 +78,7 @@ export interface ServiceRegistry<Manifest extends Record<string, any>> {
 
 export function createClient<Manifest extends Record<string, any>>(
   registry: ServiceRegistry<Manifest>,
-  config: RPCConfig
+  config: ClientConfig
 ): Client<Manifest> {
   const fetchFn = config.fetch || globalThis.fetch;
 
@@ -93,7 +93,7 @@ export function createClient<Manifest extends Record<string, any>>(
               const opId = `${service}.${method}`;
               const meta = registry.metadata[opId];
               if (!meta) {
-                throw new Error(`Unknown RPC method: ${opId}`);
+                throw new Error(`Unknown service method: ${opId}`);
               }
 
               return async (req: any) => {
@@ -138,7 +138,7 @@ export function createClient<Manifest extends Record<string, any>>(
 
                 // Try to parse as JSON
                 let rawBody: string | undefined;
-                let envelope: RPCResponse<any>;
+                let envelope: Response<any>;
                 try {
                   // Clone response so we can read body twice if needed
                   rawBody = await res.clone().text();
@@ -172,7 +172,7 @@ export function createClient<Manifest extends Record<string, any>>(
 
                 // Check for error in envelope - this is an application-level error
                 if (envelope.error) {
-                  throw new RPCError(
+                  throw new ServerError(
                     envelope.error.code || "unknown",
                     envelope.error.message || "Unknown error",
                     httpStatus,

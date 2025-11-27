@@ -2,7 +2,7 @@
 import { ServiceRegistry } from '@tygor/client';
 import * as types from './types';
 
-export interface RPCManifest {
+export interface Manifest {
   "Comments.Create": {
     req: types.CreateCommentRequest;
     res: types.Comment;
@@ -53,7 +53,7 @@ const metadata = {
   "Users.Login": { method: "POST", path: "/Users/Login" },
 } as const;
 
-export const registry: ServiceRegistry<RPCManifest> = {
-  manifest: {} as RPCManifest,
+export const registry: ServiceRegistry<Manifest> = {
+  manifest: {} as Manifest,
   metadata,
 };

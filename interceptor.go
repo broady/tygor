@@ -9,14 +9,14 @@ import (
 // or the final handler.
 type HandlerFunc func(ctx context.Context, req any) (res any, err error)
 
-// UnaryInterceptor is a hook that wraps RPC handler execution for unary (non-streaming) calls.
+// UnaryInterceptor is a hook that wraps handler execution for unary (non-streaming) calls.
 //
-// Interceptors receive *Context for type-safe access to RPC metadata:
+// Interceptors receive *Context for type-safe access to request metadata:
 //
 //	func loggingInterceptor(ctx *tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
 //	    start := time.Now()
 //	    res, err := handler(ctx, req)
-//	    log.Printf("%s.%s took %v", ctx.Service(), ctx.Method(), time.Since(start))
+//	    log.Printf("%s took %v", ctx.EndpointID(), time.Since(start))
 //	    return res, err
 //	}
 //

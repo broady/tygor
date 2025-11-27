@@ -42,7 +42,7 @@ func (e *Error) Error() string {
 	return fmt.Sprintf("%s: %s", e.Code, e.Message)
 }
 
-// NewError creates a new RPC error.
+// NewError creates a new service error.
 func NewError(code ErrorCode, message string) *Error {
 	return &Error{
 		Code:    code,
@@ -50,7 +50,7 @@ func NewError(code ErrorCode, message string) *Error {
 	}
 }
 
-// Errorf creates a new RPC error with a formatted message.
+// Errorf creates a new service error with a formatted message.
 func Errorf(code ErrorCode, format string, args ...any) *Error {
 	return &Error{
 		Code:    code,
@@ -92,19 +92,19 @@ func (e *Error) WithDetails(details map[string]any) *Error {
 	}
 }
 
-// ErrorTransformer is a function that maps an application error to an RPC error.
+// ErrorTransformer is a function that maps an application error to a service error.
 // If it returns nil, the default transformer logic should be applied.
 type ErrorTransformer func(error) *Error
 
-// DefaultErrorTransformer maps standard Go errors to RPC errors.
+// DefaultErrorTransformer maps standard Go errors to service errors.
 func DefaultErrorTransformer(err error) *Error {
 	if err == nil {
 		return nil
 	}
 
-	var rpcErr *Error
-	if errors.As(err, &rpcErr) {
-		return rpcErr
+	var svcErr *Error
+	if errors.As(err, &svcErr) {
+		return svcErr
 	}
 
 	if errors.Is(err, context.DeadlineExceeded) {
@@ -188,17 +188,17 @@ func (c ErrorCode) HTTPStatus() int {
 	}
 }
 
-func writeError(w http.ResponseWriter, rpcErr *Error, logger *slog.Logger) {
+func writeError(w http.ResponseWriter, svcErr *Error, logger *slog.Logger) {
 	if logger == nil {
 		logger = slog.Default()
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(rpcErr.Code.HTTPStatus())
-	if err := encodeErrorResponse(w, rpcErr); err != nil {
+	w.WriteHeader(svcErr.Code.HTTPStatus())
+	if err := encodeErrorResponse(w, svcErr); err != nil {
 		// Headers already sent, nothing we can do. Log for debugging.
 		logger.Error("failed to encode error response",
-			slog.String("code", string(rpcErr.Code)),
-			slog.String("message", rpcErr.Message),
+			slog.String("code", string(svcErr.Code)),
+			slog.String("message", svcErr.Message),
 			slog.Any("error", err))
 	}
 }

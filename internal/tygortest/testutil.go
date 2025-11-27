@@ -1,4 +1,4 @@
-// Package tygortest provides testing helpers for HTTP handlers and tygor RPC handlers.
+// Package tygortest provides testing helpers for HTTP handlers and tygor service handlers.
 // This package is designed to be import-cycle safe and can be used from any package
 // within the tygor module.
 package tygortest
@@ -21,7 +21,7 @@ type RequestBuilder struct {
 	headers      map[string]string
 	queryParams  map[string]string
 	service      string
-	rpcMethod    string
+	method       string
 	contextSetup ContextSetupFunc
 }
 
@@ -38,7 +38,7 @@ func NewRequest(contextSetup ...ContextSetupFunc) *RequestBuilder {
 		headers:      make(map[string]string),
 		queryParams:  make(map[string]string),
 		service:      "TestService",
-		rpcMethod:    "TestMethod",
+		method:       "TestMethod",
 		contextSetup: setup,
 	}
 }
@@ -83,10 +83,10 @@ func (b *RequestBuilder) WithQuery(key, value string) *RequestBuilder {
 	return b
 }
 
-// WithRPCInfo sets the service and method for RPC context.
-func (b *RequestBuilder) WithRPCInfo(service, method string) *RequestBuilder {
+// WithServiceInfo sets the service and method for context.
+func (b *RequestBuilder) WithServiceInfo(service, method string) *RequestBuilder {
 	b.service = service
-	b.rpcMethod = method
+	b.method = method
 	return b
 }
 
@@ -124,9 +124,9 @@ func (b *RequestBuilder) Build() (*http.Request, *httptest.ResponseRecorder) {
 
 	w := httptest.NewRecorder()
 
-	// Set up RPC context if provided
+	// Set up service context if provided
 	if b.contextSetup != nil {
-		ctx := b.contextSetup(req.Context(), w, req, b.service, b.rpcMethod)
+		ctx := b.contextSetup(req.Context(), w, req, b.service, b.method)
 		req = req.WithContext(ctx)
 	}
 

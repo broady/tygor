@@ -56,13 +56,13 @@ func (tr *TestRequestBuilder) WithQuery(key, value string) *TestRequestBuilder {
 	return tr
 }
 
-// WithRPCInfo sets the service and method for RPC context and returns the TestRequestBuilder for chaining.
-func (tr *TestRequestBuilder) WithRPCInfo(service, method string) *TestRequestBuilder {
-	tr.RequestBuilder.WithRPCInfo(service, method)
+// WithServiceInfo sets the service and method for context and returns the TestRequestBuilder for chaining.
+func (tr *TestRequestBuilder) WithServiceInfo(service, method string) *TestRequestBuilder {
+	tr.RequestBuilder.WithServiceInfo(service, method)
 	return tr
 }
 
-// Build creates the HTTP request with tygor RPC context.
+// Build creates the HTTP request with tygor context.
 func (tr *TestRequestBuilder) Build() (*http.Request, *httptest.ResponseRecorder) {
 	return tr.RequestBuilder.Build()
 }
@@ -78,9 +78,9 @@ type testContextConfig struct {
 
 // ServeHandler builds the request and serves it to a tygor handler.
 // For testing, it accepts a testContextConfig to configure the context.
-func (tr *TestRequestBuilder) ServeHandler(handler RPCMethod, config testContextConfig) *httptest.ResponseRecorder {
+func (tr *TestRequestBuilder) ServeHandler(handler Endpoint, config testContextConfig) *httptest.ResponseRecorder {
 	req, w := tr.Build()
-	h := handler.(rpcHandler)
+	h := handler.(endpointHandler)
 
 	// Extract tygor context from request and add config
 	ctx, _ := FromContext(req.Context())

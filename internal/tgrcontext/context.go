@@ -1,7 +1,7 @@
-// Package rpccontext provides the shared context key for tygor.
+// Package tgrcontext provides the shared context key for tygor.
 // This allows internal test utilities to create compatible contexts
 // without importing the main tygor package (avoiding import cycles).
-package rpccontext
+package tgrcontext
 
 import (
 	"context"
@@ -17,17 +17,17 @@ var ContextKey = &struct{ name string }{"tygor"}
 type Context struct {
 	context.Context
 	Service string
-	Method  string
+	Name    string
 	Request *http.Request
 	Writer  http.ResponseWriter
 }
 
-// NewContext creates a context with RPC metadata.
+// NewContext creates a context with service metadata.
 // The resulting context is compatible with tygor.FromContext.
-func NewContext(parent context.Context, w http.ResponseWriter, r *http.Request, service, method string) *Context {
+func NewContext(parent context.Context, w http.ResponseWriter, r *http.Request, service, name string) *Context {
 	ctx := &Context{
 		Service: service,
-		Method:  method,
+		Name:    name,
 		Request: r,
 		Writer:  w,
 	}

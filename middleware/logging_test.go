@@ -36,17 +36,14 @@ func TestLoggingInterceptor_Success(t *testing.T) {
 	}
 
 	logOutput := buf.String()
-	if !strings.Contains(logOutput, "RPC started") {
-		t.Error("expected 'RPC started' in log output")
+	if !strings.Contains(logOutput, "request started") {
+		t.Error("expected 'request started' in log output")
 	}
-	if !strings.Contains(logOutput, "RPC completed") {
-		t.Error("expected 'RPC completed' in log output")
+	if !strings.Contains(logOutput, "request completed") {
+		t.Error("expected 'request completed' in log output")
 	}
-	if !strings.Contains(logOutput, "TestService") {
-		t.Error("expected service name in log output")
-	}
-	if !strings.Contains(logOutput, "TestMethod") {
-		t.Error("expected method name in log output")
+	if !strings.Contains(logOutput, "TestService.TestMethod") {
+		t.Error("expected endpoint ID in log output")
 	}
 }
 
@@ -76,11 +73,11 @@ func TestLoggingInterceptor_Error(t *testing.T) {
 	}
 
 	logOutput := buf.String()
-	if !strings.Contains(logOutput, "RPC started") {
-		t.Error("expected 'RPC started' in log output")
+	if !strings.Contains(logOutput, "request started") {
+		t.Error("expected 'request started' in log output")
 	}
-	if !strings.Contains(logOutput, "RPC failed") {
-		t.Error("expected 'RPC failed' in log output")
+	if !strings.Contains(logOutput, "request failed") {
+		t.Error("expected 'request failed' in log output")
 	}
 	if !strings.Contains(logOutput, "test error") {
 		t.Error("expected error message in log output")
@@ -162,7 +159,7 @@ func TestLoggingInterceptor_PropagatesContext(t *testing.T) {
 	}
 }
 
-func TestLoggingInterceptor_ServiceAndMethodInLogs(t *testing.T) {
+func TestLoggingInterceptor_EndpointIDInLogs(t *testing.T) {
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
@@ -171,19 +168,20 @@ func TestLoggingInterceptor_ServiceAndMethodInLogs(t *testing.T) {
 	interceptor := LoggingInterceptor(logger)
 
 	tests := []struct {
-		service string
-		method  string
+		service    string
+		name       string
+		endpointID string
 	}{
-		{"Users", "Create"},
-		{"Posts", "List"},
-		{"Comments", "Delete"},
+		{"Users", "Create", "Users.Create"},
+		{"Posts", "List", "Posts.List"},
+		{"Comments", "Delete", "Comments.Delete"},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.service+"."+tt.method, func(t *testing.T) {
+		t.Run(tt.endpointID, func(t *testing.T) {
 			buf.Reset()
 
-			ctx := tygor.NewContext(context.Background(), tt.service, tt.method)
+			ctx := tygor.NewContext(context.Background(), tt.service, tt.name)
 
 			handler := func(ctx context.Context, req any) (any, error) {
 				return nil, nil
@@ -192,11 +190,8 @@ func TestLoggingInterceptor_ServiceAndMethodInLogs(t *testing.T) {
 			_, _ = interceptor(ctx, nil, handler)
 
 			logOutput := buf.String()
-			if !strings.Contains(logOutput, tt.service) {
-				t.Errorf("expected service %s in log output", tt.service)
-			}
-			if !strings.Contains(logOutput, tt.method) {
-				t.Errorf("expected method %s in log output", tt.method)
+			if !strings.Contains(logOutput, tt.endpointID) {
+				t.Errorf("expected endpoint ID %s in log output", tt.endpointID)
 			}
 		})
 	}
@@ -224,8 +219,8 @@ func TestLoggingInterceptor_ErrorDetails(t *testing.T) {
 	}
 
 	logOutput := buf.String()
-	if !strings.Contains(logOutput, "RPC failed") {
-		t.Error("expected 'RPC failed' in log output")
+	if !strings.Contains(logOutput, "request failed") {
+		t.Error("expected 'request failed' in log output")
 	}
 	// Error should be logged with details
 	if !strings.Contains(logOutput, "not_found") || !strings.Contains(logOutput, "resource not found") {
