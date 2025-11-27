@@ -51,6 +51,10 @@ type Config struct {
 	// Example: "github.com/myorg/myrepo/" makes "github.com/myorg/myrepo/api/v1.User" → "v1_User"
 	// Without this, types from different packages with the same name will collide.
 	StripPackagePrefix string
+
+	// SingleFile emits all types in a single types.ts file.
+	// Default (false) generates one file per Go package with a barrel types.ts that re-exports all.
+	SingleFile bool
 }
 
 // Generate generates the TypeScript types and manifest for the registered services.
@@ -107,6 +111,7 @@ func Generate(app *tygor.App, cfg *Config) error {
 		FieldCase:          "preserve",
 		TypeCase:           "preserve",
 		StripPackagePrefix: cfg.StripPackagePrefix,
+		SingleFile:         cfg.SingleFile,
 		IndentStyle:        "space",
 		IndentSize:         2,
 		LineEnding:         "lf",

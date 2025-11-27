@@ -55,6 +55,7 @@ func TestTypeScriptGenerator_Generate_BasicStruct(t *testing.T) {
 	result, err := gen.Generate(context.Background(), schema, GenerateOptions{
 		Sink: memSink,
 		Config: GeneratorConfig{
+			SingleFile:      true,
 			EmitComments:    false,
 			TrailingNewline: true,
 			LineEnding:      "lf",
@@ -109,8 +110,9 @@ func TestTypeScriptGenerator_Generate_NullableField(t *testing.T) {
 	gen := &TypeScriptGenerator{}
 
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
-		Sink:   memSink,
-		Config: GeneratorConfig{},
+		Sink: memSink,
+		Config: GeneratorConfig{
+			SingleFile: true},
 	})
 
 	if err != nil {
@@ -166,8 +168,9 @@ func TestTypeScriptGenerator_Generate_SliceField(t *testing.T) {
 			gen := &TypeScriptGenerator{}
 
 			_, err := gen.Generate(context.Background(), schema, GenerateOptions{
-				Sink:   memSink,
-				Config: GeneratorConfig{},
+				Sink: memSink,
+				Config: GeneratorConfig{
+					SingleFile: true},
 			})
 
 			if err != nil {
@@ -222,8 +225,9 @@ func TestTypeScriptGenerator_Generate_MapField(t *testing.T) {
 			gen := &TypeScriptGenerator{}
 
 			_, err := gen.Generate(context.Background(), schema, GenerateOptions{
-				Sink:   memSink,
-				Config: GeneratorConfig{},
+				Sink: memSink,
+				Config: GeneratorConfig{
+					SingleFile: true},
 			})
 
 			if err != nil {
@@ -282,8 +286,9 @@ func TestTypeScriptGenerator_Generate_Primitives(t *testing.T) {
 			gen := &TypeScriptGenerator{}
 
 			_, err := gen.Generate(context.Background(), schema, GenerateOptions{
-				Sink:   memSink,
-				Config: GeneratorConfig{},
+				Sink: memSink,
+				Config: GeneratorConfig{
+					SingleFile: true},
 			})
 
 			if err != nil {
@@ -313,8 +318,9 @@ func TestTypeScriptGenerator_Generate_Alias(t *testing.T) {
 	gen := &TypeScriptGenerator{}
 
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
-		Sink:   memSink,
-		Config: GeneratorConfig{},
+		Sink: memSink,
+		Config: GeneratorConfig{
+			SingleFile: true},
 	})
 
 	if err != nil {
@@ -348,6 +354,7 @@ func TestTypeScriptGenerator_Generate_EnumUnion(t *testing.T) {
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
 		Sink: memSink,
 		Config: GeneratorConfig{
+			SingleFile: true,
 			Custom: map[string]any{
 				"EnumStyle": "union",
 			},
@@ -386,6 +393,7 @@ func TestTypeScriptGenerator_Generate_EnumEnum(t *testing.T) {
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
 		Sink: memSink,
 		Config: GeneratorConfig{
+			SingleFile: true,
 			Custom: map[string]any{
 				"EnumStyle": "enum",
 			},
@@ -433,8 +441,9 @@ func TestTypeScriptGenerator_Generate_ReservedWords(t *testing.T) {
 	gen := &TypeScriptGenerator{}
 
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
-		Sink:   memSink,
-		Config: GeneratorConfig{},
+		Sink: memSink,
+		Config: GeneratorConfig{
+			SingleFile: true},
 	})
 
 	if err != nil {
@@ -478,8 +487,9 @@ func TestTypeScriptGenerator_Generate_Generics(t *testing.T) {
 	gen := &TypeScriptGenerator{}
 
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
-		Sink:   memSink,
-		Config: GeneratorConfig{},
+		Sink: memSink,
+		Config: GeneratorConfig{
+			SingleFile: true},
 	})
 
 	if err != nil {
@@ -528,6 +538,7 @@ func TestTypeScriptGenerator_Generate_Extends(t *testing.T) {
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
 		Sink: memSink,
 		Config: GeneratorConfig{
+			SingleFile: true,
 			Custom: map[string]any{
 				"UseInterface": true,
 			},
@@ -591,8 +602,9 @@ func TestTypeScriptGenerator_Generate_Manifest(t *testing.T) {
 	gen := &TypeScriptGenerator{}
 
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
-		Sink:   memSink,
-		Config: GeneratorConfig{},
+		Sink: memSink,
+		Config: GeneratorConfig{
+			SingleFile: true},
 	})
 
 	if err != nil {
@@ -651,6 +663,7 @@ func TestTypeScriptGenerator_Generate_Documentation(t *testing.T) {
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
 		Sink: memSink,
 		Config: GeneratorConfig{
+			SingleFile:   true,
 			EmitComments: true,
 		},
 	})
@@ -695,6 +708,7 @@ func TestTypeScriptGenerator_Generate_Configuration(t *testing.T) {
 		{
 			name: "type prefix/suffix",
 			config: GeneratorConfig{
+				SingleFile: true,
 				TypePrefix: "API",
 				TypeSuffix: "DTO",
 			},
@@ -703,14 +717,16 @@ func TestTypeScriptGenerator_Generate_Configuration(t *testing.T) {
 		{
 			name: "field case camel",
 			config: GeneratorConfig{
-				FieldCase: "camel",
+				SingleFile: true,
+				FieldCase:  "camel",
 			},
 			want: "fieldName: string;",
 		},
 		{
 			name: "type case snake",
 			config: GeneratorConfig{
-				TypeCase: "snake",
+				SingleFile: true,
+				TypeCase:   "snake",
 			},
 			want: "export interface test_type {",
 		},
@@ -777,8 +793,9 @@ func TestTypeScriptGenerator_Generate_FixedArray(t *testing.T) {
 			gen := &TypeScriptGenerator{}
 
 			_, err := gen.Generate(context.Background(), schema, GenerateOptions{
-				Sink:   memSink,
-				Config: GeneratorConfig{},
+				Sink: memSink,
+				Config: GeneratorConfig{
+					SingleFile: true},
 			})
 
 			if err != nil {
@@ -822,6 +839,7 @@ func TestTypeScriptGenerator_Generate_UnknownType(t *testing.T) {
 			_, err := gen.Generate(context.Background(), schema, GenerateOptions{
 				Sink: memSink,
 				Config: GeneratorConfig{
+					SingleFile: true,
 					Custom: map[string]any{
 						"UnknownType": tt.unknownType,
 					},
@@ -837,5 +855,78 @@ func TestTypeScriptGenerator_Generate_UnknownType(t *testing.T) {
 				t.Errorf("output should contain %q, got:\n%s", tt.want, content)
 			}
 		})
+	}
+}
+
+func TestTypeScriptGenerator_Generate_MultiFile(t *testing.T) {
+	// Types from two different packages
+	schema := &ir.Schema{
+		Package: ir.PackageInfo{
+			Path: "example.com/main",
+			Name: "main",
+		},
+		Types: []ir.TypeDescriptor{
+			&ir.StructDescriptor{
+				Name: ir.GoIdentifier{Name: "User", Package: "example.com/api/v1"},
+				Fields: []ir.FieldDescriptor{
+					{Name: "ID", JSONName: "id", Type: ir.Int(0)},
+					{Name: "Name", JSONName: "name", Type: ir.String()},
+				},
+			},
+			&ir.StructDescriptor{
+				Name: ir.GoIdentifier{Name: "User", Package: "example.com/api/v2"},
+				Fields: []ir.FieldDescriptor{
+					{Name: "ID", JSONName: "id", Type: ir.Int(0)},
+					{Name: "Name", JSONName: "name", Type: ir.String()},
+					{Name: "Email", JSONName: "email", Type: ir.String()},
+				},
+			},
+		},
+	}
+
+	memSink := sink.NewMemorySink()
+	gen := &TypeScriptGenerator{}
+
+	result, err := gen.Generate(context.Background(), schema, GenerateOptions{
+		Sink:   memSink,
+		Config: GeneratorConfig{
+			// SingleFile: false (default) - should generate multiple files
+		},
+	})
+
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	// Should have 3 files: types_example_com_api_v1.ts, types_example_com_api_v2.ts, types.ts (barrel)
+	if len(result.Files) != 4 { // +1 for manifest.ts
+		t.Errorf("expected 4 files (2 packages + barrel + manifest), got %d", len(result.Files))
+		for _, f := range result.Files {
+			t.Logf("  %s", f.Path)
+		}
+	}
+
+	// Check barrel file exists and re-exports
+	barrel := string(memSink.Get("types.ts"))
+	if !strings.Contains(barrel, "export * from") {
+		t.Errorf("barrel file should contain re-exports, got:\n%s", barrel)
+	}
+
+	// Check v1 file
+	v1File := string(memSink.Get("types_example_com_api_v1.ts"))
+	if !strings.Contains(v1File, "export interface User {") {
+		t.Errorf("v1 file should contain User interface, got:\n%s", v1File)
+	}
+	if strings.Contains(v1File, "email") {
+		t.Errorf("v1 User should not have email field")
+	}
+
+	// Check v2 file
+	v2File := string(memSink.Get("types_example_com_api_v2.ts"))
+	if !strings.Contains(v2File, "export interface User {") {
+		t.Errorf("v2 file should contain User interface, got:\n%s", v2File)
+	}
+	if !strings.Contains(v2File, "email") {
+		t.Errorf("v2 User should have email field")
 	}
 }

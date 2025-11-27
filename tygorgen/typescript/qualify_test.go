@@ -167,6 +167,7 @@ func TestGenerator_PackageQualification_Integration(t *testing.T) {
 	opts := GenerateOptions{
 		Sink: memorySink,
 		Config: GeneratorConfig{
+			SingleFile:         true,
 			StripPackagePrefix: "github.com/myorg/myrepo/",
 		},
 	}
@@ -221,8 +222,9 @@ func TestGenerator_PackageQualification_BackwardCompat(t *testing.T) {
 	memorySink := sink.NewMemorySink()
 
 	opts := GenerateOptions{
-		Sink:   memorySink,
+		Sink: memorySink,
 		Config: GeneratorConfig{
+			SingleFile: true,
 			// No StripPackagePrefix
 		},
 	}

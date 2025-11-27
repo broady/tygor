@@ -52,6 +52,9 @@ func main() {
 		fmt.Println("Generating types to", *out)
 		if err := tygorgen.Generate(app, &tygorgen.Config{
 			OutDir: *out,
+			// SingleFile: true is required when using StripPackagePrefix with cross-package
+			// references, as types from different packages end up in the same output file.
+			SingleFile: true,
 			// StripPackagePrefix disambiguates same-named types from different packages.
 			// Without this, both v1.User and v2.User would become "User" (collision!).
 			// With this, they become "v1_User" and "v2_User".

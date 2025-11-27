@@ -107,7 +107,7 @@ func TestGenerate_EmptyApp(t *testing.T) {
 	reg := tygor.NewApp()
 	outDir := t.TempDir()
 
-	cfg := &Config{OutDir: outDir}
+	cfg := &Config{OutDir: outDir, SingleFile: true}
 
 	err := Generate(reg, cfg)
 	if err != nil {
@@ -143,7 +143,7 @@ func TestGenerate_WithHandlers(t *testing.T) {
 	}
 	reg.Service("Users").Register("Create", tygor.Exec(handler))
 
-	cfg := &Config{OutDir: outDir}
+	cfg := &Config{OutDir: outDir, SingleFile: true}
 
 	err := Generate(reg, cfg)
 	if err != nil {
@@ -179,7 +179,7 @@ func TestGenerate_ManifestStructure(t *testing.T) {
 	reg.Service("Users").Register("Create", tygor.Exec(createHandler))
 	reg.Service("Posts").Register("List", tygor.Query(listHandler))
 
-	cfg := &Config{OutDir: outDir}
+	cfg := &Config{OutDir: outDir, SingleFile: true}
 
 	err := Generate(reg, cfg)
 	if err != nil {
@@ -218,7 +218,7 @@ func TestGenerate_TypesFile(t *testing.T) {
 	}
 	reg.Service("Users").Register("Create", tygor.Exec(handler))
 
-	cfg := &Config{OutDir: outDir}
+	cfg := &Config{OutDir: outDir, SingleFile: true}
 
 	err := Generate(reg, cfg)
 	if err != nil {
@@ -249,6 +249,7 @@ func TestGenerate_CustomConfig(t *testing.T) {
 
 	cfg := &Config{
 		OutDir:           outDir,
+		SingleFile:       true,
 		PreserveComments: "none",
 		EnumStyle:        "enum",
 		OptionalType:     "null",
@@ -289,7 +290,7 @@ func TestGenerate_GETParamsUseLowercaseNames(t *testing.T) {
 	}
 	reg.Service("Posts").Register("List", tygor.Query(listHandler))
 
-	cfg := &Config{OutDir: outDir}
+	cfg := &Config{OutDir: outDir, SingleFile: true}
 
 	err := Generate(reg, cfg)
 	if err != nil {

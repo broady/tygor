@@ -61,6 +61,9 @@ type GeneratorConfig struct {
 	// Types from the main package (Schema.Package) are never qualified.
 	StripPackagePrefix string
 
+	// Output structure
+	SingleFile bool // If true, emit all types in one types.ts. Default false emits one file per package.
+
 	// Formatting
 	IndentStyle     string // "space" or "tab"
 	IndentSize      int    // Spaces per indent level (when IndentStyle is "space")
