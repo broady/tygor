@@ -45,6 +45,12 @@ type Config struct {
 	// Useful for custom type definitions or imports.
 	// e.g. "export type DateTime = string & { __brand: 'DateTime' };"
 	Frontmatter string
+
+	// StripPackagePrefix removes this prefix from package paths when qualifying type names.
+	// Use this when you have same-named types in different packages (e.g., v1.User and v2.User).
+	// Example: "github.com/myorg/myrepo/" makes "github.com/myorg/myrepo/api/v1.User" → "v1_User"
+	// Without this, types from different packages with the same name will collide.
+	StripPackagePrefix string
 }
 
 // Generate generates the TypeScript types and manifest for the registered services.
@@ -96,15 +102,16 @@ func Generate(app *tygor.App, cfg *Config) error {
 
 	// 3. Configure TypeScript generator
 	tsConfig := typescript.GeneratorConfig{
-		TypePrefix:      "",
-		TypeSuffix:      "",
-		FieldCase:       "preserve",
-		TypeCase:        "preserve",
-		IndentStyle:     "space",
-		IndentSize:      2,
-		LineEnding:      "lf",
-		TrailingNewline: true,
-		EmitComments:    cfg.PreserveComments != "none",
+		TypePrefix:         "",
+		TypeSuffix:         "",
+		FieldCase:          "preserve",
+		TypeCase:           "preserve",
+		StripPackagePrefix: cfg.StripPackagePrefix,
+		IndentStyle:        "space",
+		IndentSize:         2,
+		LineEnding:         "lf",
+		TrailingNewline:    true,
+		EmitComments:       cfg.PreserveComments != "none",
 		Custom: map[string]any{
 			"EmitExport":        true,
 			"EmitDeclare":       false,
