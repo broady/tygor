@@ -15,14 +15,14 @@ GEN_DIR ?= ./client/src/rpc
 all: gen test
 
 # Run tests
-# Copy @tygor/testing to avoid symlink issues in Docker
+# Copy local @tygor packages to test unpublished changes (avoids symlink issues in Docker)
 test:
 	go build ./...
 	@if [ -d client ] && [ -f client/package.json ]; then \
-		TYGOR_ROOT=$$(cd ../.. && pwd) && \
 		(cd client && rm -rf node_modules && bun install) && \
-		mkdir -p client/node_modules/@tygor/testing && \
-		cp "$$TYGOR_ROOT/examples/testing/"*.ts "$$TYGOR_ROOT/examples/testing/"*.json client/node_modules/@tygor/testing/ && \
+		mkdir -p client/node_modules/@tygor/client client/node_modules/@tygor/testing && \
+		cp ../../client/runtime.js ../../client/runtime.d.ts ../../client/package.json client/node_modules/@tygor/client/ && \
+		cp ../testing/*.ts ../testing/*.json client/node_modules/@tygor/testing/ && \
 		echo "Type-checking TypeScript..." && \
 		(cd client && bun run typecheck) && \
 		echo "Running integration tests..." && \

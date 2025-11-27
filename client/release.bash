@@ -41,6 +41,17 @@ NEW_VERSION=$(jq -r .version package.json)
 TAG="v${NEW_VERSION}"
 echo "New version: ${NEW_VERSION}"
 
+# Update example package.json files to use new version
+echo "Updating example package.json files..."
+for example_pkg in ../examples/*/client/package.json; do
+  if [[ -f "${example_pkg}" ]]; then
+    # Update @tygor/client dependency to ^NEW_VERSION
+    jq --arg v "^${NEW_VERSION}" '.dependencies["@tygor/client"] = $v' "${example_pkg}" > "${example_pkg}.tmp"
+    mv "${example_pkg}.tmp" "${example_pkg}"
+    echo "  Updated ${example_pkg}"
+  fi
+done
+
 # Confirmation
 read -p "Ready to release ${TAG}? (y/N) " -n 1 -r
 echo
