@@ -89,9 +89,10 @@ describe("Users service", () => {
 describe("Posts service - public endpoints", () => {
   test("can list published posts without auth", async () => {
     const posts = await client.Posts.List({
+      author_id: null,
+      published: true,
       limit: 10,
       offset: 0,
-      published: true,
     });
 
     expect(Array.isArray(posts)).toBe(true);

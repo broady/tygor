@@ -1,6 +1,5 @@
 import { createClient } from '@tygor/client';
 import { registry } from './src/rpc/manifest';
-import { DateTime, NewsStatusPublished, NewsStatusDraft } from './src/rpc/types';
 
 // [snippet:client-setup]
 // 1. Create the strictly typed client
@@ -31,15 +30,16 @@ async function main() {
     newsList.forEach(item => {
       console.log(`- [${item.id}] ${item.title} (${item.status})`);
 
-      // Demonstrate DateTime branded type with helpers
+      // Demonstrate string timestamp with helpers
       if (item.created_at) {
-        console.log(`  Created: ${DateTime.format(item.created_at)}`);
+        const date = new Date(item.created_at);
+        console.log(`  Created: ${date.toLocaleString()}`);
       }
 
-      // Demonstrate enum type safety
-      if (item.status === NewsStatusPublished) {
+      // Demonstrate string union type safety
+      if (item.status === "published") {
         console.log(`  ✓ Published`);
-      } else if (item.status === NewsStatusDraft) {
+      } else if (item.status === "draft") {
         console.log(`  ⚠ Draft`);
       }
     });
@@ -53,16 +53,15 @@ async function main() {
 
     console.log("Created:", newArticle);
 
-    // Demonstrate DateTime helpers
+    // Demonstrate timestamp handling
     if (newArticle.created_at) {
-      console.log(`Created at: ${DateTime.format(newArticle.created_at, 'en-US')}`);
-      console.log(`Date object: ${DateTime.toDate(newArticle.created_at)}`);
+      const date = new Date(newArticle.created_at);
+      console.log(`Created at: ${date.toLocaleString('en-US')}`);
+      console.log(`Date object: ${date}`);
     }
 
-    // Demonstrate type safety - these would be TypeScript errors:
-    // const str: string = newArticle.created_at; // ❌ Error: DateTime is not assignable to string
-    // newArticle.created_at = "2024-01-01"; // ❌ Error: string is not assignable to DateTime
-    // newArticle.created_at = DateTime.from("2024-01-01T00:00:00Z"); // ✅ OK
+    // Demonstrate type safety - timestamps are strings
+    // created_at is a string containing an RFC3339 timestamp
 
   } catch (e: any) {
     console.error("Error:", e.message);
