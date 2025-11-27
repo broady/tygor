@@ -48,6 +48,8 @@ func main() {
 		}, nil
 	}))
 
+	// [snippet:config]
+
 	if *gen {
 		fmt.Println("Generating types to", *out)
 		if err := tygorgen.Generate(app, &tygorgen.Config{
@@ -66,6 +68,8 @@ func main() {
 		fmt.Println("Done.")
 		os.Exit(0)
 	}
+
+	// [/snippet:config]
 
 	fmt.Println("Starting server on :8080")
 	log.Fatal(http.ListenAndServe(":8080", app.Handler()))

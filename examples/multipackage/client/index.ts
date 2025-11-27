@@ -1,6 +1,8 @@
 // Example client demonstrating multi-package type disambiguation.
 // Notice how v1.User and v2.User become v1_User and v2_User in TypeScript.
 
+// [snippet:client-usage]
+
 import { createClient } from "@tygor/client";
 import { registry } from "./src/rpc/manifest";
 import type { v1_User, v2_User, MigrationRequest } from "./src/rpc/types";
@@ -25,6 +27,8 @@ async function main() {
   const result = await client.Migration.Migrate(migrationReq);
   console.log("Migration result:", result);
 }
+
+// [/snippet:client-usage]
 
 // Type assertions to verify the types are correct
 function typeChecks() {

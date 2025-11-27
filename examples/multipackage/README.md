@@ -6,21 +6,31 @@ This example demonstrates how to handle same-named types from different packages
 
 In Go, it's common to have types with the same name in different packages:
 
-```go
-// api/v1/types.go
+**api/v1/types.go:**
+<!-- [snippet:v1-types] -->
+```go title="types.go"
+// User represents a user in v1 API.
 type User struct {
-    ID   int64
-    Name string
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
 }
 
-// api/v2/types.go
-type User struct {
-    ID        int64
-    Name      string
-    Email     string
-    CreatedAt string
-}
 ```
+<!-- [/snippet:v1-types] -->
+
+**api/v2/types.go:**
+<!-- [snippet:v2-types] -->
+```go title="types.go"
+// User represents a user in v2 API with additional fields.
+type User struct {
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	Email     string `json:"email"`
+	CreatedAt string `json:"created_at"`
+}
+
+```
+<!-- [/snippet:v2-types] -->
 
 Without disambiguation, both would become `User` in TypeScript, causing a collision.
 
@@ -28,13 +38,29 @@ Without disambiguation, both would become `User` in TypeScript, causing a collis
 
 The `StripPackagePrefix` configuration strips a common prefix from package paths and uses the remainder to qualify type names:
 
-```go
-tygorgen.Generate(app, &tygorgen.Config{
-    OutDir: *out,
-    // Types from the api package itself get no prefix (MigrationRequest).
-    StripPackagePrefix: "github.com/broady/tygor/examples/multipackage/api",
-})
+<!-- [snippet:config] -->
+```go title="main.go"
+if *gen {
+	fmt.Println("Generating types to", *out)
+	if err := tygorgen.Generate(app, &tygorgen.Config{
+		OutDir: *out,
+		// SingleFile: true is required when using StripPackagePrefix with cross-package
+		// references, as types from different packages end up in the same output file.
+		SingleFile: true,
+		// StripPackagePrefix disambiguates same-named types from different packages.
+		// Without this, both v1.User and v2.User would become "User" (collision!).
+		// With this, they become "v1_User" and "v2_User".
+		// Types from the api package itself get no prefix (MigrationRequest).
+		StripPackagePrefix: "github.com/broady/tygor/examples/multipackage/api",
+	}); err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("Done.")
+	os.Exit(0)
+}
+
 ```
+<!-- [/snippet:config] -->
 
 This produces:
 
@@ -135,16 +161,32 @@ export interface v2_User {
 
 The client can use properly typed v1 and v2 types:
 
-```typescript
+<!-- [snippet:client-usage] -->
+```typescript title="index.ts"
+import { createClient } from "@tygor/client";
+import { registry } from "./src/rpc/manifest";
 import type { v1_User, v2_User, MigrationRequest } from "./src/rpc/types";
 
-// Both types are distinct
-const v1User: v1_User = { id: 1, name: "Old" };
-const v2User: v2_User = { id: 1, name: "New", email: "new@example.com", created_at: "2024-01-01" };
+const client = createClient(registry, { baseUrl: "http://localhost:8080" });
 
-// MigrationRequest properly references both
-const req: MigrationRequest = {
-  v1_user: v1User,
-  v2_user: v2User,
-};
+async function main() {
+  // Get a v1 user
+  const v1User = await client.V1Users.Get({ id: 1 });
+  console.log("V1 User:", v1User);
+
+  // Get a v2 user (has additional fields)
+  const v2User = await client.V2Users.Get({ id: 1 });
+  console.log("V2 User:", v2User);
+
+  // Migrate - both user types are properly typed
+  const migrationReq: MigrationRequest = {
+    v1_user: { id: 1, name: "Old User" },
+    v2_user: { id: 1, name: "New User", email: "new@example.com", created_at: "2024-01-01T00:00:00Z" },
+  };
+
+  const result = await client.Migration.Migrate(migrationReq);
+  console.log("Migration result:", result);
+}
+
 ```
+<!-- [/snippet:client-usage] -->
