@@ -5,11 +5,32 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/broady/tygor"
 )
+
+// loggingTestContext implements tygor.Context for testing.
+type loggingTestContext struct {
+	context.Context
+	service string
+	name    string
+}
+
+func (c *loggingTestContext) Service() string                 { return c.service }
+func (c *loggingTestContext) EndpointID() string              { return c.service + "." + c.name }
+func (c *loggingTestContext) HTTPRequest() *http.Request      { return nil }
+func (c *loggingTestContext) HTTPWriter() http.ResponseWriter { return nil }
+
+func newLoggingTestContext(parent context.Context, service, method string) tygor.Context {
+	return &loggingTestContext{
+		Context: parent,
+		service: service,
+		name:    method,
+	}
+}
 
 func TestLoggingInterceptor_Success(t *testing.T) {
 	var buf bytes.Buffer
@@ -19,7 +40,7 @@ func TestLoggingInterceptor_Success(t *testing.T) {
 
 	interceptor := LoggingInterceptor(logger)
 
-	ctx := tygor.NewContext(context.Background(), "TestService", "TestMethod")
+	ctx := newLoggingTestContext(context.Background(), "TestService", "TestMethod")
 
 	handler := func(ctx context.Context, req any) (any, error) {
 		return "response", nil
@@ -55,7 +76,7 @@ func TestLoggingInterceptor_Error(t *testing.T) {
 
 	interceptor := LoggingInterceptor(logger)
 
-	ctx := tygor.NewContext(context.Background(), "TestService", "TestMethod")
+	ctx := newLoggingTestContext(context.Background(), "TestService", "TestMethod")
 
 	testErr := errors.New("test error")
 	handler := func(ctx context.Context, req any) (any, error) {
@@ -88,7 +109,7 @@ func TestLoggingInterceptor_NilLogger(t *testing.T) {
 	// Should not panic with nil logger, should use default
 	interceptor := LoggingInterceptor(nil)
 
-	ctx := tygor.NewContext(context.Background(), "TestService", "TestMethod")
+	ctx := newLoggingTestContext(context.Background(), "TestService", "TestMethod")
 
 	handler := func(ctx context.Context, req any) (any, error) {
 		return "response", nil
@@ -113,7 +134,7 @@ func TestLoggingInterceptor_LogsDuration(t *testing.T) {
 
 	interceptor := LoggingInterceptor(logger)
 
-	ctx := tygor.NewContext(context.Background(), "TestService", "TestMethod")
+	ctx := newLoggingTestContext(context.Background(), "TestService", "TestMethod")
 
 	handler := func(ctx context.Context, req any) (any, error) {
 		return "response", nil
@@ -142,7 +163,7 @@ func TestLoggingInterceptor_PropagatesContext(t *testing.T) {
 	type ctxKey string
 	key := ctxKey("test-key")
 	baseCtx := context.WithValue(context.Background(), key, "test-value")
-	ctx := tygor.NewContext(baseCtx, "TestService", "TestMethod")
+	ctx := newLoggingTestContext(baseCtx, "TestService", "TestMethod")
 
 	handler := func(ctx context.Context, req any) (any, error) {
 		val := ctx.Value(key)
@@ -181,7 +202,7 @@ func TestLoggingInterceptor_EndpointIDInLogs(t *testing.T) {
 		t.Run(tt.endpointID, func(t *testing.T) {
 			buf.Reset()
 
-			ctx := tygor.NewContext(context.Background(), tt.service, tt.name)
+			ctx := newLoggingTestContext(context.Background(), tt.service, tt.name)
 
 			handler := func(ctx context.Context, req any) (any, error) {
 				return nil, nil
@@ -205,7 +226,7 @@ func TestLoggingInterceptor_ErrorDetails(t *testing.T) {
 
 	interceptor := LoggingInterceptor(logger)
 
-	ctx := tygor.NewContext(context.Background(), "TestService", "TestMethod")
+	ctx := newLoggingTestContext(context.Background(), "TestService", "TestMethod")
 
 	customErr := tygor.NewError(tygor.CodeNotFound, "resource not found")
 	handler := func(ctx context.Context, req any) (any, error) {
@@ -236,7 +257,7 @@ func TestLoggingInterceptor_PassthroughRequest(t *testing.T) {
 
 	interceptor := LoggingInterceptor(logger)
 
-	ctx := tygor.NewContext(context.Background(), "TestService", "TestMethod")
+	ctx := newLoggingTestContext(context.Background(), "TestService", "TestMethod")
 
 	type testReq struct {
 		Key string

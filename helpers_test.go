@@ -82,8 +82,8 @@ func (tr *TestRequestBuilder) ServeHandler(handler Endpoint, config testContextC
 	req, w := tr.Build()
 	h := handler.(endpointHandler)
 
-	// Extract tygor context from request and add config
-	ctx, _ := FromContext(req.Context())
+	// Create internal context with config
+	ctx := newContext(req.Context(), w, req, "TestService", "TestMethod")
 	ctx.errorTransformer = config.errorTransformer
 	ctx.maskInternalErrors = config.maskInternalErrors
 	ctx.interceptors = config.interceptors
@@ -94,13 +94,9 @@ func (tr *TestRequestBuilder) ServeHandler(handler Endpoint, config testContextC
 	return w
 }
 
-// newTestContext creates a Context for testing with the given request/response and config.
-func newTestContext(w http.ResponseWriter, r *http.Request, config testContextConfig) *Context {
-	// Get existing context or create new one
-	ctx, ok := FromContext(r.Context())
-	if !ok {
-		ctx = newContext(r.Context(), w, r, "TestService", "TestMethod")
-	}
+// newRpcTestContext creates an rpcContext for testing with the given request/response and config.
+func newRpcTestContext(w http.ResponseWriter, r *http.Request, config testContextConfig) *rpcContext {
+	ctx := newContext(r.Context(), w, r, "TestService", "TestMethod")
 	ctx.errorTransformer = config.errorTransformer
 	ctx.maskInternalErrors = config.maskInternalErrors
 	ctx.interceptors = config.interceptors

@@ -42,7 +42,7 @@ func TestApp_WithMaskInternalErrors(t *testing.T) {
 }
 
 func TestApp_WithUnaryInterceptor(t *testing.T) {
-	interceptor := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
+	interceptor := func(ctx Context, req any, handler HandlerFunc) (any, error) {
 		return handler(ctx, req)
 	}
 
@@ -226,7 +226,7 @@ func TestApp_Handler_WithPanic(t *testing.T) {
 func TestApp_GlobalInterceptor(t *testing.T) {
 	interceptorCalled := false
 
-	reg := NewApp().WithUnaryInterceptor(func(ctx *Context, req any, handler HandlerFunc) (any, error) {
+	reg := NewApp().WithUnaryInterceptor(func(ctx Context, req any, handler HandlerFunc) (any, error) {
 		interceptorCalled = true
 		if ctx.EndpointID() != "Test.Method" {
 			t.Errorf("unexpected endpoint: %s", ctx.EndpointID())
@@ -257,7 +257,7 @@ func TestApp_GlobalInterceptor(t *testing.T) {
 func TestService_WithUnaryInterceptor(t *testing.T) {
 	reg := NewApp()
 
-	interceptor := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
+	interceptor := func(ctx Context, req any, handler HandlerFunc) (any, error) {
 		return handler(ctx, req)
 	}
 
@@ -329,17 +329,17 @@ func TestApp_DuplicateRouteRegistration(t *testing.T) {
 func TestService_InterceptorOrder(t *testing.T) {
 	var callOrder []string
 
-	globalInterceptor := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
+	globalInterceptor := func(ctx Context, req any, handler HandlerFunc) (any, error) {
 		callOrder = append(callOrder, "global")
 		return handler(ctx, req)
 	}
 
-	serviceInterceptor := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
+	serviceInterceptor := func(ctx Context, req any, handler HandlerFunc) (any, error) {
 		callOrder = append(callOrder, "service")
 		return handler(ctx, req)
 	}
 
-	handlerInterceptor := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
+	handlerInterceptor := func(ctx Context, req any, handler HandlerFunc) (any, error) {
 		callOrder = append(callOrder, "handler")
 		return handler(ctx, req)
 	}

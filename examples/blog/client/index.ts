@@ -1,4 +1,4 @@
-import { createClient, RPCError } from "@tygor/client";
+import { createClient, ServerError } from "@tygor/client";
 import { registry } from "./src/rpc/manifest";
 
 // [snippet:client-setup]
@@ -58,7 +58,7 @@ async function main() {
     // [/snippet:client-calls]
 
   } catch (e) {
-    if (e instanceof RPCError) {
+    if (e instanceof ServerError) {
       console.error(`RPC Error [${e.code}]: ${e.message}`);
       if (e.details) {
         console.error("Details:", e.details);
@@ -75,7 +75,7 @@ async function handleErrors() {
   try {
     await client.Posts.Get({ post_id: 99999 });
   } catch (e) {
-    if (e instanceof RPCError) {
+    if (e instanceof ServerError) {
       // Structured error from the server
       console.error(`Error [${e.code}]: ${e.message}`);
       // e.details contains validation errors, etc.

@@ -443,7 +443,7 @@ type RPCMethod interface {
 // type-asserts to this interface.
 type rpcHandler interface {
     RPCMethod
-    serveHTTP(ctx *Context)
+    serveHTTP(ctx *rpcContext)
     metadata() *meta.MethodMetadata
 }
 ```
@@ -468,22 +468,21 @@ The implementation MUST ensure that only handlers created via `Exec()` or `Query
 The library MUST support interceptors (middleware) with the following signature:
 
 ```go
-type UnaryInterceptor func(ctx *Context, req any, handler HandlerFunc) (res any, err error)
+type UnaryInterceptor func(ctx Context, req any, handler HandlerFunc) (res any, err error)
 
 type HandlerFunc func(ctx context.Context, req any) (res any, err error)
 ```
 
-The `*Context` type provides type-safe access to RPC metadata:
+The `Context` interface provides type-safe access to RPC metadata:
 
 ```go
-type Context struct {
+type Context interface {
     context.Context  // embeds standard context
+    Service() string              // service name
+    EndpointID() string           // full endpoint ID (e.g., "Users.Create")
+    HTTPRequest() *http.Request   // underlying HTTP request
+    HTTPWriter() http.ResponseWriter // response writer
 }
-
-func (c *Context) Service() string              // service name
-func (c *Context) Method() string               // method name
-func (c *Context) HTTPRequest() *http.Request   // underlying HTTP request
-func (c *Context) HTTPWriter() http.ResponseWriter // response writer
 ```
 
 ### 10.2 Interceptor Scopes
@@ -497,10 +496,10 @@ Interceptors can be registered at three levels (executed in order):
 **Example:**
 ```go
 // Logging interceptor
-func LoggingInterceptor(ctx *tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
+func LoggingInterceptor(ctx tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
     start := time.Now()
     res, err := handler(ctx, req)
-    log.Printf("%s.%s took %v", ctx.Service(), ctx.Method(), time.Since(start))
+    log.Printf("%s took %v", ctx.EndpointID(), time.Since(start))
     return res, err
 }
 
@@ -522,13 +521,13 @@ Interceptors MUST execute in the following order:
 
 ### 11.1 Context Type
 
-The library provides a `*Context` type that wraps `context.Context` and provides type-safe access to RPC metadata:
+The library provides a `Context` interface that embeds `context.Context` and provides type-safe access to RPC metadata:
 
 ```go
-func FromContext(ctx context.Context) (*Context, bool)
+func FromContext(ctx context.Context) (Context, bool)
 ```
 
-**In interceptors:** Receive `*Context` directly with full access to RPC metadata.
+**In interceptors:** Receive `Context` directly with full access to RPC metadata.
 
 **In handlers:** Use `FromContext` to extract the context:
 
@@ -725,5 +724,5 @@ A conforming Go implementation MUST:
 - ✅ Support custom error transformers
 - ✅ Provide sealed `RPCMethod` interface
 - ✅ Support interceptors at app/service/handler levels via `WithUnaryInterceptor`
-- ✅ Provide context API for request metadata (`FromContext`, `*Context` with `Service()`, `Method()`, `HTTPRequest()`, `HTTPWriter()`)
+- ✅ Provide context API for request metadata (`FromContext`, `Context` interface with `Service()`, `EndpointID()`, `HTTPRequest()`, `HTTPWriter()`)
 - ✅ Generate TypeScript types and manifest

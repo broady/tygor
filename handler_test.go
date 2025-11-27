@@ -71,7 +71,7 @@ func TestHandler_WithUnaryInterceptor(t *testing.T) {
 		return TestResponse{}, nil
 	}
 
-	interceptor := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
+	interceptor := func(ctx Context, req any, handler HandlerFunc) (any, error) {
 		return handler(ctx, req)
 	}
 
@@ -219,7 +219,7 @@ func TestHandler_ServeHTTP_WithUnaryInterceptor(t *testing.T) {
 		return TestResponse{Message: "ok"}, nil
 	}
 
-	interceptor := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
+	interceptor := func(ctx Context, req any, handler HandlerFunc) (any, error) {
 		interceptorCalled = true
 		return handler(ctx, req)
 	}
@@ -330,7 +330,7 @@ func TestHandler_ServeHTTP_InterceptorModifiesRequest(t *testing.T) {
 		return TestResponse{Message: req.Name}, nil
 	}
 
-	interceptor := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
+	interceptor := func(ctx Context, req any, handler HandlerFunc) (any, error) {
 		// Modify the request
 		r := req.(TestRequest)
 		r.Name = "Modified"
@@ -358,7 +358,7 @@ func TestHandleError(t *testing.T) {
 		w := httptest.NewRecorder()
 		req := httptest.NewRequest("POST", "/test", nil)
 
-		ctx := newTestContext(w, req, testContextConfig{
+		ctx := newRpcTestContext(w, req, testContextConfig{
 			errorTransformer: func(err error) *Error {
 				if err == testErr {
 					return NewError(CodeUnavailable, "transformed")
@@ -385,7 +385,7 @@ func TestHandleError(t *testing.T) {
 		w := httptest.NewRecorder()
 		req := httptest.NewRequest("POST", "/test", nil)
 
-		ctx := newTestContext(w, req, testContextConfig{
+		ctx := newRpcTestContext(w, req, testContextConfig{
 			errorTransformer: func(err error) *Error {
 				// Return nil to use default transformer
 				return nil
@@ -411,14 +411,14 @@ func TestHandler_ChainedInterceptors(t *testing.T) {
 		return TestResponse{Message: "ok"}, nil
 	}
 
-	interceptor1 := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
+	interceptor1 := func(ctx Context, req any, handler HandlerFunc) (any, error) {
 		callOrder = append(callOrder, "interceptor1-before")
 		res, err := handler(ctx, req)
 		callOrder = append(callOrder, "interceptor1-after")
 		return res, err
 	}
 
-	interceptor2 := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
+	interceptor2 := func(ctx Context, req any, handler HandlerFunc) (any, error) {
 		callOrder = append(callOrder, "interceptor2-before")
 		res, err := handler(ctx, req)
 		callOrder = append(callOrder, "interceptor2-after")
@@ -428,7 +428,7 @@ func TestHandler_ChainedInterceptors(t *testing.T) {
 	handler := Exec(fn).WithUnaryInterceptor(interceptor1).WithUnaryInterceptor(interceptor2)
 
 	// Add config interceptor as well
-	configInterceptor := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
+	configInterceptor := func(ctx Context, req any, handler HandlerFunc) (any, error) {
 		callOrder = append(callOrder, "config-before")
 		res, err := handler(ctx, req)
 		callOrder = append(callOrder, "config-after")
@@ -520,7 +520,7 @@ func TestHandler_ServeHTTP_GET_ArrayParams(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/test?ids=1&ids=2&ids=3", nil)
 	w := httptest.NewRecorder()
-	ctx := newTestContext(w, req, testContextConfig{})
+	ctx := newRpcTestContext(w, req, testContextConfig{})
 
 	handler.serveHTTP(ctx)
 
@@ -545,7 +545,7 @@ func TestHandler_ServeHTTP_GET_IntArrayParams(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/test?num=10&num=20&num=30", nil)
 	w := httptest.NewRecorder()
-	ctx := newTestContext(w, req, testContextConfig{})
+	ctx := newRpcTestContext(w, req, testContextConfig{})
 
 	handler.serveHTTP(ctx)
 
@@ -578,7 +578,7 @@ func TestHandler_ServeHTTP_GET_SpecialCharacters(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest("GET", tt.query, nil)
 			w := httptest.NewRecorder()
-			ctx := newTestContext(w, req, testContextConfig{})
+			ctx := newRpcTestContext(w, req, testContextConfig{})
 
 			handler.serveHTTP(ctx)
 

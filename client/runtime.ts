@@ -63,7 +63,7 @@ export type Response<T> =
  */
 export type Empty = null;
 
-export type FetchFunction = (url: string, init?: RequestInit) => Promise<Response>;
+export type FetchFunction = (url: string, init?: RequestInit) => Promise<globalThis.Response>;
 
 export interface ClientConfig {
   baseUrl: string;
@@ -137,7 +137,7 @@ export function createClient<Manifest extends Record<string, any>>(
                 const httpStatus = res.status;
 
                 // Try to parse as JSON
-                let rawBody: string | undefined;
+                let rawBody = "";
                 let envelope: Response<any>;
                 try {
                   // Clone response so we can read body twice if needed
@@ -148,7 +148,7 @@ export function createClient<Manifest extends Record<string, any>>(
                   throw new TransportError(
                     res.statusText || "Failed to parse response",
                     httpStatus,
-                    rawBody?.slice(0, 1000) // Truncate for sanity
+                    rawBody.slice(0, 1000) // Truncate for sanity
                   );
                 }
 
@@ -157,7 +157,7 @@ export function createClient<Manifest extends Record<string, any>>(
                   throw new TransportError(
                     "Invalid response format",
                     httpStatus,
-                    rawBody?.slice(0, 1000)
+                    rawBody.slice(0, 1000)
                   );
                 }
 
@@ -166,7 +166,7 @@ export function createClient<Manifest extends Record<string, any>>(
                   throw new TransportError(
                     "Invalid response format: missing result or error field",
                     httpStatus,
-                    rawBody?.slice(0, 1000)
+                    rawBody.slice(0, 1000)
                   );
                 }
 

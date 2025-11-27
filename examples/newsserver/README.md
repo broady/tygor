@@ -133,7 +133,7 @@ news.Register("List", tygor.Query(ListNews).
 	}))
 
 news.Register("Create", tygor.Exec(CreateNews).
-	WithUnaryInterceptor(func(ctx *tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
+	WithUnaryInterceptor(func(ctx tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
 		// Example: Set a custom header
 		ctx.HTTPWriter().Header().Set("X-Created-By", "Tygorpc")
 		return handler(ctx, req)

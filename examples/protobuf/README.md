@@ -135,7 +135,7 @@ async function handleErrors() {
   try {
     await client.Items.Get({ id: 99999 });
   } catch (e) {
-    if (e instanceof RPCError) {
+    if (e instanceof ServerError) {
       console.error(`Error [${e.code}]: ${e.message}`);
     } else {
       throw e;

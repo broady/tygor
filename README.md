@@ -322,8 +322,8 @@ Applied to specific handlers:
 ```go
 news.Register("Create",
     tygor.Exec(CreateNews).
-        WithUnaryInterceptor(func(ctx *tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
-            // Custom logic - access ctx.Service(), ctx.Method(), ctx.HTTPRequest(), etc.
+        WithUnaryInterceptor(func(ctx tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
+            // Custom logic - access ctx.Service(), ctx.EndpointID(), ctx.HTTPRequest(), etc.
             return handler(ctx, req)
         }))
 ```
@@ -420,11 +420,11 @@ func Handler(ctx context.Context, req *Request) (*Response, error) {
 }
 ```
 
-In interceptors, you receive `*tygor.Context` directly:
+In interceptors, you receive `tygor.Context` directly:
 
 ```go
-func loggingInterceptor(ctx *tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
-    log.Printf("calling %s.%s", ctx.Service(), ctx.Method())
+func loggingInterceptor(ctx tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
+    log.Printf("calling %s", ctx.EndpointID())
     return handler(ctx, req)
 }
 ```

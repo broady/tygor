@@ -128,7 +128,7 @@ examples/blog/
 
 <!-- [snippet:auth-interceptor] -->
 ```go title="main.go"
-func requireAuth(ctx *tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
+func requireAuth(ctx tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
 	// Extract token from request headers
 	httpReq := ctx.HTTPRequest()
 	if httpReq == nil {
@@ -328,7 +328,7 @@ async function handleErrors() {
   try {
     await client.Posts.Get({ post_id: 99999 });
   } catch (e) {
-    if (e instanceof RPCError) {
+    if (e instanceof ServerError) {
       // Structured error from the server
       console.error(`Error [${e.code}]: ${e.message}`);
       // e.details contains validation errors, etc.

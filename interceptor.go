@@ -11,9 +11,9 @@ type HandlerFunc func(ctx context.Context, req any) (res any, err error)
 
 // UnaryInterceptor is a hook that wraps handler execution for unary (non-streaming) calls.
 //
-// Interceptors receive *Context for type-safe access to request metadata:
+// Interceptors receive Context for type-safe access to request metadata:
 //
-//	func loggingInterceptor(ctx *tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
+//	func loggingInterceptor(ctx tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
 //	    start := time.Now()
 //	    res, err := handler(ctx, req)
 //	    log.Printf("%s took %v", ctx.EndpointID(), time.Since(start))
@@ -27,7 +27,7 @@ type HandlerFunc func(ctx context.Context, req any) (res any, err error)
 //   - Add values to context using context.WithValue
 //
 // req/res are pointers to the request/response structs.
-type UnaryInterceptor func(ctx *Context, req any, handler HandlerFunc) (res any, err error)
+type UnaryInterceptor func(ctx Context, req any, handler HandlerFunc) (res any, err error)
 
 // chainInterceptors combines multiple interceptors into a single one.
 // The first interceptor in the slice is the outer-most one (runs first).
@@ -38,7 +38,7 @@ func chainInterceptors(interceptors []UnaryInterceptor) UnaryInterceptor {
 	if len(interceptors) == 1 {
 		return interceptors[0]
 	}
-	return func(ctx *Context, req any, handler HandlerFunc) (any, error) {
+	return func(ctx Context, req any, handler HandlerFunc) (any, error) {
 		// Chain: i[0] -> i[1] -> ... -> handler
 		// We recursively build the chain
 		var chain HandlerFunc = handler
@@ -46,11 +46,11 @@ func chainInterceptors(interceptors []UnaryInterceptor) UnaryInterceptor {
 			current := interceptors[i]
 			next := chain
 			chain = func(ctx context.Context, req any) (any, error) {
-				// Convert context.Context back to *Context
-				// This works because the interceptor passes ctx (which is *Context) to handler
-				tygorCtx, ok := ctx.(*Context)
+				// Convert context.Context back to Context
+				// This works because the interceptor passes ctx (which is Context) to handler
+				tygorCtx, ok := ctx.(Context)
 				if !ok {
-					// If someone wrapped the context, extract our *Context from it
+					// If someone wrapped the context, extract our Context from it
 					tygorCtx, _ = FromContext(ctx)
 				}
 				return current(tygorCtx, req, next)

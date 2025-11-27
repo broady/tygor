@@ -2,12 +2,37 @@ package tygor
 
 import (
 	"context"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 )
 
+// testContext implements Context for testing interceptors.
+type testContext struct {
+	context.Context
+	service string
+	name    string
+	request *http.Request
+	writer  http.ResponseWriter
+}
+
+func (c *testContext) Service() string                 { return c.service }
+func (c *testContext) EndpointID() string              { return c.service + "." + c.name }
+func (c *testContext) HTTPRequest() *http.Request      { return c.request }
+func (c *testContext) HTTPWriter() http.ResponseWriter { return c.writer }
+
+// newSimpleTestContext creates a minimal test context with the given service and method.
+// Use this for testing the Context interface methods - it doesn't have HTTP primitives.
+func newSimpleTestContext(parent context.Context, service, method string) Context {
+	return &testContext{
+		Context: parent,
+		service: service,
+		name:    method,
+	}
+}
+
 func TestContext_Service(t *testing.T) {
-	ctx := NewContext(context.Background(), "TestService", "TestMethod")
+	ctx := newSimpleTestContext(context.Background(), "TestService", "TestMethod")
 
 	if ctx.Service() != "TestService" {
 		t.Errorf("expected service 'TestService', got %s", ctx.Service())
@@ -15,7 +40,7 @@ func TestContext_Service(t *testing.T) {
 }
 
 func TestContext_EndpointID(t *testing.T) {
-	ctx := NewContext(context.Background(), "TestService", "TestMethod")
+	ctx := newSimpleTestContext(context.Background(), "TestService", "TestMethod")
 
 	if ctx.EndpointID() != "TestService.TestMethod" {
 		t.Errorf("expected endpoint 'TestService.TestMethod', got %s", ctx.EndpointID())
@@ -97,14 +122,14 @@ func TestFromContext_AfterWithValue(t *testing.T) {
 	}
 }
 
-func TestNewContext(t *testing.T) {
-	ctx := NewContext(context.Background(), "TestService", "TestMethod")
+func TestContext_Basic(t *testing.T) {
+	ctx := newSimpleTestContext(context.Background(), "TestService", "TestMethod")
 
 	if ctx.EndpointID() != "TestService.TestMethod" {
 		t.Errorf("expected endpoint 'TestService.TestMethod', got %s", ctx.EndpointID())
 	}
 
-	// HTTPRequest and HTTPWriter should be nil when created via NewContext
+	// HTTPRequest and HTTPWriter should be nil when created via newSimpleTestContext
 	if ctx.HTTPRequest() != nil {
 		t.Error("expected HTTPRequest to be nil")
 	}
@@ -114,7 +139,7 @@ func TestNewContext(t *testing.T) {
 }
 
 func TestContext_ImplementsContextInterface(t *testing.T) {
-	ctx := NewContext(context.Background(), "TestService", "TestMethod")
+	ctx := newSimpleTestContext(context.Background(), "TestService", "TestMethod")
 
 	// Should be usable as context.Context
 	var _ context.Context = ctx
@@ -133,7 +158,7 @@ func TestContext_ValuePropagation(t *testing.T) {
 	key := ctxKey("test-key")
 
 	parent := context.WithValue(context.Background(), key, "test-value")
-	ctx := NewContext(parent, "TestService", "TestMethod")
+	ctx := newSimpleTestContext(parent, "TestService", "TestMethod")
 
 	val := ctx.Value(key)
 	if val != "test-value" {

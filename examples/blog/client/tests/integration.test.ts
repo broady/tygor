@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { createClient, RPCError } from "@tygor/client";
+import { createClient, ServerError } from "@tygor/client";
 import { startServer, type RunningServer } from "@tygor/testing";
 import { registry } from "../src/rpc/manifest";
 
@@ -52,8 +52,8 @@ describe("Users service", () => {
       });
       expect.unreachable("Should have thrown");
     } catch (e) {
-      expect(e).toBeInstanceOf(RPCError);
-      if (e instanceof RPCError) {
+      expect(e).toBeInstanceOf(ServerError);
+      if (e instanceof ServerError) {
         expect(e.code).toBe("invalid_argument");
       }
     }
@@ -78,8 +78,8 @@ describe("Users service", () => {
       });
       expect.unreachable("Should have thrown");
     } catch (e) {
-      expect(e).toBeInstanceOf(RPCError);
-      if (e instanceof RPCError) {
+      expect(e).toBeInstanceOf(ServerError);
+      if (e instanceof ServerError) {
         expect(e.code).toBe("unauthenticated");
       }
     }
@@ -114,8 +114,8 @@ describe("Posts service - public endpoints", () => {
       await client.Posts.Get({ post_id: 99999 });
       expect.unreachable("Should have thrown");
     } catch (e) {
-      expect(e).toBeInstanceOf(RPCError);
-      if (e instanceof RPCError) {
+      expect(e).toBeInstanceOf(ServerError);
+      if (e instanceof ServerError) {
         expect(e.code).toBe("not_found");
       }
     }
@@ -126,8 +126,8 @@ describe("Posts service - public endpoints", () => {
       await client.Posts.Get({ post_id: 2 }); // Post 2 is unpublished in demo data
       expect.unreachable("Should have thrown");
     } catch (e) {
-      expect(e).toBeInstanceOf(RPCError);
-      if (e instanceof RPCError) {
+      expect(e).toBeInstanceOf(ServerError);
+      if (e instanceof ServerError) {
         expect(e.code).toBe("permission_denied");
       }
     }
@@ -200,8 +200,8 @@ describe("Posts service - authenticated endpoints", () => {
       });
       expect.unreachable("Should have thrown");
     } catch (e) {
-      expect(e).toBeInstanceOf(RPCError);
-      if (e instanceof RPCError) {
+      expect(e).toBeInstanceOf(ServerError);
+      if (e instanceof ServerError) {
         expect(e.code).toBe("unauthenticated");
       }
     }
@@ -255,8 +255,8 @@ describe("Comments service", () => {
       });
       expect.unreachable("Should have thrown");
     } catch (e) {
-      expect(e).toBeInstanceOf(RPCError);
-      if (e instanceof RPCError) {
+      expect(e).toBeInstanceOf(ServerError);
+      if (e instanceof ServerError) {
         expect(e.code).toBe("permission_denied");
       }
     }

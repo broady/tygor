@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { createClient, RPCError } from "@tygor/client";
+import { createClient, ServerError } from "@tygor/client";
 import { startServer, type RunningServer } from "@tygor/testing";
 import { registry } from "../src/rpc/manifest";
 
@@ -72,8 +72,8 @@ describe("Items service (protobuf types)", () => {
         await client.Items.Get({ id: 999 });
         expect.unreachable("Should have thrown");
       } catch (e) {
-        expect(e).toBeInstanceOf(RPCError);
-        if (e instanceof RPCError) {
+        expect(e).toBeInstanceOf(ServerError);
+        if (e instanceof ServerError) {
           expect(e.code).toBe("not_found");
         }
       }
@@ -84,8 +84,8 @@ describe("Items service (protobuf types)", () => {
         await client.Items.Get({ id: -1 });
         expect.unreachable("Should have thrown");
       } catch (e) {
-        expect(e).toBeInstanceOf(RPCError);
-        if (e instanceof RPCError) {
+        expect(e).toBeInstanceOf(ServerError);
+        if (e instanceof ServerError) {
           expect(e.code).toBe("not_found");
         }
       }
@@ -127,8 +127,8 @@ describe("Items service (protobuf types)", () => {
         });
         expect.unreachable("Should have thrown");
       } catch (e) {
-        expect(e).toBeInstanceOf(RPCError);
-        if (e instanceof RPCError) {
+        expect(e).toBeInstanceOf(ServerError);
+        if (e instanceof ServerError) {
           expect(e.code).toBe("invalid_argument");
         }
       }

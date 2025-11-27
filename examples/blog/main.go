@@ -92,7 +92,7 @@ func getUserID(ctx context.Context) (int64, bool) {
 }
 
 // [snippet:auth-interceptor]
-func requireAuth(ctx *tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
+func requireAuth(ctx tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
 	// Extract token from request headers
 	httpReq := ctx.HTTPRequest()
 	if httpReq == nil {

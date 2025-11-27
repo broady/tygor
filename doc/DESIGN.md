@@ -128,12 +128,12 @@ app := tygor.NewApp().WithErrorTransformer(func(err error) *tygor.Error {
 
 **Interceptor chain:** Global → Service → Handler. Signature:
 ```go
-type UnaryInterceptor func(ctx *tygor.Context, req any, handler tygor.HandlerFunc) (any, error)
+type UnaryInterceptor func(ctx tygor.Context, req any, handler tygor.HandlerFunc) (any, error)
 ```
 
 **Context API:**
-- Interceptors receive `*tygor.Context` with `Service()`, `Method()`, `HTTPRequest()`, `HTTPWriter()` methods
-- Handlers can use `tygor.FromContext(ctx)` to extract `*Context` from `context.Context`
+- Interceptors receive `tygor.Context` interface with `Service()`, `EndpointID()`, `HTTPRequest()`, `HTTPWriter()` methods
+- Handlers can use `tygor.FromContext(ctx)` to extract `Context` from `context.Context`
 
 **Code generation:**
 ```go

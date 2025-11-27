@@ -14,7 +14,7 @@ func LoggingInterceptor(logger *slog.Logger) tygor.UnaryInterceptor {
 		logger = slog.Default()
 	}
 
-	return func(ctx *tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
+	return func(ctx tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
 		start := time.Now()
 
 		logger.InfoContext(ctx, "request started",

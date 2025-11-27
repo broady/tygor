@@ -229,7 +229,7 @@ type serviceWrappedHandler struct {
 	interceptors []UnaryInterceptor
 }
 
-func (h *serviceWrappedHandler) serveHTTP(ctx *Context) {
+func (h *serviceWrappedHandler) serveHTTP(ctx *rpcContext) {
 	// Combine: Global (ctx.interceptors) + Service (h.interceptors)
 	combined := make([]UnaryInterceptor, 0, len(ctx.interceptors)+len(h.interceptors))
 	combined = append(combined, ctx.interceptors...)

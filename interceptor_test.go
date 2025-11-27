@@ -3,8 +3,29 @@ package tygor
 import (
 	"context"
 	"errors"
+	"net/http"
 	"testing"
 )
+
+// interceptorTestContext implements Context for testing interceptors.
+type interceptorTestContext struct {
+	context.Context
+	service string
+	name    string
+}
+
+func (c *interceptorTestContext) Service() string                 { return c.service }
+func (c *interceptorTestContext) EndpointID() string              { return c.service + "." + c.name }
+func (c *interceptorTestContext) HTTPRequest() *http.Request      { return nil }
+func (c *interceptorTestContext) HTTPWriter() http.ResponseWriter { return nil }
+
+func newInterceptorTestContext(parent context.Context, service, method string) Context {
+	return &interceptorTestContext{
+		Context: parent,
+		service: service,
+		name:    method,
+	}
+}
 
 func TestChainInterceptors_Empty(t *testing.T) {
 	chain := chainInterceptors([]UnaryInterceptor{})
@@ -15,7 +36,7 @@ func TestChainInterceptors_Empty(t *testing.T) {
 
 func TestChainInterceptors_Single(t *testing.T) {
 	called := false
-	interceptor := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
+	interceptor := func(ctx Context, req any, handler HandlerFunc) (any, error) {
 		called = true
 		return handler(ctx, req)
 	}
@@ -25,7 +46,7 @@ func TestChainInterceptors_Single(t *testing.T) {
 		t.Fatal("expected non-nil chain")
 	}
 
-	ctx := NewContext(context.Background(), "Test", "Method")
+	ctx := newInterceptorTestContext(context.Background(), "Test", "Method")
 	handler := func(ctx context.Context, req any) (any, error) {
 		return "result", nil
 	}
@@ -45,21 +66,21 @@ func TestChainInterceptors_Single(t *testing.T) {
 func TestChainInterceptors_Multiple(t *testing.T) {
 	var order []string
 
-	interceptor1 := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
+	interceptor1 := func(ctx Context, req any, handler HandlerFunc) (any, error) {
 		order = append(order, "before-1")
 		res, err := handler(ctx, req)
 		order = append(order, "after-1")
 		return res, err
 	}
 
-	interceptor2 := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
+	interceptor2 := func(ctx Context, req any, handler HandlerFunc) (any, error) {
 		order = append(order, "before-2")
 		res, err := handler(ctx, req)
 		order = append(order, "after-2")
 		return res, err
 	}
 
-	interceptor3 := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
+	interceptor3 := func(ctx Context, req any, handler HandlerFunc) (any, error) {
 		order = append(order, "before-3")
 		res, err := handler(ctx, req)
 		order = append(order, "after-3")
@@ -71,7 +92,7 @@ func TestChainInterceptors_Multiple(t *testing.T) {
 		t.Fatal("expected non-nil chain")
 	}
 
-	ctx := NewContext(context.Background(), "Test", "Method")
+	ctx := newInterceptorTestContext(context.Background(), "Test", "Method")
 	handler := func(ctx context.Context, req any) (any, error) {
 		order = append(order, "handler")
 		return "result", nil
@@ -99,22 +120,22 @@ func TestChainInterceptors_Multiple(t *testing.T) {
 func TestChainInterceptors_ErrorPropagation(t *testing.T) {
 	testErr := errors.New("test error")
 
-	interceptor1 := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
+	interceptor1 := func(ctx Context, req any, handler HandlerFunc) (any, error) {
 		return handler(ctx, req)
 	}
 
-	interceptor2 := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
+	interceptor2 := func(ctx Context, req any, handler HandlerFunc) (any, error) {
 		// This interceptor returns an error
 		return nil, testErr
 	}
 
-	interceptor3 := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
+	interceptor3 := func(ctx Context, req any, handler HandlerFunc) (any, error) {
 		return handler(ctx, req)
 	}
 
 	chain := chainInterceptors([]UnaryInterceptor{interceptor1, interceptor2, interceptor3})
 
-	ctx := NewContext(context.Background(), "Test", "Method")
+	ctx := newInterceptorTestContext(context.Background(), "Test", "Method")
 	handler := func(ctx context.Context, req any) (any, error) {
 		t.Error("handler should not be called when interceptor returns error")
 		return nil, nil
@@ -130,14 +151,14 @@ func TestChainInterceptors_ErrorPropagation(t *testing.T) {
 }
 
 func TestChainInterceptors_ModifyRequest(t *testing.T) {
-	interceptor1 := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
+	interceptor1 := func(ctx Context, req any, handler HandlerFunc) (any, error) {
 		// Modify request
 		return handler(ctx, "modified")
 	}
 
 	chain := chainInterceptors([]UnaryInterceptor{interceptor1})
 
-	ctx := NewContext(context.Background(), "Test", "Method")
+	ctx := newInterceptorTestContext(context.Background(), "Test", "Method")
 	handler := func(ctx context.Context, req any) (any, error) {
 		if req != "modified" {
 			t.Errorf("expected modified request, got %v", req)
@@ -155,7 +176,7 @@ func TestChainInterceptors_ModifyRequest(t *testing.T) {
 }
 
 func TestChainInterceptors_ModifyResponse(t *testing.T) {
-	interceptor1 := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
+	interceptor1 := func(ctx Context, req any, handler HandlerFunc) (any, error) {
 		res, err := handler(ctx, req)
 		if err != nil {
 			return nil, err
@@ -166,7 +187,7 @@ func TestChainInterceptors_ModifyResponse(t *testing.T) {
 
 	chain := chainInterceptors([]UnaryInterceptor{interceptor1})
 
-	ctx := NewContext(context.Background(), "Test", "Method")
+	ctx := newInterceptorTestContext(context.Background(), "Test", "Method")
 	handler := func(ctx context.Context, req any) (any, error) {
 		return "original", nil
 	}
@@ -184,7 +205,7 @@ func TestChainInterceptors_ContextPropagation(t *testing.T) {
 	type ctxKey string
 	key := ctxKey("test-key")
 
-	interceptor1 := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
+	interceptor1 := func(ctx Context, req any, handler HandlerFunc) (any, error) {
 		// Add value to context
 		newCtx := context.WithValue(ctx, key, "test-value")
 		return handler(newCtx, req)
@@ -192,7 +213,7 @@ func TestChainInterceptors_ContextPropagation(t *testing.T) {
 
 	chain := chainInterceptors([]UnaryInterceptor{interceptor1})
 
-	ctx := NewContext(context.Background(), "Test", "Method")
+	ctx := newInterceptorTestContext(context.Background(), "Test", "Method")
 	handler := func(ctx context.Context, req any) (any, error) {
 		val := ctx.Value(key)
 		if val != "test-value" {
@@ -215,7 +236,7 @@ func TestChainInterceptors_ContextAccessible(t *testing.T) {
 	expectedName := "TestMethod"
 	expectedEndpointID := expectedService + "." + expectedName
 
-	interceptor := func(ctx *Context, req any, handler HandlerFunc) (any, error) {
+	interceptor := func(ctx Context, req any, handler HandlerFunc) (any, error) {
 		if ctx.EndpointID() != expectedEndpointID {
 			t.Errorf("expected endpoint %s, got %s", expectedEndpointID, ctx.EndpointID())
 		}
@@ -224,7 +245,7 @@ func TestChainInterceptors_ContextAccessible(t *testing.T) {
 
 	chain := chainInterceptors([]UnaryInterceptor{interceptor})
 
-	ctx := NewContext(context.Background(), expectedService, expectedName)
+	ctx := newInterceptorTestContext(context.Background(), expectedService, expectedName)
 	handler := func(ctx context.Context, req any) (any, error) {
 		return "success", nil
 	}

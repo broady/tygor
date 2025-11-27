@@ -14,8 +14,8 @@ import (
 	"github.com/gorilla/schema"
 )
 
-// Ensure *Context satisfies context.Context at compile time.
-var _ context.Context = (*Context)(nil)
+// Ensure Context interface satisfies context.Context at compile time.
+var _ context.Context = (Context)(nil)
 
 var (
 	validate            = validator.New()
@@ -42,7 +42,7 @@ type Endpoint interface {
 // endpointHandler is the internal interface used by the framework to serve requests.
 type endpointHandler interface {
 	Endpoint
-	serveHTTP(ctx *Context)
+	serveHTTP(ctx *rpcContext)
 	metadata() *internal.MethodMetadata
 }
 
@@ -333,7 +333,7 @@ func (h *QueryHandler[Req, Res]) getCacheControlHeader() string {
 }
 
 // serveHTTP implements the API handler for GET requests with caching support.
-func (h *QueryHandler[Req, Res]) serveHTTP(ctx *Context) {
+func (h *QueryHandler[Req, Res]) serveHTTP(ctx *rpcContext) {
 	decoder := func() (Req, error) {
 		var req Req
 		// Select decoder based on strictness setting
@@ -364,7 +364,7 @@ func (h *QueryHandler[Req, Res]) serveHTTP(ctx *Context) {
 }
 
 // serveHTTP implements the API handler for POST requests.
-func (h *ExecHandler[Req, Res]) serveHTTP(ctx *Context) {
+func (h *ExecHandler[Req, Res]) serveHTTP(ctx *rpcContext) {
 	decoder := func() (Req, error) {
 		var req Req
 		if ctx.request.Body != nil {
@@ -390,7 +390,7 @@ func (h *ExecHandler[Req, Res]) serveHTTP(ctx *Context) {
 }
 
 // serve implements the generic glue code for both ExecHandler and QueryHandler.
-func (h *handlerBase[Req, Res]) serve(ctx *Context, cacheControl string, decodeFunc func() (Req, error)) {
+func (h *handlerBase[Req, Res]) serve(ctx *rpcContext, cacheControl string, decodeFunc func() (Req, error)) {
 	// 1. Combine Interceptors
 	// ctx.interceptors contains: Global + Service interceptors
 	// We append Handler-level interceptors
@@ -464,7 +464,7 @@ func (h *handlerBase[Req, Res]) serve(ctx *Context, cacheControl string, decodeF
 	}
 }
 
-func handleError(ctx *Context, err error) {
+func handleError(ctx *rpcContext, err error) {
 	var svcErr *Error
 	if ctx.errorTransformer != nil {
 		svcErr = ctx.errorTransformer(err)

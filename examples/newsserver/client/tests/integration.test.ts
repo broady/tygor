@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { createClient, RPCError } from "@tygor/client";
+import { createClient, ServerError } from "@tygor/client";
 import { startServer, type RunningServer } from "@tygor/testing";
 import { registry } from "../src/rpc/manifest";
 import { NewsStatusDraft, NewsStatusPublished, DateTime } from "../src/rpc/types";
@@ -84,8 +84,8 @@ describe("News service integration", () => {
         });
         expect.unreachable("Should have thrown an error");
       } catch (e) {
-        expect(e).toBeInstanceOf(RPCError);
-        if (e instanceof RPCError) {
+        expect(e).toBeInstanceOf(ServerError);
+        if (e instanceof ServerError) {
           expect(e.code).toBe("invalid_argument");
           expect(e.message).toBe("simulated error");
         }

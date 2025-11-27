@@ -34,7 +34,7 @@ func TestGetHandler_CacheControl_Simple(t *testing.T) {
 	// Verify header is set in HTTP response
 	req := httptest.NewRequest("GET", "/test?query=hello", nil)
 	w := httptest.NewRecorder()
-	ctx := newTestContext(w, req, testContextConfig{})
+	ctx := newRpcTestContext(w, req, testContextConfig{})
 
 	handler.serveHTTP(ctx)
 
@@ -227,7 +227,7 @@ func TestGetHandler_CacheControl_NoCache(t *testing.T) {
 	// Verify no header in HTTP response
 	req := httptest.NewRequest("GET", "/test?query=hello", nil)
 	w := httptest.NewRecorder()
-	ctx := newTestContext(w, req, testContextConfig{})
+	ctx := newRpcTestContext(w, req, testContextConfig{})
 
 	handler.serveHTTP(ctx)
 
@@ -247,7 +247,7 @@ func TestHandler_POST_NoCache(t *testing.T) {
 	// Verify no Cache-Control header in HTTP response
 	req := httptest.NewRequest("POST", "/test", nil)
 	w := httptest.NewRecorder()
-	ctx := newTestContext(w, req, testContextConfig{})
+	ctx := newRpcTestContext(w, req, testContextConfig{})
 
 	handler.serveHTTP(ctx)
 
@@ -305,7 +305,7 @@ func TestGetHandler_CacheControl_EndToEnd(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/test?query=hello", nil)
 	w := httptest.NewRecorder()
-	ctx := newTestContext(w, req, testContextConfig{})
+	ctx := newRpcTestContext(w, req, testContextConfig{})
 
 	handler.serveHTTP(ctx)
 
