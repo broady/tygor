@@ -55,6 +55,12 @@ type GeneratorConfig struct {
 	TypeCase           string // "preserve", "camel", "pascal", "snake", "kebab"
 	PropertyNameSource string // "field" or "tag:json", "tag:xml", etc.
 
+	// StripPackagePrefix removes this prefix from package paths when qualifying type names.
+	// Types from packages matching this prefix are qualified with the remaining path.
+	// Example: "github.com/foo/bar/" makes "github.com/foo/bar/api/v1.User" → "api_v1_User"
+	// Types from the main package (Schema.Package) are never qualified.
+	StripPackagePrefix string
+
 	// Formatting
 	IndentStyle     string // "space" or "tab"
 	IndentSize      int    // Spaces per indent level (when IndentStyle is "space")

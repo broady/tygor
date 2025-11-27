@@ -16,6 +16,51 @@ type Emitter struct {
 	indent   string
 }
 
+// qualifyTypeName returns the qualified TypeScript name for a Go type.
+// Types from the main package (Schema.Package) are not qualified.
+// Types from other packages are qualified with the sanitized package path
+// after removing StripPackagePrefix.
+func (e *Emitter) qualifyTypeName(id ir.GoIdentifier) string {
+	typeName := applyNameTransforms(id.Name, e.config)
+
+	// If no StripPackagePrefix is configured, don't qualify anything (backward compat)
+	if e.config.StripPackagePrefix == "" {
+		return typeName
+	}
+
+	// Main package types are not qualified
+	if id.Package == "" || id.Package == e.schema.Package.Path {
+		return typeName
+	}
+
+	// External package - qualify with sanitized path
+	pkgPath := id.Package
+
+	// Strip the prefix
+	pkgPath = strings.TrimPrefix(pkgPath, e.config.StripPackagePrefix)
+
+	// If nothing was stripped (prefix didn't match), use full path
+	// Sanitize the path: replace / and . with _
+	sanitized := strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			return r
+		}
+		return '_'
+	}, pkgPath)
+
+	// Remove leading/trailing underscores and collapse multiple underscores
+	for strings.Contains(sanitized, "__") {
+		sanitized = strings.ReplaceAll(sanitized, "__", "_")
+	}
+	sanitized = strings.Trim(sanitized, "_")
+
+	// Combine: pkg_prefix_TypeName
+	if sanitized != "" {
+		return sanitized + "_" + typeName
+	}
+	return typeName
+}
+
 // EmitType emits a top-level type declaration.
 func (e *Emitter) EmitType(buf *bytes.Buffer, typ ir.TypeDescriptor) ([]ir.Warning, error) {
 	// Emit documentation comments if enabled
@@ -39,8 +84,8 @@ func (e *Emitter) EmitType(buf *bytes.Buffer, typ ir.TypeDescriptor) ([]ir.Warni
 func (e *Emitter) emitStruct(buf *bytes.Buffer, s *ir.StructDescriptor) ([]ir.Warning, error) {
 	var warnings []ir.Warning
 
-	// Apply name transforms
-	typeName := applyNameTransforms(s.Name.Name, e.config)
+	// Apply name transforms with package qualification
+	typeName := e.qualifyTypeName(s.Name)
 	typeName = escapeReservedWord(typeName)
 
 	// Emit export keyword
@@ -73,7 +118,7 @@ func (e *Emitter) emitStruct(buf *bytes.Buffer, s *ir.StructDescriptor) ([]ir.Wa
 				if i > 0 {
 					buf.WriteString(", ")
 				}
-				extName := applyNameTransforms(ext.Name, e.config)
+				extName := e.qualifyTypeName(ext)
 				extName = escapeReservedWord(extName)
 				buf.WriteString(extName)
 			}
@@ -90,7 +135,7 @@ func (e *Emitter) emitStruct(buf *bytes.Buffer, s *ir.StructDescriptor) ([]ir.Wa
 		// Handle extends with intersection types
 		if len(s.Extends) > 0 {
 			for _, ext := range s.Extends {
-				extName := applyNameTransforms(ext.Name, e.config)
+				extName := e.qualifyTypeName(ext)
 				extName = escapeReservedWord(extName)
 				buf.WriteString(extName)
 				buf.WriteString(" & ")
@@ -165,8 +210,8 @@ func (e *Emitter) emitStruct(buf *bytes.Buffer, s *ir.StructDescriptor) ([]ir.Wa
 
 // emitAlias emits a type alias.
 func (e *Emitter) emitAlias(buf *bytes.Buffer, a *ir.AliasDescriptor) ([]ir.Warning, error) {
-	// Apply name transforms
-	typeName := applyNameTransforms(a.Name.Name, e.config)
+	// Apply name transforms with package qualification
+	typeName := e.qualifyTypeName(a.Name)
 	typeName = escapeReservedWord(typeName)
 
 	// Emit export keyword
@@ -200,8 +245,8 @@ func (e *Emitter) emitAlias(buf *bytes.Buffer, a *ir.AliasDescriptor) ([]ir.Warn
 
 // emitEnum emits an enum based on the configured style.
 func (e *Emitter) emitEnum(buf *bytes.Buffer, enum *ir.EnumDescriptor) ([]ir.Warning, error) {
-	// Apply name transforms
-	typeName := applyNameTransforms(enum.Name.Name, e.config)
+	// Apply name transforms with package qualification
+	typeName := e.qualifyTypeName(enum.Name)
 	typeName = escapeReservedWord(typeName)
 
 	switch e.tsConfig.EnumStyle {
@@ -411,7 +456,7 @@ func (e *Emitter) emitMap(m *ir.MapDescriptor) (string, error) {
 
 // emitReference emits a reference to a named type.
 func (e *Emitter) emitReference(r *ir.ReferenceDescriptor) string {
-	typeName := applyNameTransforms(r.Target.Name, e.config)
+	typeName := e.qualifyTypeName(r.Target)
 	return escapeReservedWord(typeName)
 }
 
