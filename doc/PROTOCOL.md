@@ -306,7 +306,7 @@ Implementations that generate client code SHOULD provide a **manifest file** tha
 import { ServiceRegistry } from '@tygor/client';
 import * as types from './types';
 
-export interface RPCManifest {
+export interface Manifest {
   "ServiceName.MethodName": {
     req: types.RequestType;
     res: types.ResponseType;
@@ -320,8 +320,8 @@ const metadata = {
   // ... additional operations
 } as const;
 
-export const registry: ServiceRegistry<RPCManifest> = {
-  manifest: {} as RPCManifest,
+export const registry: ServiceRegistry<Manifest> = {
+  manifest: {} as Manifest,
   metadata,
 };
 ```

@@ -193,30 +193,7 @@ try {
 
 The client uses JavaScript Proxies to provide method access without code generation bloat. Your bundle only includes the types and a small runtime, regardless of how many API methods you have.
 
-Example `manifest.ts`:
-
-```typescript
-export interface RPCManifest {
-  "News.List": {
-    req: types.ListNewsParams;
-    res: types.News[];
-  };
-  "News.Create": {
-    req: types.CreateNewsParams;
-    res: types.News;
-  };
-}
-
-const metadata = {
-  "News.List": { method: "GET", path: "/News/List" },
-  "News.Create": { method: "POST", path: "/News/Create" },
-} as const;
-
-export const registry: ServiceRegistry<RPCManifest> = {
-  manifest: {} as RPCManifest,
-  metadata,
-};
-```
+See [examples/newsserver/client/src/rpc/manifest.ts](examples/newsserver/client/src/rpc/manifest.ts) for an example of generated output.
 
 ## Request Handling
 

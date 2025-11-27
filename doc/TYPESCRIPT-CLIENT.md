@@ -91,7 +91,7 @@ import { ServiceRegistry } from '@tygor/client';
 import * as types from './types';
 
 /** Type-safe RPC manifest mapping operation IDs to request/response types */
-export interface RPCManifest {
+export interface Manifest {
   "News.List": {
     req: types.ListNewsParams;
     res: types.News[];
@@ -109,14 +109,14 @@ const metadata = {
 } as const;
 
 /** Registry combining type manifest and runtime metadata */
-export const registry: ServiceRegistry<RPCManifest> = {
-  manifest: {} as RPCManifest,
+export const registry: ServiceRegistry<Manifest> = {
+  manifest: {} as Manifest,
   metadata,
 };
 ```
 
 **Requirements:**
-- `RPCManifest` interface MUST map operation IDs to their request/response types
+- `Manifest` interface MUST map operation IDs to their request/response types
 - `metadata` constant MUST provide runtime access to HTTP method and path
 - `registry` object MUST combine the manifest type and metadata for client construction
 - Operation IDs MUST follow the format `"{Service}.{Method}"`
@@ -132,14 +132,14 @@ The client MUST be implemented using ES6 Proxies to dynamically resolve method c
 **Example Implementation:**
 ```typescript
 // client.ts
-import { RPCManifest, RPCMetadata } from './rpc/manifest';
+import { Manifest, Metadata } from './rpc/manifest';
 
 type UnwrapPromise<T> = T extends Promise<infer U> ? U : T;
 
 export type RPCClient = {
-  [Service in keyof RPCManifest as Service extends `${infer S}.${string}` ? S : never]: {
-    [Method in keyof RPCManifest as Method extends `${Service}.${infer M}` ? M : never]:
-      (req: RPCManifest[Method]['req']) => Promise<RPCManifest[Method]['res']>
+  [Service in keyof Manifest as Service extends `${infer S}.${string}` ? S : never]: {
+    [Method in keyof Manifest as Method extends `${Service}.${infer M}` ? M : never]:
+      (req: Manifest[Method]['req']) => Promise<Manifest[Method]['res']>
   }
 };
 
@@ -892,7 +892,7 @@ export interface News {
 import { ServiceRegistry } from '@tygor/client';
 import * as types from './types';
 
-export interface RPCManifest {
+export interface Manifest {
   "News.List": {
     req: types.ListNewsParams;
     res: types.News[];
@@ -903,8 +903,8 @@ const metadata = {
   "News.List": { method: "GET", path: "/News/List" },
 } as const;
 
-export const registry: ServiceRegistry<RPCManifest> = {
-  manifest: {} as RPCManifest,
+export const registry: ServiceRegistry<Manifest> = {
+  manifest: {} as Manifest,
   metadata,
 };
 ```

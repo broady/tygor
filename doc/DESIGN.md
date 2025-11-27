@@ -152,7 +152,7 @@ tygorgen.Generate(app, &tygorgen.Config{
 
 **Generated files:**
 - `types.ts`: TypeScript interfaces for all request/response types
-- `manifest.ts`: `RPCManifest` interface + `registry` constant with metadata
+- `manifest.ts`: `Manifest` interface + `registry` constant with metadata
 
 **Proxy implementation:** Double proxy (service → method) resolves calls dynamically. No generated method code.
 
