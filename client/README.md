@@ -1,3 +1,5 @@
+<!-- snippet-lint-disable -->
+
 # @tygor/client
 
 TypeScript runtime client for the [tygor](https://github.com/broady/tygor) RPC framework.

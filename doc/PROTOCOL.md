@@ -1,3 +1,5 @@
+<!-- snippet-lint-disable -->
+
 # Tygor Protocol Specification
 
 **Version:** 1.1

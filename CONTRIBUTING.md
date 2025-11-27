@@ -1,3 +1,5 @@
+<!-- snippet-lint-disable -->
+
 # Contributing to tygor
 
 Thanks for your interest in contributing to tygor!

@@ -8,7 +8,7 @@ SNIPPET_TOOL := cd examples && go run ./cmd/snippet
 GO_FILES := $(wildcard *.go) $(wildcard middleware/*.go) $(wildcard tygorgen/*.go)
 DOC_FILES := $(wildcard doc/examples/quickstart/*.go)
 
-.PHONY: all test lint check readme precommit fmt fmt-check ci-local help
+.PHONY: all test lint check readme lint-readme precommit fmt fmt-check ci-local help
 
 # Default target
 all: test lint
@@ -36,8 +36,15 @@ readme:
 	@cd examples && go run ./cmd/snippet -root .. -inject ../README.md -format simple \
 		$(addprefix ../,$(GO_FILES)) \
 		$(addprefix ../,$(DOC_FILES)) \
-		newsserver/main.go newsserver/api/types.go \
+		newsserver/main.go newsserver/api/types.go newsserver/client/index.ts \
 		blog/main.go blog/api/types.go
+
+# Lint all markdown files for large code blocks not covered by snippets
+lint-readme:
+	@echo "Linting markdown files for unmanaged code blocks..."
+	@cd examples && find .. -name '*.md' -not -path '*/node_modules/*' -not -path '*/.git/*' | \
+		xargs -I {} sh -c 'go run ./cmd/snippet -lint "{}" || exit 1'
+	@echo "All markdown files passed lint."
 
 # Check if generated files and README are up-to-date
 check: readme
@@ -70,11 +77,12 @@ ci-local:
 # Help
 help:
 	@echo "Available targets:"
-	@echo "  make all       - Run tests and lint (default)"
-	@echo "  make test      - Run tests"
-	@echo "  make lint      - Run go vet and staticcheck"
-	@echo "  make fmt       - Format Go code"
-	@echo "  make readme    - Update README.md with code snippets"
-	@echo "  make check     - Verify README is up-to-date"
-	@echo "  make precommit - Run all checks (test, lint, check, examples)"
-	@echo "  make ci-local  - Run GitHub Actions workflow locally via Docker (requires act)"
+	@echo "  make all         - Run tests and lint (default)"
+	@echo "  make test        - Run tests"
+	@echo "  make lint        - Run go vet and staticcheck"
+	@echo "  make fmt         - Format Go code"
+	@echo "  make readme      - Update README.md with code snippets"
+	@echo "  make lint-readme - Check all .md files for unmanaged code blocks"
+	@echo "  make check       - Verify README is up-to-date"
+	@echo "  make precommit   - Run all checks (test, lint, check, examples)"
+	@echo "  make ci-local    - Run GitHub Actions workflow locally via Docker (requires act)"

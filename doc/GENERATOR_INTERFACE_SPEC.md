@@ -1,3 +1,5 @@
+<!-- snippet-lint-disable -->
+
 # Generator Interface Specification
 
 **Version**: 0.16.2

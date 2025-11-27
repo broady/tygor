@@ -167,6 +167,7 @@ func requireAuth(ctx tygor.Context, req any, handler tygor.HandlerFunc) (any, er
 
 Applied at different levels:
 
+<!-- snippet-ignore -->
 ```go
 // Handler-level (specific endpoints)
 postService.Register("Create",
@@ -178,6 +179,7 @@ commentService := app.Service("Comments").WithUnaryInterceptor(requireAuth)
 
 ### Authorization in Handlers
 
+<!-- snippet-ignore -->
 ```go
 func UpdatePost(ctx context.Context, req *api.UpdatePostRequest) (*api.Post, error) {
     userID, _ := getUserID(ctx)
@@ -193,6 +195,7 @@ func UpdatePost(ctx context.Context, req *api.UpdatePostRequest) (*api.Post, err
 
 ### Mixed Public/Private Endpoints
 
+<!-- snippet-ignore -->
 ```go
 postService := app.Service("Posts")
 
@@ -207,6 +210,7 @@ postService.Register("Create",
 
 ### Query Parameters with Validation
 
+<!-- snippet-ignore -->
 ```go
 type ListPostsParams struct {
     AuthorID  *int64 `schema:"author_id"`

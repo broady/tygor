@@ -9,7 +9,7 @@ GO_FILES ?= main.go $(wildcard api/*.go)
 TS_FILES ?= $(wildcard client/*.ts client/src/*.ts client/src/rpc/*.ts)
 GEN_DIR ?= ./client/src/rpc
 
-.PHONY: all test gen run clean check fmt snippet-go snippet-ts snippets readme help
+.PHONY: all test gen run clean check fmt snippet-go snippet-ts snippets readme lint-readme help
 
 # Default target
 all: gen test
@@ -79,17 +79,22 @@ snippets: snippet-go snippet-ts
 readme:
 	@$(SNIPPET_TOOL) -inject README.md $(GO_FILES) $(TS_FILES)
 
+# Lint README for large code blocks not covered by snippets
+lint-readme:
+	@$(SNIPPET_TOOL) -lint README.md
+
 # Help
 help:
 	@echo "Available targets:"
-	@echo "  make all        - Generate and test (default)"
-	@echo "  make test       - Run tests"
-	@echo "  make gen        - Generate TypeScript types"
-	@echo "  make run        - Start the server"
-	@echo "  make clean      - Remove generated files"
-	@echo "  make check      - Verify generated files are up-to-date"
-	@echo "  make fmt        - Format Go and TypeScript code"
-	@echo "  make snippet-go - Extract Go snippets as markdown"
-	@echo "  make snippet-ts - Extract TypeScript snippets as markdown"
-	@echo "  make snippets   - Extract all snippets"
-	@echo "  make readme     - Update README.md with code snippets"
+	@echo "  make all         - Generate and test (default)"
+	@echo "  make test        - Run tests"
+	@echo "  make gen         - Generate TypeScript types"
+	@echo "  make run         - Start the server"
+	@echo "  make clean       - Remove generated files"
+	@echo "  make check       - Verify generated files are up-to-date"
+	@echo "  make fmt         - Format Go and TypeScript code"
+	@echo "  make snippet-go  - Extract Go snippets as markdown"
+	@echo "  make snippet-ts  - Extract TypeScript snippets as markdown"
+	@echo "  make snippets    - Extract all snippets"
+	@echo "  make readme      - Update README.md with code snippets"
+	@echo "  make lint-readme - Check for unmanaged code blocks in README"

@@ -38,22 +38,22 @@ type News struct {
 
 // [/snippet:response-type]
 
-// [snippet:request-types]
+// [snippet:list-params]
 
 // ListNewsParams contains pagination parameters for listing news articles.
 type ListNewsParams struct {
-	// Limit is the maximum number of articles to return.
-	Limit *int32 `json:"limit" schema:"limit"`
-	// Offset is the number of articles to skip.
+	Limit  *int32 `json:"limit" schema:"limit"`
 	Offset *int32 `json:"offset" schema:"offset"`
 }
 
+// [/snippet:list-params]
+
+// [snippet:create-params]
+
 // CreateNewsParams contains the parameters for creating a new news article.
 type CreateNewsParams struct {
-	// Title is the article headline (required, 3-100 characters).
-	Title string `json:"title" validate:"required,min=3"`
-	// Body is the optional article content.
-	Body *string `json:"body,omitempty"`
+	Title string  `json:"title" validate:"required,min=3"`
+	Body  *string `json:"body,omitempty"`
 }
 
-// [/snippet:request-types]
+// [/snippet:create-params]

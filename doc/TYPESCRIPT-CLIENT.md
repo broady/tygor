@@ -1,3 +1,5 @@
+<!-- snippet-lint-disable -->
+
 # Tygor TypeScript Client Specification
 
 **Version:** 1.0

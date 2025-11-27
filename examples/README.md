@@ -107,6 +107,42 @@ To embed snippets in a README, use HTML comment markers:
 
 The content between markers is replaced when running `make readme`.
 
+### Whole-File Snippets
+
+To embed an entire file without adding markers to the source:
+
+```markdown
+<!-- [snippet-file:client/src/rpc/types.ts] -->
+```
+
+This reads the file and injects it as a code block. Useful for generated files.
+
+### Lint Mode
+
+Check for large code blocks (≥5 lines) not covered by snippets:
+
+```bash
+make lint-readme                    # Check current example
+go run ./cmd/snippet -lint README.md  # Direct usage
+```
+
+To ignore intentional code blocks (like simplified examples with comments):
+
+```markdown
+<!-- snippet-ignore -->
+```typescript
+// This block will not trigger lint warnings
+```
+```
+
+To disable lint for an entire file (design docs, specs, proposals):
+
+```markdown
+<!-- snippet-lint-disable -->
+```
+
+Place at the top of files that contain standalone conceptual examples.
+
 ## Module Structure
 
 The examples directory is a separate Go module (`github.com/broady/tygor/examples`) to allow heavier dependencies (like protobuf) without affecting the main tygor module.
