@@ -22,5 +22,8 @@ jobs:
         with:
           bun-version: latest
 
+      - name: Build client
+        run: cd client && npm install && npm run build
+
       - name: Run precommit checks
         run: make precommit
