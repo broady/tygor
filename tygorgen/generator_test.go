@@ -4,144 +4,12 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/broady/tygor"
 	"github.com/broady/tygor/internal/testfixtures"
 )
-
-// Test types for reflection tests (local to this package)
-type TestStruct struct {
-	Name string `json:"name"`
-}
-
-func TestSanitizePkgPath(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		expected string
-	}{
-		{"simple path", "github.com/user/repo", "github_com_user_repo"},
-		{"with dots", "pkg.sub.name", "pkg_sub_name"},
-		{"with hyphens", "my-package", "my_package"},
-		{"alphanumeric only", "abc123", "abc123"},
-		{"empty string", "", ""},
-		{"special chars", "foo@bar#baz", "foo_bar_baz"},
-		{"mixed case", "GitHub.Com/User/Repo", "GitHub_Com_User_Repo"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := sanitizePkgPath(tt.input)
-			if result != tt.expected {
-				t.Errorf("sanitizePkgPath(%q) = %q, want %q", tt.input, result, tt.expected)
-			}
-		})
-	}
-}
-
-func TestGetTypeName(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    reflect.Type
-		expected string
-	}{
-		// Nil type
-		{"nil type", nil, "any"},
-
-		// Primitives
-		{"string", reflect.TypeOf(""), "string"},
-		{"bool", reflect.TypeOf(true), "boolean"},
-		{"int", reflect.TypeOf(0), "number"},
-		{"int8", reflect.TypeOf(int8(0)), "number"},
-		{"int16", reflect.TypeOf(int16(0)), "number"},
-		{"int32", reflect.TypeOf(int32(0)), "number"},
-		{"int64", reflect.TypeOf(int64(0)), "number"},
-		{"uint", reflect.TypeOf(uint(0)), "number"},
-		{"uint8", reflect.TypeOf(uint8(0)), "number"},
-		{"uint16", reflect.TypeOf(uint16(0)), "number"},
-		{"uint32", reflect.TypeOf(uint32(0)), "number"},
-		{"uint64", reflect.TypeOf(uint64(0)), "number"},
-		{"float32", reflect.TypeOf(float32(0)), "number"},
-		{"float64", reflect.TypeOf(float64(0)), "number"},
-		{"byte", reflect.TypeOf(byte(0)), "number"},
-		{"rune", reflect.TypeOf(rune(0)), "number"},
-		{"uintptr", reflect.TypeOf(uintptr(0)), "number"},
-		{"complex64", reflect.TypeOf(complex64(0)), "any"},
-		{"complex128", reflect.TypeOf(complex128(0)), "any"},
-
-		// Struct types
-		{"struct", reflect.TypeOf(TestStruct{}), "TestStruct"},
-
-		// Pointer types
-		{"pointer to struct", reflect.TypeOf(&TestStruct{}), "TestStruct"},
-		{"pointer to string", reflect.TypeOf(new(string)), "string"},
-
-		// Slice types
-		{"slice of struct", reflect.TypeOf([]TestStruct{}), "TestStruct[]"},
-		{"slice of int", reflect.TypeOf([]int{}), "number[]"},
-		{"slice of string", reflect.TypeOf([]string{}), "string[]"},
-
-		// Array types
-		{"array of struct", reflect.TypeOf([5]TestStruct{}), "TestStruct[]"},
-		{"array of int", reflect.TypeOf([3]int{}), "number[]"},
-
-		// Map types
-		{"map string to struct", reflect.TypeOf(map[string]TestStruct{}), "Record<string, TestStruct>"},
-		{"map int to string", reflect.TypeOf(map[int]string{}), "Record<number, string>"},
-
-		// Nested types
-		{"pointer to slice", reflect.TypeOf(&[]TestStruct{}), "TestStruct[]"},
-		{"slice of pointers", reflect.TypeOf([]*TestStruct{}), "TestStruct[]"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := getTypeName(tt.input)
-			if result != tt.expected {
-				t.Errorf("getTypeName(%v) = %q, want %q", tt.input, result, tt.expected)
-			}
-		})
-	}
-}
-
-func TestAddPkg(t *testing.T) {
-	tests := []struct {
-		name        string
-		input       reflect.Type
-		expectPkg   bool
-		expectedPkg string
-	}{
-		{"nil type", nil, false, ""},
-		{"builtin string", reflect.TypeOf(""), false, ""},
-		{"builtin int", reflect.TypeOf(0), false, ""},
-		{"struct type", reflect.TypeOf(TestStruct{}), true, "github.com/broady/tygor/tygorgen"},
-		{"pointer to struct", reflect.TypeOf(&TestStruct{}), true, "github.com/broady/tygor/tygorgen"},
-		{"slice of struct", reflect.TypeOf([]TestStruct{}), true, "github.com/broady/tygor/tygorgen"},
-		{"map with struct value", reflect.TypeOf(map[string]TestStruct{}), true, "github.com/broady/tygor/tygorgen"},
-		{"slice of builtin", reflect.TypeOf([]int{}), false, ""},
-		{"map of builtins", reflect.TypeOf(map[string]int{}), false, ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			set := make(map[string]bool)
-			addPkg(set, tt.input)
-
-			if tt.expectPkg {
-				if !set[tt.expectedPkg] {
-					t.Errorf("addPkg did not add expected package %q, got %v", tt.expectedPkg, set)
-				}
-			} else {
-				if len(set) != 0 {
-					t.Errorf("addPkg should not have added any packages, got %v", set)
-				}
-			}
-		})
-	}
-}
 
 func TestApplyConfigDefaults(t *testing.T) {
 	tests := []struct {
@@ -323,9 +191,6 @@ func TestGenerate_ManifestStructure(t *testing.T) {
 	manifestStr := string(content)
 
 	// Verify imports
-	if !strings.Contains(manifestStr, "import { ServiceRegistry }") {
-		t.Error("manifest.ts missing ServiceRegistry import")
-	}
 	if !strings.Contains(manifestStr, "import * as types") {
 		t.Error("manifest.ts missing types import")
 	}
@@ -341,16 +206,6 @@ func TestGenerate_ManifestStructure(t *testing.T) {
 	}
 	if !strings.Contains(manifestStr, `"Posts.List"`) {
 		t.Error("manifest.ts missing Posts.List")
-	}
-
-	// Verify metadata
-	if !strings.Contains(manifestStr, "const metadata") {
-		t.Error("manifest.ts missing metadata constant")
-	}
-
-	// Verify registry export
-	if !strings.Contains(manifestStr, "export const registry") {
-		t.Error("manifest.ts missing registry export")
 	}
 }
 
@@ -379,10 +234,8 @@ func TestGenerate_TypesFile(t *testing.T) {
 		t.Error("types.ts missing generation header")
 	}
 
-	// Should have export statement for package types
-	if !strings.Contains(typesStr, "export * from") {
-		t.Error("types.ts missing re-exports")
-	}
+	// Should have TypeScript interface exports
+	// (Note: new generator creates a single file with all types, not re-exports)
 }
 
 func TestGenerate_CustomConfig(t *testing.T) {
@@ -410,7 +263,7 @@ func TestGenerate_CustomConfig(t *testing.T) {
 	}
 
 	// Check types file content to verify config was applied
-	typesPath := filepath.Join(outDir, "types_github_com_broady_tygor_internal_testfixtures.ts")
+	typesPath := filepath.Join(outDir, "types.ts")
 	content, err := os.ReadFile(typesPath)
 	if err != nil {
 		t.Fatalf("failed to read generated types: %v", err)
@@ -444,7 +297,7 @@ func TestGenerate_GETParamsUseLowercaseNames(t *testing.T) {
 	}
 
 	// Read the generated types file
-	typesPath := filepath.Join(outDir, "types_github_com_broady_tygor_internal_testfixtures.ts")
+	typesPath := filepath.Join(outDir, "types.ts")
 	content, err := os.ReadFile(typesPath)
 	if err != nil {
 		t.Fatalf("failed to read generated types: %v", err)

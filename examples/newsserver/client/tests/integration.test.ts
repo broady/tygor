@@ -2,7 +2,6 @@ import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { createClient, ServerError } from "@tygor/client";
 import { startServer, type RunningServer } from "@tygor/testing";
 import { registry } from "../src/rpc/manifest";
-import { NewsStatusDraft, NewsStatusPublished, DateTime } from "../src/rpc/types";
 
 let server: RunningServer;
 let client: ReturnType<typeof createClient<typeof registry.manifest>>;
@@ -34,7 +33,7 @@ describe("News service integration", () => {
       expect(article).toHaveProperty("id");
       expect(article).toHaveProperty("title");
       expect(article).toHaveProperty("status");
-      expect([NewsStatusDraft, NewsStatusPublished, "archived"]).toContain(
+      expect(["draft", "published", "archived"]).toContain(
         article.status
       );
     });
@@ -47,8 +46,8 @@ describe("News service integration", () => {
       expect(Array.isArray(result)).toBe(true);
     });
 
-    test("works with empty params", async () => {
-      const news = await client.News.List({});
+    test("works with null pagination params", async () => {
+      const news = await client.News.List({ limit: null, offset: null });
 
       expect(Array.isArray(news)).toBe(true);
     });
@@ -64,7 +63,7 @@ describe("News service integration", () => {
       expect(article.id).toBeDefined();
       expect(article.title).toBe("Integration Test Article");
       expect(article.body).toBe("This is a test article body");
-      expect(article.status).toBe(NewsStatusDraft);
+      expect(article.status).toBe("draft");
       expect(article.created_at).toBeDefined();
     });
 
@@ -95,27 +94,27 @@ describe("News service integration", () => {
 });
 
 describe("Type safety verification", () => {
-  test("DateTime branded type works correctly", async () => {
+  test("timestamp strings work correctly", async () => {
     const article = await client.News.Create({
-      title: "DateTime Test",
+      title: "Timestamp Test",
     });
 
     if (article.created_at) {
-      // Verify we can use DateTime helpers
-      const date = DateTime.toDate(article.created_at);
+      // Verify we can parse timestamp strings
+      const date = new Date(article.created_at);
       expect(date.getTime()).not.toBeNaN();
 
-      const formatted = DateTime.format(article.created_at);
+      const formatted = date.toISOString();
       expect(typeof formatted).toBe("string");
     }
   });
 
-  test("enum types are properly typed", async () => {
-    const news = await client.News.List({});
+  test("status union types are properly typed", async () => {
+    const news = await client.News.List({ limit: null, offset: null });
 
     for (const article of news) {
-      // TypeScript ensures status is one of the enum values
-      const validStatuses = [NewsStatusDraft, NewsStatusPublished, "archived"];
+      // TypeScript ensures status is one of the valid string values
+      const validStatuses = ["draft", "published", "archived"];
       expect(validStatuses).toContain(article.status);
     }
   });
