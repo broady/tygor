@@ -117,10 +117,11 @@ func (g *TypeScriptGenerator) generateTypes(ctx context.Context, schema *ir.Sche
 
 	// Create emitter context
 	emitter := &Emitter{
-		schema:   schema,
-		config:   config,
-		tsConfig: tsConfig,
-		indent:   "",
+		schema:    schema,
+		config:    config,
+		tsConfig:  tsConfig,
+		indent:    "",
+		indentStr: computeIndentStr(config),
 	}
 
 	// Sort types alphabetically for deterministic output (§7.1)
@@ -188,10 +189,11 @@ func (g *TypeScriptGenerator) generateMultiFileTypes(ctx context.Context, schema
 
 	// Create emitter context
 	emitter := &Emitter{
-		schema:   schema,
-		config:   config,
-		tsConfig: tsConfig,
-		indent:   "",
+		schema:    schema,
+		config:    config,
+		tsConfig:  tsConfig,
+		indent:    "",
+		indentStr: computeIndentStr(config),
 	}
 
 	// Generate one file per package
@@ -302,10 +304,11 @@ func (g *TypeScriptGenerator) generateManifest(ctx context.Context, schema *ir.S
 
 	// Create emitter for type references
 	emitter := &Emitter{
-		schema:   schema,
-		config:   config,
-		tsConfig: tsConfig,
-		indent:   "",
+		schema:    schema,
+		config:    config,
+		tsConfig:  tsConfig,
+		indent:    "",
+		indentStr: computeIndentStr(config),
 	}
 
 	// Generate manifest interface
@@ -393,6 +396,21 @@ func validateOptions(opts GenerateOptions) error {
 		return fmt.Errorf("sink is required")
 	}
 	return nil
+}
+
+// computeIndentStr returns the indent string based on config.
+// Defaults to 2 spaces if not configured.
+func computeIndentStr(config GeneratorConfig) string {
+	switch config.IndentStyle {
+	case "tab":
+		return "\t"
+	default: // "space" or empty
+		size := config.IndentSize
+		if size <= 0 {
+			size = 2 // default to 2 spaces
+		}
+		return strings.Repeat(" ", size)
+	}
 }
 
 // getTypeScriptConfig extracts TypeScript config from Custom map with defaults.

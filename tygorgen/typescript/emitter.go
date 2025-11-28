@@ -11,10 +11,11 @@ import (
 
 // Emitter handles TypeScript code emission for IR type descriptors.
 type Emitter struct {
-	schema   *ir.Schema
-	config   GeneratorConfig
-	tsConfig TypeScriptConfig
-	indent   string
+	schema    *ir.Schema
+	config    GeneratorConfig
+	tsConfig  TypeScriptConfig
+	indent    string // current indentation prefix (for nested emissions)
+	indentStr string // single indent unit (tab or spaces from config)
 }
 
 // qualifyTypeName returns the qualified TypeScript name for a Go type.
@@ -151,12 +152,12 @@ func (e *Emitter) emitStruct(buf *bytes.Buffer, s *ir.StructDescriptor) ([]ir.Wa
 		// Field documentation
 		if e.config.EmitComments && !field.Documentation.IsZero() {
 			buf.WriteString(e.indent)
-			buf.WriteString("  ")
+			buf.WriteString(e.indentStr)
 			e.emitJSDoc(buf, field.Documentation)
 		}
 
 		buf.WriteString(e.indent)
-		buf.WriteString("  ")
+		buf.WriteString(e.indentStr)
 
 		// Field name (escape if reserved word or needs quoting)
 		fieldName := e.getPropertyName(field)
@@ -325,11 +326,11 @@ func (e *Emitter) emitEnumAsEnum(buf *bytes.Buffer, typeName string, enum *ir.En
 
 		// Member documentation
 		if e.config.EmitComments && !member.Documentation.IsZero() {
-			buf.WriteString("  ")
+			buf.WriteString(e.indentStr)
 			e.emitJSDoc(buf, member.Documentation)
-			buf.WriteString("  ")
+			buf.WriteString(e.indentStr)
 		} else {
-			buf.WriteString("  ")
+			buf.WriteString(e.indentStr)
 		}
 
 		memberName := escapeReservedWord(member.Name)
@@ -363,11 +364,11 @@ func (e *Emitter) emitEnumAsObject(buf *bytes.Buffer, typeName string, enum *ir.
 
 		// Member documentation
 		if e.config.EmitComments && !member.Documentation.IsZero() {
-			buf.WriteString("  ")
+			buf.WriteString(e.indentStr)
 			e.emitJSDoc(buf, member.Documentation)
-			buf.WriteString("  ")
+			buf.WriteString(e.indentStr)
 		} else {
-			buf.WriteString("  ")
+			buf.WriteString(e.indentStr)
 		}
 
 		memberName := escapeReservedWord(member.Name)
