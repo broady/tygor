@@ -1792,7 +1792,7 @@ type JSONMarshalerType struct {
 }
 
 func (j JSONMarshalerType) MarshalJSON() ([]byte, error) {
-	return []byte(`"custom"`), nil
+	return []byte(`"` + j.internal + `"`), nil
 }
 
 // TextMarshalerType implements encoding.TextMarshaler
@@ -1801,7 +1801,7 @@ type TextMarshalerType struct {
 }
 
 func (t TextMarshalerType) MarshalText() ([]byte, error) {
-	return []byte("custom"), nil
+	return []byte(t.internal), nil
 }
 
 // PtrJSONMarshalerType has MarshalJSON on pointer receiver
@@ -1810,7 +1810,7 @@ type PtrJSONMarshalerType struct {
 }
 
 func (p *PtrJSONMarshalerType) MarshalJSON() ([]byte, error) {
-	return []byte(`"custom"`), nil
+	return []byte(`"` + p.internal + `"`), nil
 }
 
 // ContainsCustomMarshalers has fields with custom marshaler types
