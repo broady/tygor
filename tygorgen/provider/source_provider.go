@@ -956,6 +956,20 @@ func (b *schemaBuilder) convertTypeParamConstraint(constraint types.Type) ir.Typ
 		return b.convertTypeParamConstraint(underlying)
 	}
 
+	// Handle named interface constraints (e.g., type Stringish interface { ~string | ~int })
+	// We need to look at the underlying interface to extract union type sets
+	if named, ok := constraint.(*types.Named); ok {
+		underlying := named.Underlying()
+		if iface, ok := underlying.(*types.Interface); ok {
+			// Recursively process the underlying interface
+			result := b.convertTypeParamConstraint(iface)
+			if result != nil {
+				return result
+			}
+		}
+		// Fall through to convertType for other named types
+	}
+
 	// Check for interface constraints
 	iface, ok := constraint.(*types.Interface)
 	if !ok {
@@ -978,9 +992,42 @@ func (b *schemaBuilder) convertTypeParamConstraint(constraint types.Type) ir.Typ
 		return nil
 	}
 
-	// For other interface constraints with type sets (unions), we should extract them
-	// For now, return nil since union constraint handling is complex
-	// TODO: properly extract union constraints from type sets using iface.EmbeddedType()
+	// Extract union constraints from interface type sets
+	// For [T ~string | ~int], the interface has embedded types that form a union
+	if iface.NumEmbeddeds() > 0 {
+		var unionTypes []ir.TypeDescriptor
+
+		for i := 0; i < iface.NumEmbeddeds(); i++ {
+			embedded := iface.EmbeddedType(i)
+
+			// Check if this is a union type (e.g., ~string | ~int)
+			if union, ok := embedded.(*types.Union); ok {
+				for j := 0; j < union.Len(); j++ {
+					term := union.Term(j)
+					// term.Tilde() indicates ~T (approximation), but for IR purposes
+					// we only care about the underlying type since JSON behavior is the same
+					termType := term.Type()
+					desc, err := b.convertType(termType)
+					if err == nil && desc != nil {
+						unionTypes = append(unionTypes, desc)
+					}
+				}
+			} else {
+				// Single embedded type (not a union)
+				desc, err := b.convertType(embedded)
+				if err == nil && desc != nil {
+					unionTypes = append(unionTypes, desc)
+				}
+			}
+		}
+
+		if len(unionTypes) > 1 {
+			return ir.Union(unionTypes...)
+		} else if len(unionTypes) == 1 {
+			return unionTypes[0]
+		}
+	}
+
 	return nil
 }
 

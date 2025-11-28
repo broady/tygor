@@ -661,3 +661,69 @@ func TestSourceProvider_EnumMemberDocumentation(t *testing.T) {
 		})
 	}
 }
+
+func TestSourceProvider_UnionConstraint(t *testing.T) {
+	provider := &SourceProvider{}
+	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
+		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
+		RootTypes: []string{"Wrapper"},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	wrapperType := findType(schema, "Wrapper")
+	if wrapperType == nil {
+		t.Fatal("Wrapper type not found")
+	}
+
+	structDesc, ok := wrapperType.(*ir.StructDescriptor)
+	if !ok {
+		t.Fatal("Wrapper should be a struct")
+	}
+
+	// Wrapper should have one type parameter with a union constraint
+	if len(structDesc.TypeParameters) != 1 {
+		t.Fatalf("expected 1 type parameter, got %d", len(structDesc.TypeParameters))
+	}
+
+	tp := structDesc.TypeParameters[0]
+	if tp.ParamName != "T" {
+		t.Errorf("expected type parameter name T, got %s", tp.ParamName)
+	}
+
+	// The constraint should be a union of string and int (from ~string | ~int)
+	if tp.Constraint == nil {
+		t.Fatal("expected constraint to be non-nil for union constraint")
+	}
+
+	unionDesc, ok := tp.Constraint.(*ir.UnionDescriptor)
+	if !ok {
+		t.Fatalf("expected UnionDescriptor, got %T", tp.Constraint)
+	}
+
+	if len(unionDesc.Types) != 2 {
+		t.Fatalf("expected 2 union types, got %d", len(unionDesc.Types))
+	}
+
+	// Check that we have string and int primitives
+	var hasString, hasInt bool
+	for _, ut := range unionDesc.Types {
+		if prim, ok := ut.(*ir.PrimitiveDescriptor); ok {
+			switch prim.PrimitiveKind {
+			case ir.PrimitiveString:
+				hasString = true
+			case ir.PrimitiveInt:
+				hasInt = true
+			}
+		}
+	}
+
+	if !hasString {
+		t.Error("union constraint should include string")
+	}
+	if !hasInt {
+		t.Error("union constraint should include int")
+	}
+}
