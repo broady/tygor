@@ -296,6 +296,19 @@ func applyConfigDefaults(cfg *Config) *Config {
 	// Make a copy to avoid mutating the input
 	result := *cfg
 
+	// Deep copy maps and slices to avoid shared references
+	if result.TypeMappings != nil {
+		copied := make(map[string]string, len(result.TypeMappings))
+		for k, v := range result.TypeMappings {
+			copied[k] = v
+		}
+		result.TypeMappings = copied
+	}
+
+	if result.Packages != nil {
+		result.Packages = append([]string(nil), result.Packages...)
+	}
+
 	if result.Provider == "" {
 		result.Provider = "source"
 	}

@@ -59,12 +59,34 @@ type reflectionSchemaBuilder struct {
 	expandingGeneric map[string]bool         // Base generic names currently being expanded (§3.4 cycle detection)
 	anonStructs      map[reflect.Type]string // Anonymous struct -> synthetic name
 	typeNames        map[string]bool         // Track used type names for collision detection
+	anonCounter      int                     // Counter for disambiguating anonymous struct names (Issue 2)
 }
 
 // extractType processes a type and adds it to the schema.
 func (b *reflectionSchemaBuilder) extractType(ctx context.Context, t reflect.Type) error {
 	// Check context cancellation
 	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	// Issue 1 Fix: Check if the pointer type itself is named BEFORE dereferencing.
+	// If it's a named pointer type (e.g., type PtrAlias *string), extract it as an alias.
+	if t.Kind() == reflect.Ptr && t.Name() != "" && t.PkgPath() != "" {
+		// This is a named pointer type - extract as alias
+		if b.visited[t] {
+			return nil
+		}
+		if b.processing[t] {
+			b.addWarning("CYCLE_DETECTED", fmt.Sprintf("Recursive type detected: %s", t.String()), "")
+			return nil
+		}
+		b.processing[t] = true
+		defer delete(b.processing, t)
+
+		err := b.extractAlias(ctx, t)
+		if err == nil {
+			b.visited[t] = true
+		}
 		return err
 	}
 
@@ -363,16 +385,8 @@ func (b *reflectionSchemaBuilder) handleEmbedded(ctx context.Context, field refl
 		embeddedType = embeddedType.Elem()
 	}
 
-	// Extract the embedded type
-	if err := b.extractType(ctx, embeddedType); err != nil {
-		return err
-	}
-
-	// Get the type name
-	typeName := b.getTypeName(embeddedType)
-	pkg := embeddedType.PkgPath()
-
 	// If there's a json tag (other than "-"), add as a field
+	// Interfaces with json tags become fields with type `any` (PrimitiveAny)
 	if jsonTag != "" {
 		parts := strings.Split(jsonTag, ",")
 		jsonName := parts[0]
@@ -383,10 +397,29 @@ func (b *reflectionSchemaBuilder) handleEmbedded(ctx context.Context, field refl
 		}
 		fd.JSONName = jsonName
 		*fields = append(*fields, fd)
-	} else {
-		// No json tag: add to Extends
-		*extends = append(*extends, ir.GoIdentifier{Name: typeName, Package: pkg})
+		return nil
 	}
+
+	// No json tag case: would be added to Extends
+	// Skip embedded interfaces without json tags - they map to PrimitiveAny
+	// and would create dangling references when added to Extends.
+	if embeddedType.Kind() == reflect.Interface {
+		typeName := embeddedType.String()
+		b.addWarning("EMBEDDED_INTERFACE", fmt.Sprintf("Embedded interface %s without json tag skipped (interfaces map to 'any' and cannot be extended)", typeName), typeName)
+		return nil
+	}
+
+	// Extract the embedded type
+	if err := b.extractType(ctx, embeddedType); err != nil {
+		return err
+	}
+
+	// Get the type name
+	typeName := b.getTypeName(embeddedType)
+	pkg := embeddedType.PkgPath()
+
+	// No json tag: add to Extends
+	*extends = append(*extends, ir.GoIdentifier{Name: typeName, Package: pkg})
 
 	return nil
 }
@@ -698,7 +731,19 @@ func (b *reflectionSchemaBuilder) handleAnonymousStruct(ctx context.Context, t r
 		return nil, fmt.Errorf("cannot generate synthetic name for anonymous struct without parent context")
 	}
 
+	// Issue 2 Fix: Make synthetic names unique by appending a counter.
+	// This prevents collisions when multiple structs have fields with the same name
+	// containing anonymous structs (e.g., User.Profile and Admin.Profile).
 	syntheticName := parentName
+	fullName := parentPkg + "." + syntheticName
+
+	// If the name collides, append counter until we find a unique name
+	for b.typeNames[fullName] {
+		b.anonCounter++
+		syntheticName = fmt.Sprintf("%s_%d", parentName, b.anonCounter)
+		fullName = parentPkg + "." + syntheticName
+	}
+
 	b.anonStructs[t] = syntheticName
 
 	// Extract the anonymous struct as a named type
@@ -711,11 +756,8 @@ func (b *reflectionSchemaBuilder) handleAnonymousStruct(ctx context.Context, t r
 
 // extractAnonymousStruct extracts an anonymous struct with a synthetic name.
 func (b *reflectionSchemaBuilder) extractAnonymousStruct(ctx context.Context, t reflect.Type, syntheticName, pkg string) error {
-	// Check for name collision
+	// Mark the name as used (collision prevention is now handled in handleAnonymousStruct)
 	fullName := pkg + "." + syntheticName
-	if b.typeNames[fullName] {
-		return fmt.Errorf("name collision: synthetic name %s already exists", fullName)
-	}
 	b.typeNames[fullName] = true
 
 	fields := []ir.FieldDescriptor{}

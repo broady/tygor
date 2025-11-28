@@ -3,6 +3,7 @@ package typescript
 import (
 	"bytes"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/broady/tygor/tygorgen/ir"
@@ -662,7 +663,9 @@ func formatEnumValue(value any) string {
 	case int64:
 		return fmt.Sprintf("%d", v)
 	case float64:
-		return fmt.Sprintf("%g", v)
+		// Use strconv.FormatFloat to avoid scientific notation (e.g., 1e+06)
+		// which is invalid in TypeScript enum values
+		return strconv.FormatFloat(v, 'f', -1, 64)
 	default:
 		return fmt.Sprintf("%v", v)
 	}

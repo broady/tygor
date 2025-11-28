@@ -92,13 +92,22 @@ func (s *Schema) Validate() []error {
 					})
 				}
 			}
-			// Validate Extends references exist
+			// Validate Extends references exist and are structs
 			for _, ext := range sd.Extends {
 				if !typeNames[ext] {
 					errors = append(errors, &ValidationError{
 						Code:    "missing_extends_reference",
 						Message: "struct " + sd.Name.Name + " extends unknown type: " + ext.Name,
 					})
+				} else {
+					// Verify that the referenced type is actually a struct
+					extType := s.FindType(ext)
+					if extType != nil && extType.Kind() != KindStruct {
+						errors = append(errors, &ValidationError{
+							Code:    "extends_non_struct",
+							Message: "struct " + sd.Name.Name + " extends non-struct type: " + ext.Name,
+						})
+					}
 				}
 			}
 		}
@@ -119,7 +128,7 @@ func (s *Schema) Validate() []error {
 	}
 
 	// Check for circular inheritance
-	if circularErrs := s.detectCircularInheritance(typeNames); len(circularErrs) > 0 {
+	if circularErrs := s.detectCircularInheritance(); len(circularErrs) > 0 {
 		errors = append(errors, circularErrs...)
 	}
 
@@ -270,7 +279,7 @@ func (e *ValidationError) Error() string {
 }
 
 // detectCircularInheritance checks for cycles in struct inheritance (Extends).
-func (s *Schema) detectCircularInheritance(typeNames map[GoIdentifier]bool) []*ValidationError {
+func (s *Schema) detectCircularInheritance() []*ValidationError {
 	var errors []*ValidationError
 
 	// Build a map of struct name -> struct descriptor

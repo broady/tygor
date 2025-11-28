@@ -77,12 +77,15 @@ func (p *SourceProvider) BuildSchema(ctx context.Context, opts SourceInputOption
 
 	// Populate package info from first INPUT package (not first loaded package)
 	// packages.Load returns packages in dependency order, not input order
-	mainPkg := pkgs[0]
+	var mainPkg *packages.Package
 	for _, pkg := range pkgs {
 		if pkg.PkgPath == opts.Packages[0] {
 			mainPkg = pkg
 			break
 		}
+	}
+	if mainPkg == nil {
+		return nil, fmt.Errorf("input package %s not found in loaded packages", opts.Packages[0])
 	}
 	// Get the actual directory from the package's files
 	pkgDir := mainPkg.PkgPath // fallback to package path
@@ -457,14 +460,43 @@ func (b *schemaBuilder) hasCustomMarshaler(named *types.Named) bool {
 		if method.Name() == "MarshalJSON" {
 			sig := method.Type().(*types.Signature)
 			if sig.Params().Len() == 0 && sig.Results().Len() == 2 {
-				// Check return types: []byte, error
-				return true
+				// Check return types: first must be []byte, second must be error
+				results := sig.Results()
+				firstType := results.At(0).Type()
+				secondType := results.At(1).Type()
+
+				// Check first result is []byte
+				if slice, ok := firstType.(*types.Slice); ok {
+					if basic, ok := slice.Elem().(*types.Basic); ok {
+						if basic.Kind() == types.Byte || basic.Kind() == types.Uint8 {
+							// Check second result is error
+							if secondType.String() == "error" {
+								return true
+							}
+						}
+					}
+				}
 			}
 		}
 		if method.Name() == "MarshalText" {
 			sig := method.Type().(*types.Signature)
 			if sig.Params().Len() == 0 && sig.Results().Len() == 2 {
-				return true
+				// Check return types: first must be []byte, second must be error
+				results := sig.Results()
+				firstType := results.At(0).Type()
+				secondType := results.At(1).Type()
+
+				// Check first result is []byte
+				if slice, ok := firstType.(*types.Slice); ok {
+					if basic, ok := slice.Elem().(*types.Basic); ok {
+						if basic.Kind() == types.Byte || basic.Kind() == types.Uint8 {
+							// Check second result is error
+							if secondType.String() == "error" {
+								return true
+							}
+						}
+					}
+				}
 			}
 		}
 	}
@@ -499,7 +531,22 @@ func (b *schemaBuilder) hasTextMarshaler(named *types.Named) bool {
 		if method.Name() == "MarshalText" {
 			sig := method.Type().(*types.Signature)
 			if sig.Params().Len() == 0 && sig.Results().Len() == 2 {
-				return true
+				// Check return types: first must be []byte, second must be error
+				results := sig.Results()
+				firstType := results.At(0).Type()
+				secondType := results.At(1).Type()
+
+				// Check first result is []byte
+				if slice, ok := firstType.(*types.Slice); ok {
+					if basic, ok := slice.Elem().(*types.Basic); ok {
+						if basic.Kind() == types.Byte || basic.Kind() == types.Uint8 {
+							// Check second result is error
+							if secondType.String() == "error" {
+								return true
+							}
+						}
+					}
+				}
 			}
 		}
 	}
