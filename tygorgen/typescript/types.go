@@ -73,6 +73,11 @@ type GeneratorConfig struct {
 	// Features
 	EmitComments bool // Include documentation comments in output
 
+	// Frontmatter is content added to the top of generated type files (after the header comment).
+	// Useful for custom type definitions, branded types, or additional imports.
+	// Example: "export type DateTime = string & { readonly __brand: 'DateTime' };"
+	Frontmatter string
+
 	// Custom contains generator-specific options (e.g., TypeScriptConfig).
 	Custom map[string]any
 }
