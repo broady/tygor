@@ -54,7 +54,6 @@ func main() {
 
 func generateAll(app *tygor.App) {
 	baseConfig := tygorgen.Config{
-		Packages:         []string{"github.com/broady/tygor/examples/config-showcase/api"},
 		SingleFile:       true,
 		PreserveComments: "default",
 	}

@@ -480,8 +480,7 @@ func main() {
 			log.Fatal(err)
 		}
 		if err := tygorgen.Generate(app, &tygorgen.Config{
-			OutDir:   *outDir,
-			Packages: []string{"github.com/broady/tygor/examples/blog/api"},
+			OutDir: *outDir,
 		}); err != nil {
 			log.Fatalf("Generation failed: %v", err)
 		}

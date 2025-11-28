@@ -27,9 +27,10 @@ type Config struct {
 	// "reflection" - uses runtime reflection (faster, but no enum values or comments)
 	Provider string
 
-	// Packages are the Go package paths to analyze when using source provider.
-	// Required when Provider is "source".
-	// e.g. []string{"github.com/myorg/myapp/api"}
+	// Packages are additional Go package paths to analyze when using source provider.
+	// By default, packages are inferred from the types registered in routes.
+	// Use this to include additional packages not directly referenced in endpoints.
+	// e.g. []string{"github.com/myorg/myapp/shared"}
 	Packages []string
 
 	// TypeMappings allows overriding type mappings for tygo.
@@ -294,9 +295,15 @@ func applyConfigDefaults(cfg *Config) *Config {
 }
 
 // buildSchemaFromSource uses the source provider to extract types.
-func buildSchemaFromSource(ctx context.Context, routes internal.RouteMap, packages []string) (*ir.Schema, error) {
+func buildSchemaFromSource(ctx context.Context, routes internal.RouteMap, extraPackages []string) (*ir.Schema, error) {
+	// Infer packages from route types
+	packages := collectPackagesFromRoutes(routes)
+
+	// Add any extra packages specified in config
+	packages = append(packages, extraPackages...)
+
 	if len(packages) == 0 {
-		return nil, fmt.Errorf("packages is required when using source provider")
+		return nil, fmt.Errorf("no packages to analyze: register at least one handler or specify Packages in config")
 	}
 
 	// Collect root type names from routes
@@ -308,6 +315,30 @@ func buildSchemaFromSource(ctx context.Context, routes internal.RouteMap, packag
 		RootTypes: rootTypes,
 	}
 	return p.BuildSchema(ctx, opts)
+}
+
+// collectPackagesFromRoutes extracts unique package paths from route types.
+func collectPackagesFromRoutes(routes internal.RouteMap) []string {
+	seen := make(map[string]bool)
+	var pkgs []string
+
+	for _, route := range routes {
+		if route.Request != nil {
+			if pkg := route.Request.PkgPath(); pkg != "" && !seen[pkg] {
+				seen[pkg] = true
+				pkgs = append(pkgs, pkg)
+			}
+		}
+		if route.Response != nil {
+			if pkg := route.Response.PkgPath(); pkg != "" && !seen[pkg] {
+				seen[pkg] = true
+				pkgs = append(pkgs, pkg)
+			}
+		}
+	}
+
+	sort.Strings(pkgs)
+	return pkgs
 }
 
 // buildSchemaFromReflection uses the reflection provider to extract types.
