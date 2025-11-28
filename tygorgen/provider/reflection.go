@@ -726,6 +726,7 @@ func (b *reflectionSchemaBuilder) getTypeName(t reflect.Type) string {
 func (b *reflectionSchemaBuilder) generateSyntheticName(name string) string {
 	// Replace special characters per §3.4 algorithm
 	result := strings.ReplaceAll(name, ".", "_")
+	result = strings.ReplaceAll(result, "/", "_")
 	result = strings.ReplaceAll(result, "[", "_")
 	result = strings.ReplaceAll(result, "]", "")
 	result = strings.ReplaceAll(result, ",", "_")

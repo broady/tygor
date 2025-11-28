@@ -251,11 +251,26 @@ func reflectTypeToIRRef(t reflect.Type) ir.TypeDescriptor {
 
 	// For named types (structs, aliases), create a reference
 	if t.Name() != "" {
-		return ir.Ref(t.Name(), t.PkgPath())
+		// Sanitize generic type names to match what the reflection provider generates
+		name := sanitizeTypeName(t.Name())
+		return ir.Ref(name, t.PkgPath())
 	}
 
 	// Fallback for primitives and unnamed types
 	return ir.Any()
+}
+
+// sanitizeTypeName applies the synthetic naming algorithm for generic instantiations.
+// This must match the logic in provider/reflection.go generateSyntheticName.
+func sanitizeTypeName(name string) string {
+	result := strings.ReplaceAll(name, ".", "_")
+	result = strings.ReplaceAll(result, "/", "_")
+	result = strings.ReplaceAll(result, "[", "_")
+	result = strings.ReplaceAll(result, "]", "")
+	result = strings.ReplaceAll(result, ",", "_")
+	result = strings.ReplaceAll(result, " ", "")
+	result = strings.ReplaceAll(result, "*", "Ptr")
+	return result
 }
 
 // applyConfigDefaults applies default values to Config.

@@ -1,7 +1,7 @@
 # Root Makefile for all examples
 MAKEFLAGS += -j
 
-EXAMPLES := newsserver blog protobuf multipackage
+EXAMPLES := newsserver blog protobuf multipackage reflection
 
 .PHONY: all test gen check fmt clean readme precommit $(EXAMPLES)
 
