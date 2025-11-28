@@ -1,9 +1,9 @@
 # Root Makefile for all examples
 # Note: parallelism is inherited from parent make via precommit targets
 
-EXAMPLES := newsserver blog protobuf multipackage reflection
+EXAMPLES := newsserver blog protobuf multipackage reflection zod react
 
-.PHONY: all test gen check fmt clean readme precommit $(EXAMPLES)
+.PHONY: all test gen check fmt clean readme precommit lint-examples $(EXAMPLES)
 
 # Generate precommit targets for each example (enables parallel execution)
 # Output is suppressed unless there's a failure
@@ -15,7 +15,25 @@ endef
 $(foreach ex,$(EXAMPLES),$(eval $(call precommit-target,$(ex))))
 
 # Run precommit on all examples in parallel
-precommit: $(addprefix precommit-,$(EXAMPLES))
+precommit: lint-examples $(addprefix precommit-,$(EXAMPLES))
+
+# Lint: verify all example directories are in EXAMPLES list
+# An "example" is a directory with a Makefile that includes common.mk
+lint-examples:
+	@missing=""; \
+	for makefile in */Makefile; do \
+		dir=$$(dirname "$$makefile"); \
+		if grep -q "common.mk" "$$makefile" 2>/dev/null; then \
+			if ! echo " $(EXAMPLES) " | grep -q " $$dir "; then \
+				missing="$$missing $$dir"; \
+			fi; \
+		fi; \
+	done; \
+	if [ -n "$$missing" ]; then \
+		echo "ERROR: Example directories missing from EXAMPLES list:$$missing"; \
+		echo "Add them to examples/Makefile"; \
+		exit 1; \
+	fi
 
 # Update all READMEs
 readme:
@@ -37,7 +55,7 @@ gen:
 	done
 
 # Check all examples
-check:
+check: lint-examples
 	@for ex in $(EXAMPLES); do \
 		$(MAKE) -C $$ex check || exit 1; \
 	done

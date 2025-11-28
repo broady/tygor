@@ -33,24 +33,9 @@ The generator produces two files:
 
 <!-- [snippet:zod-generation] -->
 ```go title="main.go"
-// Generation Mode
-if *genFlag {
-	fmt.Printf("Generating types and Zod schemas to %s...\n", *outDir)
-	if err := os.MkdirAll(*outDir, 0755); err != nil {
-		log.Fatal(err)
-	}
-
-	_, err := tygorgen.FromApp(app).
-		WithFlavor(tygorgen.FlavorZod).
-		ToDir(*outDir)
-
-	if err != nil {
-		log.Fatalf("Generation failed: %v", err)
-	}
-	fmt.Println("Done.")
-	return
-}
-
+_, err := tygorgen.FromApp(app).
+	WithFlavor(tygorgen.FlavorZod).
+	ToDir(*outDir)
 ```
 <!-- [/snippet:zod-generation] -->
 
