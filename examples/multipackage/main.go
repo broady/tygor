@@ -52,17 +52,16 @@ func main() {
 
 	if *gen {
 		fmt.Println("Generating types to", *out)
-		if err := tygorgen.Generate(app, &tygorgen.Config{
-			OutDir: *out,
-			// SingleFile: true is required when using StripPackagePrefix with cross-package
-			// references, as types from different packages end up in the same output file.
-			SingleFile: true,
-			// StripPackagePrefix disambiguates same-named types from different packages.
-			// Without this, both v1.User and v2.User would become "User" (collision!).
-			// With this, they become "v1_User" and "v2_User".
-			// Types from the api package itself get no prefix (MigrationRequest).
-			StripPackagePrefix: "github.com/broady/tygor/examples/multipackage/api",
-		}); err != nil {
+		// SingleFile is required when using StripPackagePrefix with cross-package
+		// references, as types from different packages end up in the same output file.
+		// StripPackagePrefix disambiguates same-named types from different packages.
+		// Without this, both v1.User and v2.User would become "User" (collision!).
+		// With this, they become "v1_User" and "v2_User".
+		_, err := tygorgen.FromApp(app).
+			SingleFile().
+			StripPackagePrefix("github.com/broady/tygor/examples/multipackage/api").
+			ToDir(*out)
+		if err != nil {
 			log.Fatal(err)
 		}
 		fmt.Println("Done.")

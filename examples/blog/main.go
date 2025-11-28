@@ -484,9 +484,7 @@ func main() {
 		if err := os.MkdirAll(*outDir, 0755); err != nil {
 			log.Fatal(err)
 		}
-		if err := tygorgen.Generate(app, &tygorgen.Config{
-			OutDir: *outDir,
-		}); err != nil {
+		if _, err := tygorgen.FromApp(app).ToDir(*outDir); err != nil {
 			log.Fatalf("Generation failed: %v", err)
 		}
 		fmt.Println("Done.")

@@ -114,12 +114,11 @@ func main() {
 		if err := os.MkdirAll(*outDir, 0755); err != nil {
 			log.Fatal(err)
 		}
-		if err := tygorgen.Generate(app, &tygorgen.Config{
-			OutDir:           *outDir,
-			PreserveComments: "default",
-			EnumStyle:        "union",
-			OptionalType:     "undefined",
-			Frontmatter: `// Branded types for enhanced type safety
+		_, err := tygorgen.FromApp(app).
+			PreserveComments("default").
+			EnumStyle("union").
+			OptionalType("undefined").
+			Frontmatter(`// Branded types for enhanced type safety
 export type DateTime = string & { readonly __brand: 'DateTime' };
 
 // DateTime helper functions
@@ -138,11 +137,10 @@ export const DateTime = {
     return new Date(dt).toLocaleString(locale);
   },
 };
-`,
-			TypeMappings: map[string]string{
-				"time.Time": "DateTime",
-			},
-		}); err != nil {
+`).
+			TypeMapping("time.Time", "DateTime").
+			ToDir(*outDir)
+		if err != nil {
 			log.Fatalf("Generation failed: %v", err)
 		}
 		fmt.Println("Done.")

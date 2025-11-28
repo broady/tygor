@@ -74,7 +74,7 @@ SQL query definition
 Go struct (ListNewsParams, News)
   ↓ Use as request/response types
 Go handler registration
-  ↓ tygorgen.Generate(reg, config)
+  ↓ tygorgen.FromApp(app).ToDir(...)
 TypeScript types (types.ts, manifest.ts)
   ↓ Consumed by proxy-based client
 Type-safe API calls
@@ -139,15 +139,12 @@ type UnaryInterceptor func(ctx tygor.Context, req any, handler tygor.HandlerFunc
 
 **Code generation:**
 ```go
-tygorgen.Generate(app, &tygorgen.Config{
-    OutDir: "./client/src/rpc",
-    TypeMappings: map[string]string{
-        "time.Time": "string",
-        "uuid.UUID": "string",
-    },
-    OptionalType: "undefined", // Go pointers → T | undefined
-    EnumStyle: "union",        // type Status = "draft" | "published"
-})
+tygorgen.FromApp(app).
+    TypeMapping("time.Time", "string").
+    TypeMapping("uuid.UUID", "string").
+    OptionalType("undefined"). // Go pointers → T | undefined
+    EnumStyle("union").        // type Status = "draft" | "published"
+    ToDir("./client/src/rpc")
 ```
 
 ### TypeScript Client
@@ -238,7 +235,7 @@ func main() {
     app := tygor.NewApp()
     news := app.Service("News")
     news.Register("List", tygor.Query(ListNews))
-    tygorgen.Generate(app, &tygorgen.Config{OutDir: "./client/src/rpc"})
+    tygorgen.FromApp(app).ToDir("./client/src/rpc")
     http.ListenAndServe(":8080", app.Handler())
 }
 ```

@@ -618,12 +618,9 @@ The generator MUST produce:
 
 **Example:**
 ```go
-err := tygorgen.Generate(app, &tygorgen.Config{
-    OutDir: "./client/src/rpc",
-    TypeMappings: map[string]string{
-        "uuid.UUID": "string",
-    },
-})
+_, err := tygorgen.FromApp(app).
+    TypeMapping("uuid.UUID", "string").
+    ToDir("./client/src/rpc")
 ```
 
 ---
@@ -700,9 +697,7 @@ func main() {
     news.Register("Create", tygor.Exec(CreateNews))
 
     // Generate TypeScript types
-    if err := tygorgen.Generate(app, &tygorgen.Config{
-        OutDir: "./client/src/rpc",
-    }); err != nil {
+    if _, err := tygorgen.FromApp(app).ToDir("./client/src/rpc"); err != nil {
         log.Fatal(err)
     }
 

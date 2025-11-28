@@ -90,9 +90,9 @@ type Config struct {
 
 	// Flavors lists which additional output flavors to generate.
 	// Each enabled flavor produces its own output file alongside or instead of types.ts.
-	// Valid names: "zod", "zod-mini" (future: "treeshake", "fat-client")
-	// Example: []string{"zod"} generates schemas.zod.ts with Zod schemas
-	Flavors []string
+	// Use FlavorZod, FlavorZodMini constants or the ConfigBuilder.WithFlavor() method.
+	// Example: []Flavor{FlavorZod} generates schemas.zod.ts with Zod schemas
+	Flavors []Flavor
 
 	// EmitTypes controls whether base types.ts is generated.
 	// Default (nil/true): generate types.ts. Set to false to only emit flavor outputs.
@@ -165,7 +165,7 @@ func Generate(app *tygor.App, cfg *Config) (*GenerateResult, error) {
 			"EnumStyle":         cfg.EnumStyle,
 			"OptionalType":      cfg.OptionalType,
 			"UnknownType":       "unknown",
-			"Flavors":           cfg.Flavors,
+			"Flavors":           flavorsToStrings(cfg.Flavors),
 			"EmitTypes":         cfg.EmitTypes,
 		},
 	}
@@ -357,7 +357,7 @@ func applyConfigDefaults(cfg *Config) *Config {
 	}
 
 	if result.Flavors != nil {
-		result.Flavors = append([]string(nil), result.Flavors...)
+		result.Flavors = append([]Flavor(nil), result.Flavors...)
 	}
 
 	if result.Provider == "" {
@@ -495,4 +495,16 @@ func collectRootTypeNames(routes internal.RouteMap) []string {
 
 	sort.Strings(names)
 	return names
+}
+
+// flavorsToStrings converts []Flavor to []string for internal use.
+func flavorsToStrings(flavors []Flavor) []string {
+	if flavors == nil {
+		return nil
+	}
+	result := make([]string, len(flavors))
+	for i, f := range flavors {
+		result[i] = string(f)
+	}
+	return result
 }

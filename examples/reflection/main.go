@@ -129,17 +129,16 @@ func main() {
 
 		// [snippet:reflection-generation]
 
-		// tygor.Generate uses the reflection provider internally.
-		// The reflection provider extracts types from the registered handlers
+		// The reflection provider extracts types from registered handlers
 		// and automatically handles generic type instantiation.
-		if err := tygorgen.Generate(app, &tygorgen.Config{
-			OutDir:             *outDir,
-			Provider:           "reflection",
-			PreserveComments:   "default",
-			EnumStyle:          "union",
-			OptionalType:       "undefined",
-			StripPackagePrefix: "github.com/broady/tygor/examples/reflection/",
-		}); err != nil {
+		_, err := tygorgen.FromApp(app).
+			Provider("reflection").
+			PreserveComments("default").
+			EnumStyle("union").
+			OptionalType("undefined").
+			StripPackagePrefix("github.com/broady/tygor/examples/reflection/").
+			ToDir(*outDir)
+		if err != nil {
 			log.Fatalf("Generation failed: %v", err)
 		}
 

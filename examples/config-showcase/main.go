@@ -53,85 +53,66 @@ func main() {
 }
 
 func generateAll(app *tygor.App) {
-	baseConfig := tygorgen.Config{
-		SingleFile:       true,
-		PreserveComments: "default",
+	// base returns a generator with common settings
+	base := func() *tygorgen.Generator {
+		return tygorgen.FromApp(app).
+			SingleFile().
+			PreserveComments("default")
 	}
 
 	configs := []struct {
-		name   string
-		outDir string
-		modify func(*tygorgen.Config)
+		name string
+		gen  func() (*tygorgen.GenerateResult, error)
 	}{
 		{
-			name:   "EnumStyle: union (default)",
-			outDir: "./client/src/union",
-			modify: func(c *tygorgen.Config) {
-				c.EnumStyle = "union"
+			name: "EnumStyle: union (default) -> ./client/src/union",
+			gen:  func() (*tygorgen.GenerateResult, error) { return base().EnumStyle("union").ToDir("./client/src/union") },
+		},
+		{
+			name: "EnumStyle: enum (with member docs) -> ./client/src/enum",
+			gen:  func() (*tygorgen.GenerateResult, error) { return base().EnumStyle("enum").ToDir("./client/src/enum") },
+		},
+		{
+			name: "EnumStyle: const_enum (inlined) -> ./client/src/const",
+			gen: func() (*tygorgen.GenerateResult, error) {
+				return base().EnumStyle("const_enum").ToDir("./client/src/const")
 			},
 		},
 		{
-			name:   "EnumStyle: enum (with member docs)",
-			outDir: "./client/src/enum",
-			modify: func(c *tygorgen.Config) {
-				c.EnumStyle = "enum"
+			name: "EnumStyle: object (runtime accessible) -> ./client/src/object",
+			gen: func() (*tygorgen.GenerateResult, error) {
+				return base().EnumStyle("object").ToDir("./client/src/object")
 			},
 		},
 		{
-			name:   "EnumStyle: const_enum (inlined)",
-			outDir: "./client/src/const",
-			modify: func(c *tygorgen.Config) {
-				c.EnumStyle = "const_enum"
+			name: "OptionalType: default (§4.9 spec) -> ./client/src/opt-default",
+			gen: func() (*tygorgen.GenerateResult, error) {
+				return base().EnumStyle("union").OptionalType("default").ToDir("./client/src/opt-default")
 			},
 		},
 		{
-			name:   "EnumStyle: object (runtime accessible)",
-			outDir: "./client/src/object",
-			modify: func(c *tygorgen.Config) {
-				c.EnumStyle = "object"
+			name: "OptionalType: null (all | null) -> ./client/src/opt-null",
+			gen: func() (*tygorgen.GenerateResult, error) {
+				return base().EnumStyle("union").OptionalType("null").ToDir("./client/src/opt-null")
 			},
 		},
 		{
-			name:   "OptionalType: default (§4.9 spec)",
-			outDir: "./client/src/opt-default",
-			modify: func(c *tygorgen.Config) {
-				c.EnumStyle = "union"
-				c.OptionalType = "default"
+			name: "OptionalType: undefined (all ?:) -> ./client/src/opt-undef",
+			gen: func() (*tygorgen.GenerateResult, error) {
+				return base().EnumStyle("union").OptionalType("undefined").ToDir("./client/src/opt-undef")
 			},
 		},
 		{
-			name:   "OptionalType: null (all | null)",
-			outDir: "./client/src/opt-null",
-			modify: func(c *tygorgen.Config) {
-				c.EnumStyle = "union"
-				c.OptionalType = "null"
-			},
-		},
-		{
-			name:   "OptionalType: undefined (all ?:)",
-			outDir: "./client/src/opt-undef",
-			modify: func(c *tygorgen.Config) {
-				c.EnumStyle = "union"
-				c.OptionalType = "undefined"
-			},
-		},
-		{
-			name:   "PreserveComments: none",
-			outDir: "./client/src/no-comments",
-			modify: func(c *tygorgen.Config) {
-				c.EnumStyle = "union"
-				c.PreserveComments = "none"
+			name: "PreserveComments: none -> ./client/src/no-comments",
+			gen: func() (*tygorgen.GenerateResult, error) {
+				return base().EnumStyle("union").PreserveComments("none").ToDir("./client/src/no-comments")
 			},
 		},
 	}
 
 	for _, cfg := range configs {
-		config := baseConfig
-		config.OutDir = cfg.outDir
-		cfg.modify(&config)
-
-		fmt.Printf("Generating: %s -> %s\n", cfg.name, cfg.outDir)
-		if err := tygorgen.Generate(app, &config); err != nil {
+		fmt.Printf("Generating: %s\n", cfg.name)
+		if _, err := cfg.gen(); err != nil {
 			log.Fatalf("Failed to generate %s: %v", cfg.name, err)
 		}
 	}

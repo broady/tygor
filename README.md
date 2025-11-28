@@ -129,9 +129,7 @@ http.ListenAndServe(":8080", app.Handler())
 
 <!-- [snippet:doc/examples/quickstart:generation] -->
 ```go
-if _, err := tygorgen.Generate(app, &tygorgen.Config{
-	OutDir: "./client/src/rpc",
-}); err != nil {
+if _, err := tygorgen.FromApp(app).ToDir("./client/src/rpc"); err != nil {
 	log.Fatal(err)
 }
 ```
@@ -429,13 +427,10 @@ Customize TypeScript type generation for third-party types:
 
 <!-- snippet-ignore -->
 ```go
-tygorgen.Generate(app, &tygorgen.Config{
-    OutDir: "./client/src/rpc",
-    TypeMappings: map[string]string{
-        "github.com/jackc/pgtype.Timestamptz": "string | null",
-        "github.com/jackc/pgtype.UUID":        "string",
-    },
-})
+tygorgen.FromApp(app).
+    TypeMapping("github.com/jackc/pgtype.Timestamptz", "string | null").
+    TypeMapping("github.com/jackc/pgtype.UUID", "string").
+    ToDir("./client/src/rpc")
 ```
 
 ## License

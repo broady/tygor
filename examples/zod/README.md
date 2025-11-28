@@ -368,10 +368,12 @@ if *genFlag {
 	if err := os.MkdirAll(*outDir, 0755); err != nil {
 		log.Fatal(err)
 	}
-	if _, err := tygorgen.Generate(app, &tygorgen.Config{
-		OutDir:  *outDir,
-		Flavors: []string{"zod"}, // Enable Zod schema generation
-	}); err != nil {
+
+	_, err := tygorgen.FromApp(app).
+		WithFlavor(tygorgen.FlavorZod).
+		ToDir(*outDir)
+
+	if err != nil {
 		log.Fatalf("Generation failed: %v", err)
 	}
 	fmt.Println("Done.")

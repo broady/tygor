@@ -18,8 +18,8 @@ import (
 // In-memory database (for demo purposes)
 var (
 	dbMu       sync.RWMutex
-	users      = make(map[int64]*api.User)
-	tasks      = make(map[int64]*api.Task)
+	users            = make(map[int64]*api.User)
+	tasks            = make(map[int64]*api.Task)
 	nextUserID int64 = 1
 	nextTaskID int64 = 1
 )
@@ -210,10 +210,12 @@ func main() {
 		if err := os.MkdirAll(*outDir, 0755); err != nil {
 			log.Fatal(err)
 		}
-		if _, err := tygorgen.Generate(app, &tygorgen.Config{
-			OutDir:  *outDir,
-			Flavors: []string{"zod"}, // Enable Zod schema generation
-		}); err != nil {
+
+		_, err := tygorgen.FromApp(app).
+			WithFlavor(tygorgen.FlavorZod).
+			ToDir(*outDir)
+
+		if err != nil {
 			log.Fatalf("Generation failed: %v", err)
 		}
 		fmt.Println("Done.")

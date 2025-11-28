@@ -755,11 +755,10 @@ The Go server's `tygorgen.Config` affects the generated TypeScript types. Here's
 ### 9.1 Optional Type Handling
 
 ```go
-// Go configuration
-tygorgen.Config{
-    OutDir: "./client/src/rpc",
-    OptionalType: "undefined", // Default
-}
+// Go configuration (default)
+tygorgen.FromApp(app).
+    OptionalType("undefined").
+    ToDir("./client/src/rpc")
 ```
 
 ```typescript
@@ -773,10 +772,9 @@ export interface UpdateUserParams {
 vs.
 
 ```go
-tygorgen.Config{
-    OutDir: "./client/src/rpc",
-    OptionalType: "null",
-}
+tygorgen.FromApp(app).
+    OptionalType("null").
+    ToDir("./client/src/rpc")
 ```
 
 ```typescript
@@ -815,14 +813,11 @@ export enum Status {
 ### 9.3 Custom Type Mappings
 
 ```go
-tygorgen.Config{
-    OutDir: "./client/src/rpc",
-    TypeMappings: map[string]string{
-        "uuid.UUID": "string",
-        "decimal.Decimal": "number",
-        "time.Time": "Date", // Custom: use Date objects instead of strings
-    },
-}
+tygorgen.FromApp(app).
+    TypeMapping("uuid.UUID", "string").
+    TypeMapping("decimal.Decimal", "number").
+    TypeMapping("time.Time", "Date"). // Custom: use Date objects instead of strings
+    ToDir("./client/src/rpc")
 ```
 
 **Note:** Using `Date` for `time.Time` requires custom JSON parsing.
@@ -830,13 +825,12 @@ tygorgen.Config{
 ### 9.4 Frontmatter (Branded Types)
 
 ```go
-tygorgen.Config{
-    OutDir: "./client/src/rpc",
-    Frontmatter: `
+tygorgen.FromApp(app).
+    Frontmatter(`
 export type UserID = number & { __brand: 'UserID' };
 export type DateTime = string & { __brand: 'DateTime' };
-`,
-}
+`).
+    ToDir("./client/src/rpc")
 ```
 
 Enables compile-time type safety for primitives:

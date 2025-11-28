@@ -50,7 +50,7 @@ const goCode = [
   line(span('news.Register('), span('"Create"', colors.string), span(', tygor.Exec(CreateNews))')),
   line(span(' ')),
   line(span('if', colors.keyword), span(' *gen {')),
-  line(span('  tygorgen.Generate(app, &tygorgen.Config{OutDir: '), span('"..."', colors.string), span('})')),
+  line(span('  tygorgen.FromApp(app).ToDir('), span('"./client/api"', colors.string), span(')')),
   line(span('} ', colors.keyword), span('else', colors.keyword), span(' {')),
   line(span('  http.ListenAndServe('), span('":8080"', colors.string), span(', app.Handler())')),
   line(span('}')),
@@ -59,7 +59,7 @@ const goCode = [
 // TypeScript code highlighting
 const tsCode = [
   line(span('import', colors.keyword), span(' { createClient } '), span('from', colors.keyword), span(' '), span("'@tygor/client'", colors.string)),
-  line(span('import', colors.keyword), span(' { registry } '), span('from', colors.keyword), span(' '), span("'./rpc/manifest'", colors.string)),
+  line(span('import', colors.keyword), span(' { registry } '), span('from', colors.keyword), span(' '), span("'./api/manifest'", colors.string)),
   line(span(' ')),
   line(span('const', colors.keyword), span(' client = createClient(registry, config)')),
   line(span(' ')),
