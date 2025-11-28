@@ -44,6 +44,11 @@ if *gen {
 	fmt.Println("Generating types to", *out)
 	if err := tygorgen.Generate(app, &tygorgen.Config{
 		OutDir: *out,
+		Packages: []string{
+			"github.com/broady/tygor/examples/multipackage/api",
+			"github.com/broady/tygor/examples/multipackage/api/v1",
+			"github.com/broady/tygor/examples/multipackage/api/v2",
+		},
 		// SingleFile: true is required when using StripPackagePrefix with cross-package
 		// references, as types from different packages end up in the same output file.
 		SingleFile: true,

@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/broady/tygor/tygorgen/ir"
@@ -725,5 +726,60 @@ func TestSourceProvider_UnionConstraint(t *testing.T) {
 	}
 	if !hasInt {
 		t.Error("union constraint should include int")
+	}
+}
+
+func TestSourceProvider_CustomMarshalerWarning(t *testing.T) {
+	provider := &SourceProvider{}
+	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
+		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
+		RootTypes: []string{"CustomJSONType", "CustomTextType"},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	// Both CustomJSONType and CustomTextType should generate warnings
+	foundWarnings := make(map[string]string)
+
+	for _, warning := range schema.Warnings {
+		if warning.Code == "CUSTOM_MARSHALER" {
+			foundWarnings[warning.TypeName] = warning.Message
+		}
+	}
+
+	// Verify we got warnings for both types
+	for _, typeName := range []string{"CustomJSONType", "CustomTextType"} {
+		msg, found := foundWarnings[typeName]
+		if !found {
+			t.Errorf("Expected CUSTOM_MARSHALER warning for %s, but none was found", typeName)
+			continue
+		}
+
+		// Verify the message says "unknown" (not "any") - this is the correct terminology
+		// since TypeScript output defaults to 'unknown'
+		if !strings.Contains(msg, "unknown") {
+			t.Errorf("Warning for %s should mention 'unknown', got: %s", typeName, msg)
+		}
+		if strings.Contains(msg, "'any'") {
+			t.Errorf("Warning for %s should not mention 'any', got: %s", typeName, msg)
+		}
+	}
+
+	// Verify the types are mapped to PrimitiveAny in IR
+	jsonType := findType(schema, "CustomJSONType")
+	if jsonType == nil {
+		t.Fatal("CustomJSONType not found")
+	}
+
+	aliasDesc, ok := jsonType.(*ir.AliasDescriptor)
+	if !ok {
+		t.Fatalf("CustomJSONType should be an AliasDescriptor, got %T", jsonType)
+	}
+
+	primDesc, ok := aliasDesc.Underlying.(*ir.PrimitiveDescriptor)
+	if !ok || primDesc.PrimitiveKind != ir.PrimitiveAny {
+		t.Errorf("CustomJSONType should be mapped to PrimitiveAny")
 	}
 }

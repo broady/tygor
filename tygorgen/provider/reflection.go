@@ -54,9 +54,9 @@ func (p *ReflectionProvider) BuildSchema(ctx context.Context, opts ReflectionInp
 // reflectionSchemaBuilder maintains state during schema construction.
 type reflectionSchemaBuilder struct {
 	schema           *ir.Schema
-	visited          map[reflect.Type]bool // Types already processed
-	processing       map[reflect.Type]bool // Types currently being processed (cycle detection)
-	expandingGeneric map[string]bool       // Base generic names currently being expanded (§3.4 cycle detection)
+	visited          map[reflect.Type]bool   // Types already processed
+	processing       map[reflect.Type]bool   // Types currently being processed (cycle detection)
+	expandingGeneric map[string]bool         // Base generic names currently being expanded (§3.4 cycle detection)
 	anonStructs      map[reflect.Type]string // Anonymous struct -> synthetic name
 	typeNames        map[string]bool         // Track used type names for collision detection
 }

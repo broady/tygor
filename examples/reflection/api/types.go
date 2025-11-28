@@ -46,10 +46,10 @@ type User struct {
 
 // Post represents a blog post.
 type Post struct {
-	ID      int32  `json:"id"`
-	Title   string `json:"title"`
-	Content string `json:"content"`
-	AuthorID int32 `json:"author_id"`
+	ID       int32  `json:"id"`
+	Title    string `json:"title"`
+	Content  string `json:"content"`
+	AuthorID int32  `json:"author_id"`
 }
 
 // [/snippet:concrete-types]

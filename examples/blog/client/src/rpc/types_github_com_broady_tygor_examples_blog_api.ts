@@ -36,8 +36,8 @@ export interface ListCommentsParams {
 }
 /** ListPostsParams are the query parameters for listing posts. */
 export interface ListPostsParams {
-  author_id: number | null;
-  published: boolean | null;
+  author_id?: number;
+  published?: boolean;
   limit: number;
   offset: number;
 }
@@ -49,7 +49,7 @@ export interface LoginRequest {
 /** LoginResponse contains the authentication token. */
 export interface LoginResponse {
   token: string;
-  user: User | null;
+  user?: User;
 }
 /** Post represents a blog post. */
 export interface Post {

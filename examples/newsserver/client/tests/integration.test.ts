@@ -46,8 +46,8 @@ describe("News service integration", () => {
       expect(Array.isArray(result)).toBe(true);
     });
 
-    test("works with null pagination params", async () => {
-      const news = await client.News.List({ limit: null, offset: null });
+    test("works with undefined pagination params", async () => {
+      const news = await client.News.List({ limit: undefined, offset: undefined });
 
       expect(Array.isArray(news)).toBe(true);
     });
@@ -110,7 +110,7 @@ describe("Type safety verification", () => {
   });
 
   test("status union types are properly typed", async () => {
-    const news = await client.News.List({ limit: null, offset: null });
+    const news = await client.News.List({});
 
     for (const article of news) {
       // TypeScript ensures status is one of the valid string values

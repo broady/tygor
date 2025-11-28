@@ -73,10 +73,10 @@ type User struct {
 
 // Post represents a blog post.
 type Post struct {
-	ID      int32  `json:"id"`
-	Title   string `json:"title"`
-	Content string `json:"content"`
-	AuthorID int32 `json:"author_id"`
+	ID       int32  `json:"id"`
+	Title    string `json:"title"`
+	Content  string `json:"content"`
+	AuthorID int32  `json:"author_id"`
 }
 
 ```
@@ -209,11 +209,12 @@ The key difference from the default source provider is how types are extracted:
 // The reflection provider extracts types from the registered handlers
 // and automatically handles generic type instantiation.
 if err := tygorgen.Generate(app, &tygorgen.Config{
-	OutDir:              *outDir,
-	PreserveComments:    "default",
-	EnumStyle:           "union",
-	OptionalType:        "undefined",
-	StripPackagePrefix:  "github.com/broady/tygor/examples/reflection/",
+	OutDir:             *outDir,
+	Provider:           "reflection",
+	PreserveComments:   "default",
+	EnumStyle:          "union",
+	OptionalType:       "undefined",
+	StripPackagePrefix: "github.com/broady/tygor/examples/reflection/",
 }); err != nil {
 	log.Fatalf("Generation failed: %v", err)
 }
@@ -252,10 +253,12 @@ async function demonstrateGenerics() {
   });
 
   console.log(`Users page ${usersPage.page}/${Math.ceil(usersPage.total / usersPage.page_size)}`);
-  console.log(`Found ${usersPage.data.length} of ${usersPage.total} total`);
-  usersPage.data.forEach(user => {
-    console.log(`- ${user.username} (${user.email}) - ${user.role}`);
-  });
+  if (usersPage.data) {
+    console.log(`Found ${usersPage.data.length} of ${usersPage.total} total`);
+    usersPage.data.forEach(user => {
+      console.log(`- ${user.username} (${user.email}) - ${user.role}`);
+    });
+  }
 
   // Result[User] - Generic type for success/error results
   const userResult = await client.Users.Get({ id: 1 });

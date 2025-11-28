@@ -14,7 +14,7 @@ export interface api_ListUsersParams {
   role?: string;
 }
 export interface api_PagedResponse_github_com_broady_tygor_examples_reflection_api_User {
-  data: api_User[] | null;
+  data?: api_User[];
   total: number;
   page: number;
   page_size: number;

@@ -27,8 +27,8 @@ export interface CreateNewsParams {
 }
 /** ListNewsParams contains pagination parameters for listing news articles. */
 export interface ListNewsParams {
-  limit: number | null;
-  offset: number | null;
+  limit?: number;
+  offset?: number;
 }
 /** News represents a news article in the system. */
 export interface News {

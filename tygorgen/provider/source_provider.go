@@ -197,7 +197,7 @@ func (b *schemaBuilder) extractNamedType(tn *types.TypeName) error {
 	if b.hasCustomMarshaler(named) {
 		b.schema.AddWarning(ir.Warning{
 			Code:     "CUSTOM_MARSHALER",
-			Message:  fmt.Sprintf("type %s implements custom marshaler, mapped to 'any'", tn.Name()),
+			Message:  fmt.Sprintf("type %s implements custom marshaler, mapped to 'unknown'", tn.Name()),
 			TypeName: tn.Name(),
 		})
 		// Create an alias to PrimitiveAny
@@ -226,7 +226,7 @@ func (b *schemaBuilder) extractNamedType(tn *types.TypeName) error {
 		// Interfaces are emitted as PrimitiveAny with a warning
 		b.schema.AddWarning(ir.Warning{
 			Code:     "INTERFACE_TYPE",
-			Message:  fmt.Sprintf("interface type %s mapped to 'any'", tn.Name()),
+			Message:  fmt.Sprintf("interface type %s mapped to 'unknown'", tn.Name()),
 			TypeName: tn.Name(),
 		})
 		// Create an alias to PrimitiveAny
@@ -331,7 +331,7 @@ func (b *schemaBuilder) convertType(t types.Type) (ir.TypeDescriptor, error) {
 		// Non-empty interface
 		b.schema.AddWarning(ir.Warning{
 			Code:    "INTERFACE_TYPE",
-			Message: fmt.Sprintf("interface type %s mapped to 'any'", typ.String()),
+			Message: fmt.Sprintf("interface type %s mapped to 'unknown'", typ.String()),
 		})
 		return ir.Any(), nil
 
@@ -389,7 +389,7 @@ func (b *schemaBuilder) handleSpecialType(t types.Type) ir.TypeDescriptor {
 		if b.hasCustomMarshaler(typ) {
 			b.schema.AddWarning(ir.Warning{
 				Code:     "CUSTOM_MARSHALER",
-				Message:  fmt.Sprintf("type %s implements custom marshaler, mapped to 'any'", name),
+				Message:  fmt.Sprintf("type %s implements custom marshaler, mapped to 'unknown'", name),
 				TypeName: name,
 			})
 			return ir.Any()

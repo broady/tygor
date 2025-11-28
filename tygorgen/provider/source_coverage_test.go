@@ -226,12 +226,47 @@ func TestSourceProvider_ConstrainedGeneric(t *testing.T) {
 
 	// Should have a constrained type parameter
 	if len(wrapperStruct.TypeParameters) != 1 {
-		t.Errorf("Wrapper should have 1 type parameter, got %d", len(wrapperStruct.TypeParameters))
+		t.Fatalf("Wrapper should have 1 type parameter, got %d", len(wrapperStruct.TypeParameters))
 	}
 
-	// The Stringish constraint should be preserved as a reference
-	// For now we return nil for complex constraints, so just check it doesn't crash
-	// TODO: When union constraints are fully implemented, test the constraint
+	tp := wrapperStruct.TypeParameters[0]
+	if tp.ParamName != "T" {
+		t.Errorf("expected type parameter name T, got %s", tp.ParamName)
+	}
+
+	// The Stringish constraint (~string | ~int) should be extracted as a union
+	if tp.Constraint == nil {
+		t.Fatal("expected constraint to be non-nil for Stringish constraint")
+	}
+
+	unionDesc, ok := tp.Constraint.(*ir.UnionDescriptor)
+	if !ok {
+		t.Fatalf("expected UnionDescriptor for Stringish constraint, got %T", tp.Constraint)
+	}
+
+	if len(unionDesc.Types) != 2 {
+		t.Fatalf("expected 2 union types in Stringish, got %d", len(unionDesc.Types))
+	}
+
+	// Verify union contains string and int
+	var hasString, hasInt bool
+	for _, ut := range unionDesc.Types {
+		if prim, ok := ut.(*ir.PrimitiveDescriptor); ok {
+			switch prim.PrimitiveKind {
+			case ir.PrimitiveString:
+				hasString = true
+			case ir.PrimitiveInt:
+				hasInt = true
+			}
+		}
+	}
+
+	if !hasString {
+		t.Error("Stringish constraint should include string")
+	}
+	if !hasInt {
+		t.Error("Stringish constraint should include int")
+	}
 }
 
 func TestSourceProvider_BuildSchemaErrors(t *testing.T) {
