@@ -66,12 +66,32 @@ func (s *Schema) FindService(name string) *ServiceDescriptor {
 func (s *Schema) Validate() []error {
 	var errors []*ValidationError
 
-	// Build a set of type names from Schema.Types
+	// Build a set of type names from Schema.Types, checking for duplicates
 	typeNames := make(map[GoIdentifier]bool)
 	for _, t := range s.Types {
 		name := t.TypeName()
 		if !name.IsZero() {
+			if typeNames[name] {
+				errors = append(errors, &ValidationError{
+					Code:    "duplicate_type",
+					Message: "duplicate type name: " + name.Name + " (package: " + name.Package + ")",
+				})
+			}
 			typeNames[name] = true
+		}
+	}
+
+	// Validate struct fields
+	for _, t := range s.Types {
+		if sd, ok := t.(*StructDescriptor); ok {
+			for _, field := range sd.Fields {
+				if field.StringEncoded && !isStringEncodableType(field.Type) {
+					errors = append(errors, &ValidationError{
+						Code:    "invalid_string_encoded",
+						Message: "StringEncoded set on incompatible type for field " + sd.Name.Name + "." + field.Name + ": only string, integer, float, and boolean types support json:\",string\"",
+					})
+				}
+			}
 		}
 	}
 
@@ -126,6 +146,27 @@ func (s *Schema) Validate() []error {
 		result = append(result, e)
 	}
 	return result
+}
+
+// isStringEncodableType checks if a type supports json:",string" encoding.
+// Per Go's encoding/json, only string, integer, floating-point, and boolean
+// types can use the string option.
+func isStringEncodableType(td TypeDescriptor) bool {
+	if td == nil {
+		return false
+	}
+
+	switch d := td.(type) {
+	case *PrimitiveDescriptor:
+		switch d.PrimitiveKind {
+		case PrimitiveString, PrimitiveBool, PrimitiveInt, PrimitiveUint, PrimitiveFloat:
+			return true
+		}
+	case *PtrDescriptor:
+		// Pointers to string-encodable types are also valid
+		return isStringEncodableType(d.Element)
+	}
+	return false
 }
 
 // validateTypeReferences recursively walks a TypeDescriptor and checks that all

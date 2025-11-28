@@ -1,6 +1,9 @@
 package ir
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestSchema_AddType(t *testing.T) {
 	s := &Schema{}
@@ -689,5 +692,100 @@ func TestSchema_Validate_TypeParameterNoConstraint(t *testing.T) {
 	errors := s.Validate()
 	if len(errors) != 0 {
 		t.Errorf("Type parameter with nil constraint should have no errors, got %d: %v", len(errors), errors)
+	}
+}
+
+func TestSchema_Validate_DuplicateType(t *testing.T) {
+	s := &Schema{}
+
+	// Add the same type twice
+	s.AddType(&StructDescriptor{
+		Name: GoIdentifier{Name: "User", Package: "test/pkg"},
+	})
+	s.AddType(&StructDescriptor{
+		Name: GoIdentifier{Name: "User", Package: "test/pkg"},
+	})
+
+	errors := s.Validate()
+	if len(errors) != 1 {
+		t.Fatalf("Expected 1 error for duplicate type, got %d: %v", len(errors), errors)
+	}
+	if !strings.Contains(errors[0].Error(), "duplicate type name") {
+		t.Errorf("Expected duplicate type error, got: %v", errors[0])
+	}
+}
+
+func TestSchema_Validate_DuplicateTypeDifferentPackages(t *testing.T) {
+	s := &Schema{}
+
+	// Same name but different packages should be allowed
+	s.AddType(&StructDescriptor{
+		Name: GoIdentifier{Name: "User", Package: "pkg/a"},
+	})
+	s.AddType(&StructDescriptor{
+		Name: GoIdentifier{Name: "User", Package: "pkg/b"},
+	})
+
+	errors := s.Validate()
+	if len(errors) != 0 {
+		t.Errorf("Same type name in different packages should be allowed, got errors: %v", errors)
+	}
+}
+
+func TestSchema_Validate_StringEncodedOnValidTypes(t *testing.T) {
+	s := &Schema{}
+
+	// StringEncoded on valid types should pass
+	s.AddType(&StructDescriptor{
+		Name: GoIdentifier{Name: "Valid", Package: "test"},
+		Fields: []FieldDescriptor{
+			{Name: "IntField", Type: Int(64), StringEncoded: true},
+			{Name: "UintField", Type: Uint(64), StringEncoded: true},
+			{Name: "FloatField", Type: Float(64), StringEncoded: true},
+			{Name: "BoolField", Type: Bool(), StringEncoded: true},
+			{Name: "StringField", Type: String(), StringEncoded: true},
+		},
+	})
+
+	errors := s.Validate()
+	if len(errors) != 0 {
+		t.Errorf("StringEncoded on valid types should pass, got errors: %v", errors)
+	}
+}
+
+func TestSchema_Validate_StringEncodedOnInvalidTypes(t *testing.T) {
+	s := &Schema{}
+
+	// StringEncoded on invalid types should fail
+	s.AddType(&StructDescriptor{
+		Name: GoIdentifier{Name: "Invalid", Package: "test"},
+		Fields: []FieldDescriptor{
+			{Name: "StructField", Type: Ref("Other", "test"), StringEncoded: true},
+		},
+	})
+
+	errors := s.Validate()
+	if len(errors) != 1 {
+		t.Fatalf("Expected 1 error for StringEncoded on struct type, got %d: %v", len(errors), errors)
+	}
+	if !strings.Contains(errors[0].Error(), "StringEncoded") || !strings.Contains(errors[0].Error(), "StructField") {
+		t.Errorf("Expected StringEncoded error for StructField, got: %v", errors[0])
+	}
+}
+
+func TestSchema_Validate_StringEncodedOnPointerToValid(t *testing.T) {
+	s := &Schema{}
+
+	// StringEncoded on pointer to valid type should pass
+	s.AddType(&StructDescriptor{
+		Name: GoIdentifier{Name: "Valid", Package: "test"},
+		Fields: []FieldDescriptor{
+			{Name: "PtrInt", Type: Ptr(Int(64)), StringEncoded: true},
+		},
+	})
+
+	errors := s.Validate()
+	if len(errors) != 0 {
+		t.Errorf("StringEncoded on pointer to int should pass, got errors: %v", errors)
 	}
 }
