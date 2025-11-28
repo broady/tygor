@@ -64,6 +64,7 @@ type UpdatePostRequest struct {
 	Content *string `json:"content,omitempty" validate:"omitempty,min=10"`
 }
 
+// [snippet:query-params]
 // ListPostsParams are the query parameters for listing posts.
 type ListPostsParams struct {
 	AuthorID  *int64 `json:"author_id" schema:"author_id"`
@@ -71,6 +72,8 @@ type ListPostsParams struct {
 	Limit     int32  `json:"limit" schema:"limit"`
 	Offset    int32  `json:"offset" schema:"offset"`
 }
+
+// [/snippet:query-params]
 
 // GetPostParams are the query parameters for getting a post.
 type GetPostParams struct {

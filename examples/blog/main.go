@@ -290,6 +290,7 @@ func ListPosts(ctx context.Context, req *api.ListPostsParams) ([]*api.Post, erro
 	return result[start:end], nil
 }
 
+// [snippet:authorization-check]
 func UpdatePost(ctx context.Context, req *api.UpdatePostRequest) (*api.Post, error) {
 	userID, ok := getUserID(ctx)
 	if !ok {
@@ -320,6 +321,8 @@ func UpdatePost(ctx context.Context, req *api.UpdatePostRequest) (*api.Post, err
 
 	return post, nil
 }
+
+// [/snippet:authorization-check]
 
 func PublishPost(ctx context.Context, req *api.PublishPostRequest) (*api.Post, error) {
 	userID, ok := getUserID(ctx)
@@ -450,6 +453,7 @@ func main() {
 	userService.Register("Create", tygor.Exec(CreateUser))
 	userService.Register("Login", tygor.Exec(Login))
 
+	// [snippet:mixed-endpoints]
 	// Post Service (mixed public/private endpoints)
 	postService := app.Service("Posts")
 
@@ -472,6 +476,7 @@ func main() {
 	commentService := app.Service("Comments").WithUnaryInterceptor(requireAuth)
 	commentService.Register("Create", tygor.Exec(CreateComment))
 	commentService.Register("List", tygor.Query(ListComments))
+	// [/snippet:mixed-endpoints]
 
 	// Generation Mode
 	if *genFlag {

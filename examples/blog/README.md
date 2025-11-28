@@ -165,64 +165,116 @@ func requireAuth(ctx tygor.Context, req any, handler tygor.HandlerFunc) (any, er
 ```
 <!-- [/snippet:auth-interceptor] -->
 
-Applied at different levels:
+Applied at different levels (handler-level with `WithUnaryInterceptor` on specific endpoints, service-level on the entire `Comments` service):
 
-<!-- snippet-ignore -->
-```go
-// Handler-level (specific endpoints)
-postService.Register("Create",
-    tygor.Exec(CreatePost).WithUnaryInterceptor(requireAuth))
-
-// Service-level (all endpoints)
-commentService := app.Service("Comments").WithUnaryInterceptor(requireAuth)
-```
-
-### Authorization in Handlers
-
-<!-- snippet-ignore -->
-```go
-func UpdatePost(ctx context.Context, req *api.UpdatePostRequest) (*api.Post, error) {
-    userID, _ := getUserID(ctx)
-
-    post := findPost(req.PostID)
-    if post.AuthorID != userID {
-        return nil, tygor.NewError(tygor.CodePermissionDenied,
-            "not authorized to edit this post")
-    }
-    // ... update post
-}
-```
-
-### Mixed Public/Private Endpoints
-
-<!-- snippet-ignore -->
-```go
+<!-- [snippet:mixed-endpoints] -->
+```go title="main.go"
+// Post Service (mixed public/private endpoints)
 postService := app.Service("Posts")
 
 // Public endpoints
 postService.Register("Get", tygor.Query(GetPost))
-postService.Register("List", tygor.Query(ListPosts))
+postService.Register("List", tygor.Query(ListPosts).CacheControl(tygor.CacheConfig{
+	MaxAge: 30 * time.Second,
+	Public: true,
+}))
 
-// Private endpoints (require auth)
+// Private endpoints (require authentication)
 postService.Register("Create",
-    tygor.Exec(CreatePost).WithUnaryInterceptor(requireAuth))
+	tygor.Exec(CreatePost).WithUnaryInterceptor(requireAuth))
+postService.Register("Update",
+	tygor.Exec(UpdatePost).WithUnaryInterceptor(requireAuth))
+postService.Register("Publish",
+	tygor.Exec(PublishPost).WithUnaryInterceptor(requireAuth))
+
+// Comment Service (requires authentication)
+commentService := app.Service("Comments").WithUnaryInterceptor(requireAuth)
+commentService.Register("Create", tygor.Exec(CreateComment))
+commentService.Register("List", tygor.Query(ListComments))
 ```
+<!-- [/snippet:mixed-endpoints] -->
+
+### Authorization in Handlers
+
+<!-- [snippet:authorization-check] -->
+```go title="main.go"
+func UpdatePost(ctx context.Context, req *api.UpdatePostRequest) (*api.Post, error) {
+	userID, ok := getUserID(ctx)
+	if !ok {
+		return nil, tygor.NewError(tygor.CodeInternal, "user ID not in context")
+	}
+
+	dbMu.Lock()
+	defer dbMu.Unlock()
+
+	post, ok := posts[req.PostID]
+	if !ok {
+		return nil, tygor.NewError(tygor.CodeNotFound, "post not found")
+	}
+
+	// Check authorization
+	if post.AuthorID != userID {
+		return nil, tygor.NewError(tygor.CodePermissionDenied, "not authorized to edit this post")
+	}
+
+	// Update fields
+	if req.Title != nil {
+		post.Title = *req.Title
+	}
+	if req.Content != nil {
+		post.Content = *req.Content
+	}
+	post.UpdatedAt = time.Now()
+
+	return post, nil
+}
+
+```
+<!-- [/snippet:authorization-check] -->
+
+### Mixed Public/Private Endpoints
+
+<!-- [snippet:mixed-endpoints] -->
+```go title="main.go"
+// Post Service (mixed public/private endpoints)
+postService := app.Service("Posts")
+
+// Public endpoints
+postService.Register("Get", tygor.Query(GetPost))
+postService.Register("List", tygor.Query(ListPosts).CacheControl(tygor.CacheConfig{
+	MaxAge: 30 * time.Second,
+	Public: true,
+}))
+
+// Private endpoints (require authentication)
+postService.Register("Create",
+	tygor.Exec(CreatePost).WithUnaryInterceptor(requireAuth))
+postService.Register("Update",
+	tygor.Exec(UpdatePost).WithUnaryInterceptor(requireAuth))
+postService.Register("Publish",
+	tygor.Exec(PublishPost).WithUnaryInterceptor(requireAuth))
+
+// Comment Service (requires authentication)
+commentService := app.Service("Comments").WithUnaryInterceptor(requireAuth)
+commentService.Register("Create", tygor.Exec(CreateComment))
+commentService.Register("List", tygor.Query(ListComments))
+```
+<!-- [/snippet:mixed-endpoints] -->
 
 ### Query Parameters with Validation
 
-<!-- snippet-ignore -->
-```go
+<!-- [snippet:api:query-params] -->
+```go title="types.go"
+// ListPostsParams are the query parameters for listing posts.
 type ListPostsParams struct {
-    AuthorID  *int64 `schema:"author_id"`
-    Published *bool  `schema:"published"`
-    Limit     int32  `schema:"limit"`
-    Offset    int32  `schema:"offset"`
+	AuthorID  *int64 `json:"author_id" schema:"author_id"`
+	Published *bool  `json:"published" schema:"published"`
+	Limit     int32  `json:"limit" schema:"limit"`
+	Offset    int32  `json:"offset" schema:"offset"`
 }
 
-func ListPosts(ctx context.Context, req *ListPostsParams) ([]*Post, error) {
-    // Parameters automatically decoded and validated
-}
 ```
+<!-- [/snippet:api:query-params] -->
 
 ## Demo Data
 
@@ -255,18 +307,18 @@ Example error response:
 
 ### Client Setup
 
-<!-- [snippet:client-setup] -->
+<!-- [snippet:client:client-setup] -->
 ```typescript title="index.ts"
 // Create a basic client (for public endpoints)
 const client = createClient(registry, {
   baseUrl: "http://localhost:8080",
 });
 ```
-<!-- [/snippet:client-setup] -->
+<!-- [/snippet:client:client-setup] -->
 
 ### Authenticated Client
 
-<!-- [snippet:client-auth] -->
+<!-- [snippet:client:client-auth] -->
 ```typescript title="index.ts"
 // Create an authenticated client
 function createAuthClient(token: string) {
@@ -278,11 +330,11 @@ function createAuthClient(token: string) {
   });
 }
 ```
-<!-- [/snippet:client-auth] -->
+<!-- [/snippet:client:client-auth] -->
 
 ### Login Flow
 
-<!-- [snippet:client-login] -->
+<!-- [snippet:client:client-login] -->
 ```typescript title="index.ts"
 // Login to get a token
 const loginResult = await client.Users.Login({
@@ -294,11 +346,11 @@ console.log("Logged in as:", loginResult.user?.username);
 // Create authenticated client with the token
 const authClient = createAuthClient(loginResult.token);
 ```
-<!-- [/snippet:client-login] -->
+<!-- [/snippet:client:client-login] -->
 
 ### Making RPC Calls
 
-<!-- [snippet:client-calls] -->
+<!-- [snippet:client:client-calls] -->
 ```typescript title="index.ts"
 // Public endpoint: list published posts
 const posts = await client.Posts.List({
@@ -321,11 +373,11 @@ const published = await authClient.Posts.Publish({
 });
 console.log("Published:", published.published);
 ```
-<!-- [/snippet:client-calls] -->
+<!-- [/snippet:client:client-calls] -->
 
 ### Error Handling
 
-<!-- [snippet:client-errors] -->
+<!-- [snippet:client:client-errors] -->
 ```typescript title="index.ts"
 // Error handling example
 async function handleErrors() {
@@ -342,4 +394,4 @@ async function handleErrors() {
   }
 }
 ```
-<!-- [/snippet:client-errors] -->
+<!-- [/snippet:client:client-errors] -->
