@@ -150,6 +150,31 @@ npm install @tygor/client
 The generated client provides a clean, idiomatic API with full type safety:
 
 <!-- [snippet:examples/newsserver:client-usage] -->
+```typescript
+async function example() {
+  // Type-safe calls with autocomplete
+  const news = await client.News.List({ limit: 10, offset: 0 });
+  // news: News[]
+
+  const created = await client.News.Create({
+    title: "Breaking News",
+    body: "Important update"
+  });
+  // created: News
+
+  // Errors are properly typed
+  try {
+    await client.News.Create({ title: "" });
+  } catch (err) {
+    if (err instanceof ServerError) {
+      console.error(err.code, err.message);
+    } else if (err instanceof TransportError) {
+      console.error("Network error:", err.httpStatus);
+    }
+  }
+}
+
+```
 <!-- [/snippet:examples/newsserver:client-usage] -->
 
 The client uses JavaScript Proxies to provide method access without code generation bloat. Your bundle only includes the types and a small runtime, regardless of how many API methods you have.
@@ -163,6 +188,14 @@ See [examples/newsserver/client/src/rpc/manifest.ts](examples/newsserver/client/
 For GET requests, parameters are decoded from query strings:
 
 <!-- [snippet:examples/newsserver:list-params] -->
+```go
+// ListNewsParams contains pagination parameters for listing news articles.
+type ListNewsParams struct {
+	Limit  *int32 `json:"limit" schema:"limit"`
+	Offset *int32 `json:"offset" schema:"offset"`
+}
+
+```
 <!-- [/snippet:examples/newsserver:list-params] -->
 
 Query: `/News/List?limit=10&offset=20`
@@ -172,6 +205,14 @@ Query: `/News/List?limit=10&offset=20`
 For POST requests (the default), the body is decoded as JSON:
 
 <!-- [snippet:examples/newsserver:create-params] -->
+```go
+// CreateNewsParams contains the parameters for creating a new news article.
+type CreateNewsParams struct {
+	Title string  `json:"title" validate:"required,min=3"`
+	Body  *string `json:"body,omitempty"`
+}
+
+```
 <!-- [/snippet:examples/newsserver:create-params] -->
 
 ## Error Handling

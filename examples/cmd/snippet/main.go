@@ -367,12 +367,49 @@ func formatSnippets(snippets []Snippet, format string) string {
 	return sb.String()
 }
 
+// lookupSnippet finds a snippet by name with hierarchical fallback.
+// For "examples/newsserver:list-params", it first tries exact match,
+// then searches for any snippet named "list-params" under "examples/newsserver/**".
+func lookupSnippet(snippetMap map[string]Snippet, name string) (Snippet, bool) {
+	// Try exact match first
+	if s, ok := snippetMap[name]; ok {
+		return s, true
+	}
+
+	// Parse into scope and snippet name
+	idx := strings.LastIndex(name, ":")
+	if idx == -1 {
+		return Snippet{}, false
+	}
+	requestedScope := name[:idx]
+	snippetName := name[idx+1:]
+
+	// Search for any snippet under the requested scope with matching name
+	for fullName, s := range snippetMap {
+		idx := strings.LastIndex(fullName, ":")
+		if idx == -1 {
+			continue
+		}
+		scope := fullName[:idx]
+		sName := fullName[idx+1:]
+
+		// Check if scope is under requestedScope and name matches
+		if sName == snippetName && strings.HasPrefix(scope, requestedScope) {
+			return s, true
+		}
+	}
+
+	return Snippet{}, false
+}
+
 func injectSnippets(filename string, snippets []Snippet, format string, root string) error {
 	// Build a map of snippets by name
 	snippetMap := make(map[string]Snippet)
 	for _, s := range snippets {
 		snippetMap[s.Name] = s
 	}
+
+	var missingSnippets []string
 
 	// Resolve base directory for file snippets (relative to the README's directory)
 	baseDir := filepath.Dir(filename)
@@ -445,10 +482,10 @@ func injectSnippets(filename string, snippets []Snippet, format string, root str
 			result = append(result, line)
 
 			// Insert the snippet content
-			if s, ok := snippetMap[currentSnippet]; ok {
+			if s, ok := lookupSnippet(snippetMap, currentSnippet); ok {
 				result = append(result, formatSnippet(s, format))
 			} else {
-				fmt.Fprintf(os.Stderr, "Warning: snippet %q not found\n", currentSnippet)
+				missingSnippets = append(missingSnippets, currentSnippet)
 			}
 			skipping = true
 			continue
@@ -475,6 +512,10 @@ func injectSnippets(filename string, snippets []Snippet, format string, root str
 
 	if skipping {
 		return fmt.Errorf("unclosed README snippet marker %q", currentSnippet)
+	}
+
+	if len(missingSnippets) > 0 {
+		return fmt.Errorf("missing snippets: %v", missingSnippets)
 	}
 
 	// Write back
