@@ -69,6 +69,7 @@ type Snippet struct {
 	EndLine   int
 	Content   string
 	Lang      string
+	Collapse  bool // If true, collapse function bodies to "// ..."
 }
 
 var (
@@ -214,11 +215,14 @@ func extractSnippets(filename string, root string) ([]Snippet, error) {
 			if current != nil {
 				return nil, fmt.Errorf("line %d: nested snippet %q inside %q", lineNum, matches[1], current.Name)
 			}
+			// Parse name and attributes: "name attr1 attr2"
+			name, attrs := parseSnippetMarker(matches[1])
 			current = &Snippet{
-				Name:      scopePrefix + matches[1], // Scoped name: "dir:name"
+				Name:      scopePrefix + name, // Scoped name: "dir:name"
 				File:      filepath.Base(filename),
 				StartLine: lineNum + 1, // Content starts on next line
 				Lang:      detectLang(filename),
+				Collapse:  attrs["collapse"],
 			}
 			contentLines = nil
 			continue
@@ -230,14 +234,20 @@ func extractSnippets(filename string, root string) ([]Snippet, error) {
 				return nil, fmt.Errorf("line %d: end marker for %q without start", lineNum, matches[1])
 			}
 			// Compare against unscoped name (source files use simple names)
-			expectedEnd := scopePrefix + matches[1]
+			// End markers don't have attributes, just the name
+			endName, _ := parseSnippetMarker(matches[1])
+			expectedEnd := scopePrefix + endName
 			if expectedEnd != current.Name {
-				return nil, fmt.Errorf("line %d: end marker %q doesn't match start %q", lineNum, matches[1], current.Name)
+				return nil, fmt.Errorf("line %d: end marker %q doesn't match start %q", lineNum, endName, current.Name)
 			}
 			current.EndLine = lineNum - 1
 			current.Content = strings.Join(contentLines, "\n")
 			// Trim leading blank line if present (from blank line after marker)
 			current.Content = strings.TrimPrefix(current.Content, "\n")
+			// Collapse function bodies if requested (before dedent to preserve indentation detection)
+			if current.Collapse {
+				current.Content = collapseBodies(current.Content, current.Lang)
+			}
 			// Dedent: remove common leading whitespace
 			current.Content = dedent(current.Content)
 			snippets = append(snippets, *current)
@@ -293,6 +303,86 @@ func dedent(s string) string {
 	}
 
 	return strings.Join(lines, "\n")
+}
+
+// parseSnippetMarker parses "name attr1 attr2" into name and attributes.
+// Returns the name and a map of boolean attributes (presence = true).
+func parseSnippetMarker(s string) (name string, attrs map[string]bool) {
+	parts := strings.Fields(s)
+	if len(parts) == 0 {
+		return "", nil
+	}
+	name = parts[0]
+	attrs = make(map[string]bool)
+	for _, attr := range parts[1:] {
+		attrs[attr] = true
+	}
+	return name, attrs
+}
+
+// collapseBodies collapses indented content to "// ..." comments.
+// Uses the first non-empty line to determine base indent, then collapses
+// any lines that are more indented. Language-agnostic.
+func collapseBodies(content string, lang string) string {
+	lines := strings.Split(content, "\n")
+	if len(lines) == 0 {
+		return content
+	}
+
+	// Find base indent from first non-empty line
+	baseIndent := -1
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		baseIndent = len(line) - len(strings.TrimLeft(line, " \t"))
+		break
+	}
+	if baseIndent < 0 {
+		return content
+	}
+
+	// Choose comment style based on language
+	commentPrefix := "// "
+	if lang == "python" {
+		commentPrefix = "# "
+	}
+
+	var result []string
+	var collapsedIndent string // indent of the collapsed block
+	inCollapsed := false
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Empty lines: keep if not in collapsed block
+		if trimmed == "" {
+			if !inCollapsed {
+				result = append(result, line)
+			}
+			continue
+		}
+
+		indent := len(line) - len(strings.TrimLeft(line, " \t"))
+
+		if indent > baseIndent {
+			// More indented than base - collapse it
+			if !inCollapsed {
+				// Starting a new collapsed block
+				collapsedIndent = line[:indent]
+				result = append(result, collapsedIndent+commentPrefix+"...")
+				inCollapsed = true
+			}
+			// Skip this line (it's collapsed)
+			continue
+		}
+
+		// At base indent - keep this line
+		inCollapsed = false
+		result = append(result, line)
+	}
+
+	return strings.Join(result, "\n")
 }
 
 func detectLang(filename string) string {

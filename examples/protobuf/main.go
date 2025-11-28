@@ -26,7 +26,7 @@ var idCounter atomic.Int64
 
 // --- Handlers using protobuf types ---
 
-// [snippet:proto-handler]
+// [snippet:proto-handler collapse]
 func CreateItem(ctx context.Context, req *api.CreateItemRequest) (*api.Item, error) {
 	if req.Name == "" {
 		return nil, tygor.NewError(tygor.CodeInvalidArgument, "name is required")

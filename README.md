@@ -73,7 +73,7 @@ yarn add @tygor/client
 ### 1. Define your types
 
 <!-- [snippet:doc/examples/quickstart:types] -->
-```go
+```go title="types.go"
 type News struct {
 	ID        int32      `json:"id"`
 	Title     string     `json:"title"`
@@ -97,15 +97,13 @@ type CreateNewsParams struct {
 ### 2. Implement handlers
 
 <!-- [snippet:doc/examples/quickstart:handlers] -->
-```go
+```go title="main.go"
 func ListNews(ctx context.Context, req *ListNewsParams) ([]*News, error) {
-	// Your implementation
-	return nil, nil
+	// ...
 }
 
 func CreateNews(ctx context.Context, req *CreateNewsParams) (*News, error) {
-	// Your implementation
-	return nil, nil
+	// ...
 }
 
 ```
@@ -114,7 +112,7 @@ func CreateNews(ctx context.Context, req *CreateNewsParams) (*News, error) {
 ### 3. Register services
 
 <!-- [snippet:doc/examples/quickstart:registration] -->
-```go
+```go title="main.go"
 app := tygor.NewApp()
 
 news := app.Service("News")
@@ -128,7 +126,7 @@ http.ListenAndServe(":8080", app.Handler())
 ### 4. Generate TypeScript types
 
 <!-- [snippet:doc/examples/quickstart:generation] -->
-```go
+```go title="main.go"
 if _, err := tygorgen.FromApp(app).ToDir("./client/src/rpc"); err != nil {
 	log.Fatal(err)
 }
@@ -148,7 +146,7 @@ npm install @tygor/client
 The generated client provides a clean, idiomatic API with full type safety:
 
 <!-- [snippet:examples/newsserver:client-usage] -->
-```typescript
+```typescript title="index.ts"
 async function example() {
   // Type-safe calls with autocomplete
   const news = await client.News.List({ limit: 10, offset: 0 });
@@ -186,7 +184,7 @@ See [examples/newsserver/client/src/rpc/manifest.ts](examples/newsserver/client/
 For GET requests, parameters are decoded from query strings:
 
 <!-- [snippet:examples/newsserver:list-params] -->
-```go
+```go title="types.go"
 // ListNewsParams contains pagination parameters for listing news articles.
 type ListNewsParams struct {
 	Limit  *int32 `json:"limit" schema:"limit"`
@@ -203,7 +201,7 @@ Query: `/News/List?limit=10&offset=20`
 For POST requests (the default), the body is decoded as JSON:
 
 <!-- [snippet:examples/newsserver:create-params] -->
-```go
+```go title="types.go"
 // CreateNewsParams contains the parameters for creating a new news article.
 type CreateNewsParams struct {
 	Title string  `json:"title" validate:"required,min=3"`
@@ -218,19 +216,9 @@ type CreateNewsParams struct {
 Use structured error codes for consistent error responses:
 
 <!-- [snippet:examples/newsserver:error-handling] -->
-```go
+```go title="main.go"
 func CreateNews(ctx context.Context, req *api.CreateNewsParams) (*api.News, error) {
-	if req.Title == "error" {
-		return nil, tygor.NewError(tygor.CodeInvalidArgument, "simulated error")
-	}
-	now := time.Now()
-	return &api.News{
-		ID:        123,
-		Title:     req.Title,
-		Body:      req.Body,
-		Status:    api.NewsStatusDraft,
-		CreatedAt: &now,
-	}, nil
+	// ...
 }
 
 ```
@@ -252,7 +240,7 @@ Available error codes and their HTTP status code mapping (not exhaustive):
 Map application errors to API errors:
 
 <!-- [snippet:examples/newsserver:error-transformer] -->
-```go
+```go title="main.go"
 app := tygor.NewApp().
 	WithErrorTransformer(func(err error) *tygor.Error {
 		if err.Error() == "database connection failed" {
@@ -282,7 +270,7 @@ Interceptors provide cross-cutting concerns at different levels.
 Applied to all handlers:
 
 <!-- [snippet:examples/newsserver:global-interceptor] -->
-```go
+```go title="main.go"
 app = app.WithUnaryInterceptor(middleware.LoggingInterceptor(logger))
 
 ```
@@ -303,7 +291,7 @@ news := app.Service("News").
 Applied to specific handlers:
 
 <!-- [snippet:examples/newsserver:handler-interceptor] -->
-```go
+```go title="main.go"
 news.Register("Create", tygor.Exec(CreateNews).
 	WithUnaryInterceptor(func(ctx tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
 		ctx.HTTPWriter().Header().Set("X-Created-By", "tygor")
@@ -318,7 +306,7 @@ news.Register("Create", tygor.Exec(CreateNews).
 HTTP middleware wraps the entire app:
 
 <!-- [snippet:examples/newsserver:middleware] -->
-```go
+```go title="main.go"
 app = app.WithMiddleware(middleware.CORS(middleware.CORSAllowAll))
 
 ```
@@ -360,7 +348,7 @@ Query: `/News/List?limit=10&offset=0&status=published`
 Set cache headers on GET handlers using `CacheControl`:
 
 <!-- [snippet:examples/newsserver:cache-control] -->
-```go
+```go title="main.go"
 news.Register("List", tygor.Query(ListNews).
 	CacheControl(tygor.CacheConfig{
 		MaxAge: 1 * time.Minute,

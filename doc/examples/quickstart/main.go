@@ -10,7 +10,7 @@ import (
 	"github.com/broady/tygor/tygorgen"
 )
 
-// [snippet:handlers]
+// [snippet:handlers collapse]
 func ListNews(ctx context.Context, req *ListNewsParams) ([]*News, error) {
 	// Your implementation
 	return nil, nil

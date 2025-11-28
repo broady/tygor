@@ -18,7 +18,7 @@ import (
 
 // --- Handlers ---
 
-// [snippet:handlers]
+// [snippet:handlers collapse]
 func ListNews(ctx context.Context, req *api.ListNewsParams) ([]*api.News, error) {
 	// Simulate DB
 	body := "This is the body"
@@ -31,7 +31,7 @@ func ListNews(ctx context.Context, req *api.ListNewsParams) ([]*api.News, error)
 
 // [/snippet:handlers]
 
-// [snippet:error-handling]
+// [snippet:error-handling collapse]
 
 func CreateNews(ctx context.Context, req *api.CreateNewsParams) (*api.News, error) {
 	if req.Title == "error" {

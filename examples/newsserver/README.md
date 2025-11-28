@@ -76,13 +76,7 @@ type CreateNewsParams struct {
 <!-- [snippet:handlers] -->
 ```go title="main.go"
 func ListNews(ctx context.Context, req *api.ListNewsParams) ([]*api.News, error) {
-	// Simulate DB
-	body := "This is the body"
-	now := time.Now()
-	return []*api.News{
-		{ID: 1, Title: "News 1", Body: &body, Status: api.NewsStatusPublished, CreatedAt: &now},
-		{ID: 2, Title: "News 2", Status: api.NewsStatusDraft, CreatedAt: &now},
-	}, nil
+	// ...
 }
 
 ```

@@ -44,18 +44,7 @@ message Item {
 <!-- [snippet:proto-handler] -->
 ```go title="main.go"
 func CreateItem(ctx context.Context, req *api.CreateItemRequest) (*api.Item, error) {
-	if req.Name == "" {
-		return nil, tygor.NewError(tygor.CodeInvalidArgument, "name is required")
-	}
-
-	id := idCounter.Add(1)
-	return &api.Item{
-		Id:          id,
-		Name:        req.Name,
-		Description: req.Description,
-		PriceCents:  req.PriceCents,
-		Tags:        req.Tags,
-	}, nil
+	// ...
 }
 
 ```

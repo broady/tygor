@@ -91,7 +91,7 @@ func getUserID(ctx context.Context) (int64, bool) {
 	return userID, ok
 }
 
-// [snippet:auth-interceptor]
+// [snippet:auth-interceptor collapse]
 func requireAuth(ctx tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
 	// Extract token from request headers
 	httpReq := ctx.HTTPRequest()
@@ -290,7 +290,7 @@ func ListPosts(ctx context.Context, req *api.ListPostsParams) ([]*api.Post, erro
 	return result[start:end], nil
 }
 
-// [snippet:authorization-check]
+// [snippet:authorization-check collapse]
 func UpdatePost(ctx context.Context, req *api.UpdatePostRequest) (*api.Post, error) {
 	userID, ok := getUserID(ctx)
 	if !ok {

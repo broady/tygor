@@ -15,7 +15,7 @@ import (
 
 // --- Handlers ---
 
-// [snippet:handlers]
+// [snippet:handlers collapse]
 
 func ListUsers(ctx context.Context, req *api.ListUsersParams) (*api.PagedResponse[api.User], error) {
 	// Simulate database query with pagination

@@ -113,87 +113,15 @@ type CreatePostParams struct {
 <!-- [snippet:handlers] -->
 ```go title="main.go"
 func ListUsers(ctx context.Context, req *api.ListUsersParams) (*api.PagedResponse[api.User], error) {
-	// Simulate database query with pagination
-	users := []api.User{
-		{ID: 1, Username: "alice", Email: "alice@example.com", Role: "admin"},
-		{ID: 2, Username: "bob", Email: "bob@example.com", Role: "user"},
-		{ID: 3, Username: "charlie", Email: "charlie@example.com", Role: "user"},
-	}
-
-	// Apply role filter if specified
-	filtered := users
-	if req.Role != "" {
-		filtered = []api.User{}
-		for _, u := range users {
-			if u.Role == req.Role {
-				filtered = append(filtered, u)
-			}
-		}
-	}
-
-	// Calculate pagination
-	page := req.Page
-	if page < 1 {
-		page = 1
-	}
-	pageSize := req.PageSize
-	if pageSize < 1 {
-		pageSize = 10
-	}
-
-	start := (page - 1) * pageSize
-	end := start + pageSize
-	if end > len(filtered) {
-		end = len(filtered)
-	}
-	if start > len(filtered) {
-		start = len(filtered)
-	}
-
-	return &api.PagedResponse[api.User]{
-		Data:     filtered[start:end],
-		Total:    len(filtered),
-		Page:     page,
-		PageSize: pageSize,
-		HasMore:  end < len(filtered),
-	}, nil
+	// ...
 }
 
 func GetUser(ctx context.Context, req *api.GetUserParams) (*api.Result[api.User], error) {
-	// Simulate database lookup
-	if req.ID == 1 {
-		user := api.User{
-			ID:       1,
-			Username: "alice",
-			Email:    "alice@example.com",
-			Role:     "admin",
-		}
-		return &api.Result[api.User]{
-			Success: true,
-			Data:    &user,
-		}, nil
-	}
-
-	errMsg := "user not found"
-	return &api.Result[api.User]{
-		Success: false,
-		Error:   &errMsg,
-	}, nil
+	// ...
 }
 
 func CreatePost(ctx context.Context, req *api.CreatePostParams) (*api.Result[api.Post], error) {
-	// Simulate post creation
-	post := api.Post{
-		ID:       123,
-		Title:    req.Title,
-		Content:  req.Content,
-		AuthorID: req.AuthorID,
-	}
-
-	return &api.Result[api.Post]{
-		Success: true,
-		Data:    &post,
-	}, nil
+	// ...
 }
 
 ```

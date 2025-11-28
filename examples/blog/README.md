@@ -129,37 +129,7 @@ examples/blog/
 <!-- [snippet:auth-interceptor] -->
 ```go title="main.go"
 func requireAuth(ctx tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
-	// Extract token from request headers
-	httpReq := ctx.HTTPRequest()
-	if httpReq == nil {
-		return nil, tygor.NewError(tygor.CodeUnauthenticated, "no request in context")
-	}
-
-	authHeader := httpReq.Header.Get("Authorization")
-	if authHeader == "" {
-		return nil, tygor.NewError(tygor.CodeUnauthenticated, "missing authorization header")
-	}
-
-	// Extract bearer token
-	parts := strings.Split(authHeader, " ")
-	if len(parts) != 2 || parts[0] != "Bearer" {
-		return nil, tygor.NewError(tygor.CodeUnauthenticated, "invalid authorization header format")
-	}
-
-	token := parts[1]
-
-	// Look up user by token
-	dbMu.RLock()
-	userID, ok := tokens[token]
-	dbMu.RUnlock()
-
-	if !ok {
-		return nil, tygor.NewError(tygor.CodeUnauthenticated, "invalid token")
-	}
-
-	// Add user ID to context and pass to handler
-	ctxWithUser := context.WithValue(ctx, userIDKey, userID)
-	return handler(ctxWithUser, req)
+	// ...
 }
 
 ```
@@ -199,34 +169,7 @@ commentService.Register("List", tygor.Query(ListComments))
 <!-- [snippet:authorization-check] -->
 ```go title="main.go"
 func UpdatePost(ctx context.Context, req *api.UpdatePostRequest) (*api.Post, error) {
-	userID, ok := getUserID(ctx)
-	if !ok {
-		return nil, tygor.NewError(tygor.CodeInternal, "user ID not in context")
-	}
-
-	dbMu.Lock()
-	defer dbMu.Unlock()
-
-	post, ok := posts[req.PostID]
-	if !ok {
-		return nil, tygor.NewError(tygor.CodeNotFound, "post not found")
-	}
-
-	// Check authorization
-	if post.AuthorID != userID {
-		return nil, tygor.NewError(tygor.CodePermissionDenied, "not authorized to edit this post")
-	}
-
-	// Update fields
-	if req.Title != nil {
-		post.Title = *req.Title
-	}
-	if req.Content != nil {
-		post.Content = *req.Content
-	}
-	post.UpdatedAt = time.Now()
-
-	return post, nil
+	// ...
 }
 
 ```
