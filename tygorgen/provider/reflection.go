@@ -666,7 +666,7 @@ func (b *reflectionSchemaBuilder) validateMapKeyType(t reflect.Type) error {
 		return nil
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return nil
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
 		return nil
 	case reflect.Bool:
 		return fmt.Errorf("unsupported map key type: bool")
@@ -681,10 +681,6 @@ func (b *reflectionSchemaBuilder) validateMapKeyType(t reflect.Type) error {
 		}
 		return fmt.Errorf("unsupported map key type: struct without TextMarshaler")
 	default:
-		// For other types, check if it's string-based
-		if t.Kind() == reflect.String || (t.Name() != "" && t.Kind() == reflect.String) {
-			return nil
-		}
 		return fmt.Errorf("unsupported map key type: %s", t.Kind())
 	}
 }
