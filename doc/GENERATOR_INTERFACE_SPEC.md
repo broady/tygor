@@ -433,8 +433,8 @@ Given the Go type above, the provider emits:
 &StructDescriptor{
     Name: GoIdentifier{Name: "Outer_Inner", Package: "example.com/api"},
     Fields: []FieldDescriptor{
-        {Name: "X", JSONName: "X", Type: &PrimitiveDescriptor{Kind: PrimitiveInt}},
-        {Name: "Y", JSONName: "Y", Type: &PrimitiveDescriptor{Kind: PrimitiveString}},
+        {Name: "X", JSONName: "X", Type: &PrimitiveDescriptor{PrimitiveKind: PrimitiveInt}},
+        {Name: "Y", JSONName: "Y", Type: &PrimitiveDescriptor{PrimitiveKind: PrimitiveString}},
     },
 }
 ```
@@ -468,14 +468,17 @@ type TypeDescriptor interface {
     // Kind returns the descriptor kind for type switching.
     Kind() DescriptorKind
 
-    // Name returns the canonical name of this type.
-    Name() GoIdentifier
+    // TypeName returns the canonical name of this type.
+    // Returns zero value for expression types (primitives, arrays, etc).
+    TypeName() GoIdentifier
 
-    // Documentation returns associated documentation comments.
-    Documentation() Documentation
+    // Doc returns associated documentation comments.
+    // Returns zero value for expression types.
+    Doc() Documentation
 
-    // Source returns the original Go source location.
-    Source() Source
+    // Src returns the original Go source location.
+    // Returns zero value for expression types.
+    Src() Source
 }
 ```
 
@@ -533,8 +536,8 @@ type StructDescriptor struct {
     TypeParameters []TypeParameterDescriptor // Generic type parameters (source provider only)
     Fields         []FieldDescriptor
     Extends        []GoIdentifier  // Embedded types without json tags (inheritance)
-    Doc            Documentation
-    Src            Source
+    Documentation  Documentation
+    Source         Source
 }
 
 func (d *StructDescriptor) Kind() DescriptorKind { return KindStruct }
@@ -597,8 +600,8 @@ type FieldDescriptor struct {
     // "gorm" tags) that falls outside the JSON serialization concern.
     RawTags map[string]string
 
-    // Doc is the documentation for this field.
-    Doc Documentation
+    // Documentation for this field.
+    Documentation Documentation
 }
 ```
 
@@ -721,8 +724,8 @@ type AliasDescriptor struct {
     Name           GoIdentifier
     TypeParameters []TypeParameterDescriptor // Generic type parameters (source provider only)
     Underlying     TypeDescriptor
-    Doc            Documentation
-    Src            Source
+    Documentation  Documentation
+    Source         Source
 }
 
 func (d *AliasDescriptor) Kind() DescriptorKind { return KindAlias }
@@ -735,10 +738,10 @@ func (d *AliasDescriptor) Kind() DescriptorKind { return KindAlias }
 // NOTE: Reflection provider cannot produce EnumDescriptor (cannot enumerate const values).
 // This descriptor is only available from source-based providers.
 type EnumDescriptor struct {
-    Name    GoIdentifier
-    Members []EnumMember
-    Doc     Documentation
-    Src     Source
+    Name          GoIdentifier
+    Members       []EnumMember
+    Documentation Documentation
+    Source        Source
 }
 
 func (d *EnumDescriptor) Kind() DescriptorKind { return KindEnum }
@@ -749,8 +752,8 @@ type EnumMember struct {
     // Value is the constant value. Providers MUST convert Go constant values
     // to one of exactly three types: string, int64, or float64.
     // Generators can rely on type assertions to these concrete types.
-    Value any
-    Doc   Documentation
+    Value         any
+    Documentation Documentation
 }
 ```
 
@@ -759,7 +762,7 @@ type EnumMember struct {
 These descriptors represent **type expressions** used within fields, aliases, and other contexts. Unlike named type descriptors (Struct, Alias, Enum), expression descriptors:
 
 - Implement the `TypeDescriptor` interface (so they can be assigned to `TypeDescriptor` fields)
-- Return zero values from `Name()`, `Documentation()`, and `Source()` methods
+- Return zero values from `TypeName()`, `Doc()`, and `Src()` methods
 - Appear nested within fields and other type expressions, not in `Schema.Types`
 
 ```go
@@ -767,9 +770,9 @@ These descriptors represent **type expressions** used within fields, aliases, an
 // of the TypeDescriptor interface methods they don't use.
 type exprBase struct{}
 
-func (exprBase) Name() GoIdentifier          { return GoIdentifier{} }
-func (exprBase) Documentation() Documentation { return Documentation{} }
-func (exprBase) Source() Source              { return Source{} }
+func (exprBase) TypeName() GoIdentifier { return GoIdentifier{} }
+func (exprBase) Doc() Documentation     { return Documentation{} }
+func (exprBase) Src() Source            { return Source{} }
 ```
 
 **Expression Descriptors:**
@@ -793,7 +796,7 @@ const (
 // PrimitiveDescriptor represents a built-in primitive type.
 type PrimitiveDescriptor struct {
     exprBase
-    Kind    PrimitiveKind
+    PrimitiveKind PrimitiveKind
 
     // BitSize specifies the size for numeric types (PrimitiveInt, PrimitiveUint, PrimitiveFloat).
     // Valid values:
@@ -807,9 +810,9 @@ type PrimitiveDescriptor struct {
     // types (TypeScript, Python) MAY ignore BitSize.
     //
     // Example mappings:
-    // - {Kind: PrimitiveInt, BitSize: 32} -> TypeScript: number, Rust: i32, Zod: z.number().int()
-    // - {Kind: PrimitiveInt, BitSize: 64} -> TypeScript: number (⚠️), Rust: i64, Zod: z.number().int()
-    // - {Kind: PrimitiveFloat, BitSize: 64} -> TypeScript: number, Rust: f64, Zod: z.number()
+    // - {PrimitiveKind: PrimitiveInt, BitSize: 32} -> TypeScript: number, Rust: i32, Zod: z.number().int()
+    // - {PrimitiveKind: PrimitiveInt, BitSize: 64} -> TypeScript: number (⚠️), Rust: i64, Zod: z.number().int()
+    // - {PrimitiveKind: PrimitiveFloat, BitSize: 64} -> TypeScript: number, Rust: f64, Zod: z.number()
     BitSize int
 }
 
@@ -944,13 +947,13 @@ func (d *UnionDescriptor) Kind() DescriptorKind { return KindUnion }
 //
 // Note: TypeParameterDescriptor appears in two contexts:
 // - Declaration: In StructDescriptor.TypeParameters or AliasDescriptor.TypeParameters,
-//   where Name and Constraint define the type parameter.
-// - Usage: As a field type (FieldDescriptor.Type), where only Name is used to
+//   where ParamName and Constraint define the type parameter.
+// - Usage: As a field type (FieldDescriptor.Type), where only ParamName is used to
 //   reference back to the declaration. In usage context, Constraint is ignored.
 type TypeParameterDescriptor struct {
     exprBase
-    // Name is the type parameter name (e.g., "T", "K", "V").
-    Name string
+    // ParamName is the type parameter name (e.g., "T", "K", "V").
+    ParamName string
 
     // Constraint is the type set constraint, represented as a TypeDescriptor.
     // nil means unconstrained (equivalent to `any`).
@@ -994,20 +997,20 @@ The source provider emits:
 &StructDescriptor{
     Name: GoIdentifier{Name: "Response", Package: "example.com/api"},
     TypeParameters: []TypeParameterDescriptor{{
-        Name:       "T",
+        ParamName:  "T",
         Constraint: nil, // unconstrained (any)
     }},
     Fields: []FieldDescriptor{
         {
             Name:     "Data",
             JSONName: "data",
-            Type:     &TypeParameterDescriptor{Name: "T"},
+            Type:     &TypeParameterDescriptor{ParamName: "T"},
         },
         {
             Name:     "Error",
             JSONName: "error",
             Optional: true,
-            Type:     &PrimitiveDescriptor{Kind: PrimitiveString},
+            Type:     &PrimitiveDescriptor{PrimitiveKind: PrimitiveString},
         },
     },
 }
@@ -1041,8 +1044,8 @@ The source provider emits the constraint interface as a type:
     Name: GoIdentifier{Name: "Stringish", Package: "example.com/api"},
     Underlying: &UnionDescriptor{
         Types: []TypeDescriptor{
-            &PrimitiveDescriptor{Kind: PrimitiveString}, // ~string
-            &PrimitiveDescriptor{Kind: PrimitiveBytes},  // ~[]byte
+            &PrimitiveDescriptor{PrimitiveKind: PrimitiveString}, // ~string
+            &PrimitiveDescriptor{PrimitiveKind: PrimitiveBytes},  // ~[]byte
         },
     },
 }
@@ -1050,13 +1053,13 @@ The source provider emits the constraint interface as a type:
 &StructDescriptor{
     Name: GoIdentifier{Name: "Container", Package: "example.com/api"},
     TypeParameters: []TypeParameterDescriptor{{
-        Name:       "T",
+        ParamName:  "T",
         Constraint: &ReferenceDescriptor{Target: GoIdentifier{Name: "Stringish", Package: "example.com/api"}},
     }},
     Fields: []FieldDescriptor{{
         Name:     "Value",
         JSONName: "value",
-        Type:     &TypeParameterDescriptor{Name: "T"},
+        Type:     &TypeParameterDescriptor{ParamName: "T"},
     }},
 }
 ```
@@ -1160,8 +1163,8 @@ type ServiceDescriptor struct {
     // Endpoints contains all endpoints in this service.
     Endpoints []EndpointDescriptor
 
-    // Doc is the service-level documentation.
-    Doc Documentation
+    // Documentation for this service.
+    Documentation Documentation
 }
 
 // EndpointDescriptor represents a single API endpoint.
@@ -1189,8 +1192,8 @@ type EndpointDescriptor struct {
     // May be a ReferenceDescriptor, ArrayDescriptor, MapDescriptor, etc.
     Response TypeDescriptor
 
-    // Doc is the endpoint documentation.
-    Doc Documentation
+    // Documentation for this endpoint.
+    Documentation Documentation
 }
 ```
 
@@ -1254,7 +1257,7 @@ The Generator Spec defines types and endpoint metadata; the tygor Protocol Spec 
 
    ```go
    Response: &PtrDescriptor{
-       Elem: &PrimitiveDescriptor{Kind: PrimitiveEmpty},
+       Elem: &PrimitiveDescriptor{PrimitiveKind: PrimitiveEmpty},
    }
    ```
 
@@ -1266,8 +1269,8 @@ The Generator Spec defines types and endpoint metadata; the tygor Protocol Spec 
    **Semantics distinction:**
    | IR Representation | Go Type | Wire Format | Use Case |
    |-------------------|---------|-------------|----------|
-   | `&PtrDescriptor{Elem: &PrimitiveDescriptor{Kind: PrimitiveEmpty}}` | `*struct{}` | `null` | Void responses |
-   | `&PrimitiveDescriptor{Kind: PrimitiveEmpty}` | `struct{}` | `{}` | Empty object (rare) |
+   | `&PtrDescriptor{Elem: &PrimitiveDescriptor{PrimitiveKind: PrimitiveEmpty}}` | `*struct{}` | `null` | Void responses |
+   | `&PrimitiveDescriptor{PrimitiveKind: PrimitiveEmpty}` | `struct{}` | `{}` | Empty object (rare) |
    | `Response: nil` | (unspecified) | — | Invalid; providers MUST specify a response type |
 
 4. **Empty/Void Requests**: For endpoints with no request parameters (e.g., a GET with no query params), use `Request: nil`. Generators SHOULD map this to an empty object type or void parameter:
@@ -1762,26 +1765,26 @@ type TypeMatcher struct {
 
 | Go Type | IR Representation |
 |---------|-------------------|
-| `bool` | `{Kind: PrimitiveBool}` |
-| `int` | `{Kind: PrimitiveInt, BitSize: 0}` |
-| `int8` | `{Kind: PrimitiveInt, BitSize: 8}` |
-| `int16` | `{Kind: PrimitiveInt, BitSize: 16}` |
-| `int32` | `{Kind: PrimitiveInt, BitSize: 32}` |
-| `int64` | `{Kind: PrimitiveInt, BitSize: 64}` |
-| `uint` | `{Kind: PrimitiveUint, BitSize: 0}` |
-| `uint8` | `{Kind: PrimitiveUint, BitSize: 8}` |
-| `uint16` | `{Kind: PrimitiveUint, BitSize: 16}` |
-| `uint32` | `{Kind: PrimitiveUint, BitSize: 32}` |
-| `uint64` | `{Kind: PrimitiveUint, BitSize: 64}` |
-| `uintptr` | `{Kind: PrimitiveUint, BitSize: 0}` |
-| `float32` | `{Kind: PrimitiveFloat, BitSize: 32}` |
-| `float64` | `{Kind: PrimitiveFloat, BitSize: 64}` |
-| `string` | `{Kind: PrimitiveString}` |
-| `[]byte` | `{Kind: PrimitiveBytes}` |
-| `time.Time` | `{Kind: PrimitiveTime}` |
-| `time.Duration` | `{Kind: PrimitiveDuration}` |
-| `any` / `interface{}` | `{Kind: PrimitiveAny}` |
-| `struct{}` | `{Kind: PrimitiveEmpty}` |
+| `bool` | `{PrimitiveKind: PrimitiveBool}` |
+| `int` | `{PrimitiveKind: PrimitiveInt, BitSize: 0}` |
+| `int8` | `{PrimitiveKind: PrimitiveInt, BitSize: 8}` |
+| `int16` | `{PrimitiveKind: PrimitiveInt, BitSize: 16}` |
+| `int32` | `{PrimitiveKind: PrimitiveInt, BitSize: 32}` |
+| `int64` | `{PrimitiveKind: PrimitiveInt, BitSize: 64}` |
+| `uint` | `{PrimitiveKind: PrimitiveUint, BitSize: 0}` |
+| `uint8` | `{PrimitiveKind: PrimitiveUint, BitSize: 8}` |
+| `uint16` | `{PrimitiveKind: PrimitiveUint, BitSize: 16}` |
+| `uint32` | `{PrimitiveKind: PrimitiveUint, BitSize: 32}` |
+| `uint64` | `{PrimitiveKind: PrimitiveUint, BitSize: 64}` |
+| `uintptr` | `{PrimitiveKind: PrimitiveUint, BitSize: 0}` |
+| `float32` | `{PrimitiveKind: PrimitiveFloat, BitSize: 32}` |
+| `float64` | `{PrimitiveKind: PrimitiveFloat, BitSize: 64}` |
+| `string` | `{PrimitiveKind: PrimitiveString}` |
+| `[]byte` | `{PrimitiveKind: PrimitiveBytes}` |
+| `time.Time` | `{PrimitiveKind: PrimitiveTime}` |
+| `time.Duration` | `{PrimitiveKind: PrimitiveDuration}` |
+| `any` / `interface{}` | `{PrimitiveKind: PrimitiveAny}` |
+| `struct{}` | `{PrimitiveKind: PrimitiveEmpty}` |
 
 ### A.2 IR to Target Language Mapping
 
@@ -1832,7 +1835,7 @@ type TypeMatcher struct {
 - `uintptr` is encoded identically to other unsigned integers by `encoding/json`.
 - `json.RawMessage` is a `[]byte` type that embeds raw JSON content directly without encoding. It is treated as `PrimitiveAny` in the IR.
 - `struct{}` (empty struct) serializes as `{}` (empty JSON object). With `omitzero`, empty struct fields are omitted; with `omitempty`, they are NOT omitted (structs are never considered "empty" for `omitempty` purposes).
-- **Void responses (`*struct{}`)**: For endpoints returning `tygor.Empty` (`*struct{}`), use `&PtrDescriptor{Elem: &PrimitiveDescriptor{Kind: PrimitiveEmpty}}`. This serializes to `null` on the wire. Do not confuse with bare `PrimitiveEmpty` which represents `struct{}` (serializes to `{}`). See §4.8 Protocol Integration.
+- **Void responses (`*struct{}`)**: For endpoints returning `tygor.Empty` (`*struct{}`), use `&PtrDescriptor{Elem: &PrimitiveDescriptor{PrimitiveKind: PrimitiveEmpty}}`. This serializes to `null` on the wire. Do not confuse with bare `PrimitiveEmpty` which represents `struct{}` (serializes to `{}`). See §4.8 Protocol Integration.
 
 **Float Special Values:** `encoding/json` returns `UnsupportedValueError` when marshaling `NaN`, `+Inf`, or `-Inf` float values. These values have no JSON representation. Providers encountering these values at analysis time (e.g., in const declarations) SHOULD emit a warning. This is primarily a runtime concern rather than a type generation concern.
 
