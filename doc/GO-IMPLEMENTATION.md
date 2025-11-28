@@ -1,3 +1,5 @@
+<!-- snippet-lint-disable -->
+
 # Tygor Go Implementation Specification
 
 **Version:** 1.0

@@ -1,3 +1,5 @@
+<!-- snippet-lint-disable -->
+
 # Tygor Specification
 
 Type-safe backend for Go + TypeScript apps. Go structs are the single source of truth; TypeScript types are generated automatically. Works great with `sqlc`-generated database types.

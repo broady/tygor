@@ -1,3 +1,5 @@
+<!-- snippet-lint-disable -->
+
 # Validation in Tygor
 
 Tygor provides multiple layers of validation for request handling, allowing you to choose the right approach for your needs.

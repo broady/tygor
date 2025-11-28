@@ -149,47 +149,33 @@ npm install @tygor/client
 
 The generated client provides a clean, idiomatic API with full type safety:
 
+<!-- [snippet:examples/newsserver:client-usage] -->
 ```typescript
-import { createClient } from '@tygor/client';
-import { registry } from './rpc/manifest';
+async function example() {
+  // Type-safe calls with autocomplete
+  const news = await client.News.List({ limit: 10, offset: 0 });
+  // news: News[]
 
-const client = createClient(
-  registry,
-  {
-    baseUrl: 'http://localhost:8080',
-    headers: () => ({
-      'Authorization': 'Bearer my-token'
-    })
-    // fetch: customFetch  // Optional: for testing or custom environments
-  }
-);
+  const created = await client.News.Create({
+    title: "Breaking News",
+    body: "Important update"
+  });
+  // created: News
 
-// Type-safe calls with autocomplete
-const news = await client.News.List({ limit: 10, offset: 0 });
-// news: News[]
-
-const created = await client.News.Create({
-  title: "Breaking News",
-  body: "Important update"
-});
-// created: News
-
-// Errors are properly typed with a hierarchy:
-// - TygorError (base class)
-//   - RPCError: application errors from the server (has code, message, details)
-//   - TransportError: network/proxy errors (has httpStatus, rawBody)
-try {
-  await client.News.Create({ title: "x" }); // Validation error
-} catch (err) {
-  if (err instanceof RPCError) {
-    console.error(err.code, err.message); // "invalid_argument", "validation failed"
-    console.error(err.details);           // Additional error context
-  } else if (err instanceof TransportError) {
-    console.error("Transport error:", err.httpStatus);
+  // Errors are properly typed
+  try {
+    await client.News.Create({ title: "" });
+  } catch (err) {
+    if (err instanceof ServerError) {
+      console.error(err.code, err.message);
+    } else if (err instanceof TransportError) {
+      console.error("Network error:", err.httpStatus);
+    }
   }
 }
-// See doc/TYPESCRIPT-CLIENT.md for detailed error handling patterns.
+
 ```
+<!-- [/snippet:examples/newsserver:client-usage] -->
 
 The client uses JavaScript Proxies to provide method access without code generation bloat. Your bundle only includes the types and a small runtime, regardless of how many API methods you have.
 
@@ -201,14 +187,16 @@ See [examples/newsserver/client/src/rpc/manifest.ts](examples/newsserver/client/
 
 For GET requests, parameters are decoded from query strings:
 
+<!-- [snippet:examples/newsserver:list-params] -->
 ```go
-type ListParams struct {
-    Limit  *int32 `json:"limit"`
-    Offset *int32 `json:"offset"`
+// ListNewsParams contains pagination parameters for listing news articles.
+type ListNewsParams struct {
+	Limit  *int32 `json:"limit" schema:"limit"`
+	Offset *int32 `json:"offset" schema:"offset"`
 }
 
-tygor.Query(List)
 ```
+<!-- [/snippet:examples/newsserver:list-params] -->
 
 Query: `/News/List?limit=10&offset=20`
 
@@ -216,26 +204,39 @@ Query: `/News/List?limit=10&offset=20`
 
 For POST requests (the default), the body is decoded as JSON:
 
+<!-- [snippet:examples/newsserver:create-params] -->
 ```go
-type CreateParams struct {
-    Title string `json:"title" validate:"required"`
+// CreateNewsParams contains the parameters for creating a new news article.
+type CreateNewsParams struct {
+	Title string  `json:"title" validate:"required,min=3"`
+	Body  *string `json:"body,omitempty"`
 }
 
-tygor.Exec(Create)
 ```
+<!-- [/snippet:examples/newsserver:create-params] -->
 
 ## Error Handling
 
 Use structured error codes for consistent error responses:
 
+<!-- [snippet:examples/newsserver:error-handling] -->
 ```go
-func CreateNews(ctx context.Context, req *CreateNewsParams) (*News, error) {
-    if req.Title == "invalid" {
-        return nil, tygor.NewError(tygor.CodeInvalidArgument, "invalid title")
-    }
-    return &news, nil
+func CreateNews(ctx context.Context, req *api.CreateNewsParams) (*api.News, error) {
+	if req.Title == "error" {
+		return nil, tygor.NewError(tygor.CodeInvalidArgument, "simulated error")
+	}
+	now := time.Now()
+	return &api.News{
+		ID:        123,
+		Title:     req.Title,
+		Body:      req.Body,
+		Status:    api.NewsStatusDraft,
+		CreatedAt: &now,
+	}, nil
 }
+
 ```
+<!-- [/snippet:examples/newsserver:error-handling] -->
 
 Available error codes and their HTTP status code mapping (not exhaustive):
 - `CodeOK` (200)
@@ -252,20 +253,24 @@ Available error codes and their HTTP status code mapping (not exhaustive):
 
 Map application errors to API errors:
 
+<!-- [snippet:examples/newsserver:error-transformer] -->
 ```go
 app := tygor.NewApp().
-    WithErrorTransformer(func(err error) *tygor.Error {
-        if errors.Is(err, sql.ErrNoRows) {
-            return tygor.NewError(tygor.CodeNotFound, "not found")
-        }
-        return nil
-    })
+	WithErrorTransformer(func(err error) *tygor.Error {
+		if err.Error() == "database connection failed" {
+			return tygor.NewError(tygor.CodeUnavailable, "service unavailable")
+		}
+		return nil
+	})
+
 ```
+<!-- [/snippet:examples/newsserver:error-transformer] -->
 
 ### Masking Internal Errors
 
 Prevent sensitive error details from leaking in production:
 
+<!-- snippet-ignore -->
 ```go
 app := tygor.NewApp().WithMaskInternalErrors()
 ```
@@ -278,15 +283,18 @@ Interceptors provide cross-cutting concerns at different levels.
 
 Applied to all handlers:
 
+<!-- [snippet:examples/newsserver:global-interceptor] -->
 ```go
-app := tygor.NewApp().
-    WithUnaryInterceptor(middleware.LoggingInterceptor(logger))
+app = app.WithUnaryInterceptor(middleware.LoggingInterceptor(logger))
+
 ```
+<!-- [/snippet:examples/newsserver:global-interceptor] -->
 
 ### Service Interceptors
 
 Applied to all handlers in a service:
 
+<!-- snippet-ignore -->
 ```go
 news := app.Service("News").
     WithUnaryInterceptor(authInterceptor)
@@ -296,25 +304,27 @@ news := app.Service("News").
 
 Applied to specific handlers:
 
+<!-- [snippet:examples/newsserver:handler-interceptor] -->
 ```go
-news.Register("Create",
-    tygor.Exec(CreateNews).
-        WithUnaryInterceptor(func(ctx tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
-            // Custom logic - access ctx.Service(), ctx.EndpointID(), ctx.HTTPRequest(), etc.
-            return handler(ctx, req)
-        }))
+news.Register("Create", tygor.Exec(CreateNews).
+	WithUnaryInterceptor(func(ctx tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
+		ctx.HTTPWriter().Header().Set("X-Created-By", "tygor")
+		return handler(ctx, req)
+	}))
+
 ```
+<!-- [/snippet:examples/newsserver:handler-interceptor] -->
 
 ## Middleware
 
 HTTP middleware wraps the entire app:
 
+<!-- [snippet:examples/newsserver:middleware] -->
 ```go
-app := tygor.NewApp().
-    WithMiddleware(middleware.CORS(middleware.DefaultCORSConfig()))
+app = app.WithMiddleware(middleware.CORS(middleware.DefaultCORSConfig()))
 
-http.ListenAndServe(":8080", app.Handler())
 ```
+<!-- [/snippet:examples/newsserver:middleware] -->
 
 ## Validation
 
@@ -322,6 +332,7 @@ http.ListenAndServe(":8080", app.Handler())
 
 POST request bodies are validated using struct tags via the `validator/v10` package:
 
+<!-- snippet-ignore -->
 ```go
 type CreateParams struct {
     Title string `json:"title" validate:"required,min=3,max=100"`
@@ -333,6 +344,7 @@ type CreateParams struct {
 
 GET request query parameters are decoded using `gorilla/schema` and then validated with `validator/v10`:
 
+<!-- snippet-ignore -->
 ```go
 type ListParams struct {
     Limit  int    `schema:"limit" validate:"min=0,max=100"`
@@ -349,17 +361,20 @@ Query: `/News/List?limit=10&offset=0&status=published`
 
 Set cache headers on GET handlers using `CacheControl`:
 
+<!-- [snippet:examples/newsserver:cache-control] -->
 ```go
-news.Register("List",
-    tygor.Query(ListNews).
-        CacheControl(tygor.CacheConfig{
-            MaxAge: 5 * time.Minute,
-            Public: true,
-        }))
+news.Register("List", tygor.Query(ListNews).
+	CacheControl(tygor.CacheConfig{
+		MaxAge: 1 * time.Minute,
+		Public: true,
+	}))
+
 ```
+<!-- [/snippet:examples/newsserver:cache-control] -->
 
 Common patterns:
 
+<!-- snippet-ignore -->
 ```go
 // Browser-only caching (private)
 CacheControl(tygor.CacheConfig{MaxAge: 5 * time.Minute})
@@ -379,6 +394,7 @@ CacheControl(tygor.CacheConfig{
 
 Access request metadata and HTTP primitives via `tygor.FromContext`:
 
+<!-- snippet-ignore -->
 ```go
 func Handler(ctx context.Context, req *Request) (*Response, error) {
     tc, ok := tygor.FromContext(ctx)
@@ -399,6 +415,7 @@ func Handler(ctx context.Context, req *Request) (*Response, error) {
 
 In interceptors, you receive `tygor.Context` directly:
 
+<!-- snippet-ignore -->
 ```go
 func loggingInterceptor(ctx tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
     log.Printf("calling %s", ctx.EndpointID())
@@ -410,6 +427,7 @@ func loggingInterceptor(ctx tygor.Context, req any, handler tygor.HandlerFunc) (
 
 Customize TypeScript type generation for third-party types:
 
+<!-- snippet-ignore -->
 ```go
 tygorgen.Generate(app, &tygorgen.Config{
     OutDir: "./client/src/rpc",
