@@ -118,6 +118,7 @@ func Generate(app *tygor.App, cfg *Config) error {
 		TrailingNewline:    true,
 		EmitComments:       cfg.PreserveComments != "none",
 		Frontmatter:        cfg.Frontmatter,
+		TypeMappings:       cfg.TypeMappings,
 		Custom: map[string]any{
 			"EmitExport":        true,
 			"EmitDeclare":       false,

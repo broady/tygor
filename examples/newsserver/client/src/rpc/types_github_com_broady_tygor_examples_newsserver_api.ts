@@ -33,6 +33,6 @@ export interface News {
   title: string;
   body?: string;
   status: NewsStatus;
-  created_at?: string;
+  created_at?: DateTime;
 }
 export type NewsStatus = string;

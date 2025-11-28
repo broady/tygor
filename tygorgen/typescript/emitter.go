@@ -394,8 +394,16 @@ func (e *Emitter) emitPrimitive(p *ir.PrimitiveDescriptor) string {
 	case ir.PrimitiveBytes:
 		return "string" // base64
 	case ir.PrimitiveTime:
+		// Check for custom type mapping
+		if mapped, ok := e.config.TypeMappings["time.Time"]; ok {
+			return mapped
+		}
 		return "string" // RFC 3339
 	case ir.PrimitiveDuration:
+		// Check for custom type mapping
+		if mapped, ok := e.config.TypeMappings["time.Duration"]; ok {
+			return mapped
+		}
 		return "number" // nanoseconds
 	case ir.PrimitiveAny:
 		return e.tsConfig.UnknownType

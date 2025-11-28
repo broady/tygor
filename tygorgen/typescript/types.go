@@ -78,6 +78,12 @@ type GeneratorConfig struct {
 	// Example: "export type DateTime = string & { readonly __brand: 'DateTime' };"
 	Frontmatter string
 
+	// TypeMappings maps Go type names to custom TypeScript types.
+	// Keys are fully-qualified Go type names (e.g., "time.Time", "github.com/foo/bar.MyType").
+	// Values are the TypeScript type to emit instead of the default.
+	// Example: map[string]string{"time.Time": "DateTime"} makes time.Time fields emit as DateTime.
+	TypeMappings map[string]string
+
 	// Custom contains generator-specific options (e.g., TypeScriptConfig).
 	Custom map[string]any
 }
