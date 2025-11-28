@@ -319,7 +319,7 @@ HTTP middleware wraps the entire app:
 
 <!-- [snippet:examples/newsserver:middleware] -->
 ```go
-app = app.WithMiddleware(middleware.CORS(middleware.DefaultCORSConfig()))
+app = app.WithMiddleware(middleware.CORS(middleware.CORSAllowAll))
 
 ```
 <!-- [/snippet:examples/newsserver:middleware] -->

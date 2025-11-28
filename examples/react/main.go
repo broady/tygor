@@ -22,7 +22,7 @@ var (
 	nextID  int32 = 1
 )
 
-// [snippet:handlers]
+// [snippet:handlers collapse]
 
 func ListTasks(ctx context.Context, req *api.ListTasksParams) ([]*api.Task, error) {
 	tasksMu.Lock()
@@ -81,11 +81,7 @@ func main() {
 	// [snippet:app-setup]
 
 	app := tygor.NewApp().
-		WithMiddleware(middleware.CORS(&middleware.CORSConfig{
-			AllowedOrigins: []string{"http://localhost:5173"},
-			AllowedMethods: []string{"GET", "POST", "OPTIONS"},
-			AllowedHeaders: []string{"Content-Type"},
-		}))
+		WithMiddleware(middleware.CORS(middleware.CORSAllowAll))
 
 	tasks := app.Service("Tasks")
 	tasks.Register("List", tygor.Query(ListTasks))

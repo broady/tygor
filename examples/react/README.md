@@ -40,49 +40,15 @@ react/
 <!-- [snippet:handlers] -->
 ```go title="main.go"
 func ListTasks(ctx context.Context, req *api.ListTasksParams) ([]*api.Task, error) {
-	tasksMu.Lock()
-	defer tasksMu.Unlock()
-
-	if req.ShowDone != nil && !*req.ShowDone {
-		filtered := []*api.Task{}
-		for _, t := range tasks {
-			if !t.Done {
-				filtered = append(filtered, t)
-			}
-		}
-		return filtered, nil
-	}
-	if tasks == nil {
-		return []*api.Task{}, nil
-	}
-	return tasks, nil
+	// ...
 }
 
 func CreateTask(ctx context.Context, req *api.CreateTaskParams) (*api.Task, error) {
-	tasksMu.Lock()
-	defer tasksMu.Unlock()
-
-	task := &api.Task{
-		ID:    nextID,
-		Title: req.Title,
-		Done:  false,
-	}
-	nextID++
-	tasks = append(tasks, task)
-	return task, nil
+	// ...
 }
 
 func ToggleTask(ctx context.Context, req *api.ToggleTaskParams) (*api.Task, error) {
-	tasksMu.Lock()
-	defer tasksMu.Unlock()
-
-	for _, t := range tasks {
-		if t.ID == req.ID {
-			t.Done = !t.Done
-			return t, nil
-		}
-	}
-	return nil, tygor.NewError(tygor.CodeNotFound, "task not found")
+	// ...
 }
 
 ```
@@ -93,11 +59,7 @@ func ToggleTask(ctx context.Context, req *api.ToggleTaskParams) (*api.Task, erro
 <!-- [snippet:app-setup] -->
 ```go title="main.go"
 app := tygor.NewApp().
-	WithMiddleware(middleware.CORS(&middleware.CORSConfig{
-		AllowedOrigins: []string{"http://localhost:5173"},
-		AllowedMethods: []string{"GET", "POST", "OPTIONS"},
-		AllowedHeaders: []string{"Content-Type"},
-	}))
+	WithMiddleware(middleware.CORS(middleware.CORSAllowAll))
 
 tasks := app.Service("Tasks")
 tasks.Register("List", tygor.Query(ListTasks))

@@ -112,7 +112,7 @@ app = app.WithUnaryInterceptor(middleware.LoggingInterceptor(logger))
 
 <!-- [snippet:middleware] -->
 ```go title="main.go"
-app = app.WithMiddleware(middleware.CORS(middleware.DefaultCORSConfig()))
+app = app.WithMiddleware(middleware.CORS(middleware.CORSAllowAll))
 
 ```
 <!-- [/snippet:middleware] -->

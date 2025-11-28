@@ -6,35 +6,13 @@ import (
 	"testing"
 )
 
-func TestDefaultCORSConfig(t *testing.T) {
-	cfg := DefaultCORSConfig()
-
-	if cfg == nil {
-		t.Fatal("expected non-nil config")
-	}
-
-	if len(cfg.AllowedOrigins) != 1 || cfg.AllowedOrigins[0] != "*" {
-		t.Errorf("expected AllowedOrigins to be [*], got %v", cfg.AllowedOrigins)
-	}
-
-	expectedMethods := []string{"GET", "POST", "OPTIONS"}
-	if len(cfg.AllowedMethods) != len(expectedMethods) {
-		t.Errorf("expected %d methods, got %d", len(expectedMethods), len(cfg.AllowedMethods))
-	}
-
-	expectedHeaders := []string{"Content-Type", "Authorization"}
-	if len(cfg.AllowedHeaders) != len(expectedHeaders) {
-		t.Errorf("expected %d headers, got %d", len(expectedHeaders), len(cfg.AllowedHeaders))
-	}
-}
-
-func TestCORS_WithDefaultConfig(t *testing.T) {
+func TestCORS_WithCORSAllowAll(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("ok"))
 	})
 
-	corsHandler := CORS(DefaultCORSConfig())(handler)
+	corsHandler := CORS(CORSAllowAll)(handler)
 
 	req := httptest.NewRequest("GET", "/test", nil)
 	req.Header.Set("Origin", "http://example.com")
@@ -71,7 +49,7 @@ func TestCORS_Preflight(t *testing.T) {
 		t.Error("handler should not be called for preflight request")
 	})
 
-	corsHandler := CORS(DefaultCORSConfig())(handler)
+	corsHandler := CORS(CORSAllowAll)(handler)
 
 	req := httptest.NewRequest("OPTIONS", "/test", nil)
 	req.Header.Set("Origin", "http://example.com")
@@ -312,7 +290,7 @@ func TestCORS_NonPreflightRequest(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	corsHandler := CORS(DefaultCORSConfig())(handler)
+	corsHandler := CORS(CORSAllowAll)(handler)
 
 	req := httptest.NewRequest("POST", "/test", nil)
 	req.Header.Set("Origin", "http://example.com")

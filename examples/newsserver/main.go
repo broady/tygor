@@ -82,7 +82,7 @@ func main() {
 
 	// [snippet:middleware]
 
-	app = app.WithMiddleware(middleware.CORS(middleware.DefaultCORSConfig()))
+	app = app.WithMiddleware(middleware.CORS(middleware.CORSAllowAll))
 
 	// [/snippet:middleware]
 

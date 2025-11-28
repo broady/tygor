@@ -34,20 +34,20 @@ type CORSConfig struct {
 	MaxAge int
 }
 
-// DefaultCORSConfig returns a permissive CORS configuration suitable for development.
-func DefaultCORSConfig() *CORSConfig {
-	return &CORSConfig{
-		AllowedOrigins: []string{"*"},
-		AllowedMethods: []string{"GET", "POST", "OPTIONS"},
-		AllowedHeaders: []string{"Content-Type", "Authorization"},
-	}
-}
+// CORSAllowAll is a permissive CORS configuration suitable for development.
+// It allows all origins (*), standard methods (GET, POST, OPTIONS),
+// and common headers (Content-Type, Authorization).
+var CORSAllowAll *CORSConfig = nil
 
 // CORS returns an HTTP middleware that handles CORS preflight requests and sets CORS headers.
 // This is an HTTP middleware, not an RPC interceptor, so it wraps the entire http.Handler.
 func CORS(cfg *CORSConfig) func(http.Handler) http.Handler {
 	if cfg == nil {
-		cfg = DefaultCORSConfig()
+		cfg = &CORSConfig{
+			AllowedOrigins: []string{"*"},
+			AllowedMethods: []string{"GET", "POST", "OPTIONS"},
+			AllowedHeaders: []string{"Content-Type", "Authorization"},
+		}
 	}
 
 	allowedOrigins := cfg.AllowedOrigins

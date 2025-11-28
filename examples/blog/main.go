@@ -446,7 +446,7 @@ func main() {
 	// Create app with global middleware and interceptors
 	app := tygor.NewApp().
 		WithUnaryInterceptor(middleware.LoggingInterceptor(logger)).
-		WithMiddleware(middleware.CORS(middleware.DefaultCORSConfig()))
+		WithMiddleware(middleware.CORS(middleware.CORSAllowAll))
 
 	// User Service (public endpoints)
 	userService := app.Service("Users")
