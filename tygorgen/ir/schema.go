@@ -83,16 +83,12 @@ func (s *Schema) Validate() []error {
 		for _, endpoint := range service.Endpoints {
 			// Check Request type references resolve (if not nil)
 			if endpoint.Request != nil {
-				for _, err := range validateTypeReferences(endpoint.Request, typeNames, "endpoint "+endpoint.FullName+" Request") {
-					errors = append(errors, err)
-				}
+				errors = append(errors, validateTypeReferences(endpoint.Request, typeNames, "endpoint "+endpoint.FullName+" Request")...)
 			}
 
 			// Check Response type references resolve
 			if endpoint.Response != nil {
-				for _, err := range validateTypeReferences(endpoint.Response, typeNames, "endpoint "+endpoint.FullName+" Response") {
-					errors = append(errors, err)
-				}
+				errors = append(errors, validateTypeReferences(endpoint.Response, typeNames, "endpoint "+endpoint.FullName+" Response")...)
 			}
 
 			// Check FullName format: exactly one dot, matches ServiceName.EndpointName
