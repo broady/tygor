@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/broady/tygor/tygorgen/ir"
 )
@@ -1209,5 +1210,89 @@ func TestSourceProvider_CollisionDetection_SameType(t *testing.T) {
 
 	if count != 1 {
 		t.Errorf("Expected DuplicateType to appear exactly once, got %d", count)
+	}
+}
+
+func TestSourceProvider_AliasChains(t *testing.T) {
+	// This test verifies that type alias chains are handled correctly
+	// and don't cause infinite recursion in convertType.
+	// See: convertType has no cycle detection for type aliases
+	provider := &SourceProvider{}
+
+	// Use a timeout context to detect infinite loops
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	schema, err := provider.BuildSchema(ctx, SourceInputOptions{
+		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
+		RootTypes: []string{"AliasContainer", "Node"},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	// Verify AliasContainer was processed
+	containerType := findType(schema, "AliasContainer")
+	if containerType == nil {
+		t.Fatal("AliasContainer type not found")
+	}
+
+	containerStruct, ok := containerType.(*ir.StructDescriptor)
+	if !ok {
+		t.Fatalf("AliasContainer is not a StructDescriptor, got %T", containerType)
+	}
+
+	// Check that alias chain fields resolved to correct underlying types
+	testCases := []struct {
+		fieldName    string
+		expectedKind ir.DescriptorKind
+	}{
+		{"Level1", ir.KindPrimitive}, // string via AliasLevel1
+		{"Level2", ir.KindPrimitive}, // string via AliasLevel2 -> AliasLevel1
+		{"Level3", ir.KindPrimitive}, // string via AliasLevel3 -> AliasLevel2 -> AliasLevel1
+		{"Named", ir.KindReference},  // User via AliasToNamed
+		{"Struct", ir.KindReference}, // BaseStruct via AliasToStruct
+		{"Deep", ir.KindReference},   // BaseStruct via AliasToAliasStruct -> AliasToStruct
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.fieldName, func(t *testing.T) {
+			field := findFieldByName(containerStruct.Fields, tc.fieldName)
+			if field == nil {
+				t.Fatalf("Field %s not found", tc.fieldName)
+			}
+
+			if field.Type.Kind() != tc.expectedKind {
+				t.Errorf("Field %s: expected kind %v, got %v", tc.fieldName, tc.expectedKind, field.Type.Kind())
+			}
+		})
+	}
+
+	// Verify Node (self-referential via alias) was processed without infinite loop
+	nodeType := findType(schema, "Node")
+	if nodeType == nil {
+		t.Fatal("Node type not found - may indicate infinite loop was triggered")
+	}
+
+	nodeStruct, ok := nodeType.(*ir.StructDescriptor)
+	if !ok {
+		t.Fatalf("Node is not a StructDescriptor, got %T", nodeType)
+	}
+
+	// Check Next field is a pointer to a reference (breaking the cycle)
+	nextField := findFieldByName(nodeStruct.Fields, "Next")
+	if nextField == nil {
+		t.Fatal("Next field not found in Node")
+	}
+
+	ptrDesc, ok := nextField.Type.(*ir.PtrDescriptor)
+	if !ok {
+		t.Fatalf("Next field should be a pointer, got %T", nextField.Type)
+	}
+
+	// The element should be a reference (to Node or NodeAlias, depending on how alias resolved)
+	if ptrDesc.Element.Kind() != ir.KindReference {
+		t.Errorf("Next field element should be a reference, got %v", ptrDesc.Element.Kind())
 	}
 }
