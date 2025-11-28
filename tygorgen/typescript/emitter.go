@@ -99,7 +99,11 @@ func (e *Emitter) emitStruct(buf *bytes.Buffer, s *ir.StructDescriptor) ([]ir.Wa
 	// Emit type parameters
 	typeParams := ""
 	if len(s.TypeParameters) > 0 {
-		typeParams = e.emitTypeParameters(s.TypeParameters)
+		var err error
+		typeParams, err = e.emitTypeParameters(s.TypeParameters)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Decide whether to use interface or type
@@ -232,7 +236,11 @@ func (e *Emitter) emitAlias(buf *bytes.Buffer, a *ir.AliasDescriptor) ([]ir.Warn
 
 	// Emit type parameters
 	if len(a.TypeParameters) > 0 {
-		buf.WriteString(e.emitTypeParameters(a.TypeParameters))
+		typeParams, err := e.emitTypeParameters(a.TypeParameters)
+		if err != nil {
+			return nil, err
+		}
+		buf.WriteString(typeParams)
 	}
 
 	buf.WriteString(" = ")
@@ -513,9 +521,9 @@ func (e *Emitter) emitTypeParameter(tp *ir.TypeParameterDescriptor) string {
 }
 
 // emitTypeParameters emits type parameter declarations.
-func (e *Emitter) emitTypeParameters(params []ir.TypeParameterDescriptor) string {
+func (e *Emitter) emitTypeParameters(params []ir.TypeParameterDescriptor) (string, error) {
 	if len(params) == 0 {
-		return ""
+		return "", nil
 	}
 
 	var parts []string
@@ -523,14 +531,15 @@ func (e *Emitter) emitTypeParameters(params []ir.TypeParameterDescriptor) string
 		part := param.ParamName
 		if param.Constraint != nil {
 			constraintType, err := e.EmitTypeExpr(param.Constraint)
-			if err == nil {
-				part += " extends " + constraintType
+			if err != nil {
+				return "", fmt.Errorf("failed to emit constraint for type parameter %s: %w", param.ParamName, err)
 			}
+			part += " extends " + constraintType
 		}
 		parts = append(parts, part)
 	}
 
-	return "<" + strings.Join(parts, ", ") + ">"
+	return "<" + strings.Join(parts, ", ") + ">", nil
 }
 
 // determineOptionalNullable determines if a field should be optional and/or nullable.
