@@ -879,7 +879,7 @@ func (b *schemaBuilder) buildStructDescriptor(named *types.Named, name string, d
 		}
 
 		// Convert field type - use convertFieldType to handle anonymous structs
-		fieldTypeDesc, err := b.convertFieldType(field.Type(), name, field.Name())
+		fieldTypeDesc, err := b.convertFieldType(field.Type(), name, field.Name(), pkgPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert field %s: %w", field.Name(), err)
 		}
@@ -1060,10 +1060,22 @@ func (b *schemaBuilder) convertTypeParamConstraint(constraint types.Type) ir.Typ
 
 // convertFieldType converts a field type, handling anonymous structs with parent context.
 // For anonymous structs, it generates a synthetic name and adds the struct to Schema.Types.
-func (b *schemaBuilder) convertFieldType(t types.Type, parentName, fieldName string) (ir.TypeDescriptor, error) {
+func (b *schemaBuilder) convertFieldType(t types.Type, parentName, fieldName, pkgPath string) (ir.TypeDescriptor, error) {
 	// Check if this is an anonymous struct
 	if structType, ok := t.(*types.Struct); ok {
-		return b.handleAnonymousStruct(structType, parentName, fieldName)
+		return b.handleAnonymousStruct(structType, parentName, fieldName, pkgPath)
+	}
+
+	// Check if this is a pointer to an anonymous struct
+	if ptr, ok := t.(*types.Pointer); ok {
+		if structType, ok := ptr.Elem().(*types.Struct); ok {
+			// Handle the anonymous struct, then wrap in Ptr
+			innerDesc, err := b.handleAnonymousStruct(structType, parentName, fieldName, pkgPath)
+			if err != nil {
+				return nil, err
+			}
+			return ir.Ptr(innerDesc), nil
+		}
 	}
 
 	// For non-struct types, use regular conversion
@@ -1071,19 +1083,9 @@ func (b *schemaBuilder) convertFieldType(t types.Type, parentName, fieldName str
 }
 
 // handleAnonymousStruct generates a synthetic name for an anonymous struct and adds it to Schema.Types.
-func (b *schemaBuilder) handleAnonymousStruct(structType *types.Struct, parentName, fieldName string) (ir.TypeDescriptor, error) {
+func (b *schemaBuilder) handleAnonymousStruct(structType *types.Struct, parentName, fieldName, pkgPath string) (ir.TypeDescriptor, error) {
 	// Generate synthetic name: ParentType_FieldName (§3.5)
 	syntheticName := parentName + "_" + fieldName
-
-	// Get package path from the parent type
-	pkgPath := ""
-	for fullKey := range b.namedTypes {
-		// fullKey is pkgPath.Name
-		if strings.HasSuffix(fullKey, "."+parentName) {
-			pkgPath = strings.TrimSuffix(fullKey, "."+parentName)
-			break
-		}
-	}
 
 	// Check for name collision (§3.5)
 	fullKey := pkgPath + "." + syntheticName
@@ -1141,7 +1143,7 @@ func (b *schemaBuilder) handleAnonymousStruct(structType *types.Struct, parentNa
 		}
 
 		// Convert field type - use recursive call for nested anonymous structs
-		fieldTypeDesc, err := b.convertFieldType(field.Type(), syntheticName, field.Name())
+		fieldTypeDesc, err := b.convertFieldType(field.Type(), syntheticName, field.Name(), pkgPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert field %s.%s: %w", syntheticName, field.Name(), err)
 		}

@@ -867,3 +867,347 @@ func TestSourceProvider_JSONSpecialTypes(t *testing.T) {
 		})
 	}
 }
+
+func TestSourceProvider_AnonymousStruct_Basic(t *testing.T) {
+	provider := &SourceProvider{}
+	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
+		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
+		RootTypes: []string{"AnonymousStructField"},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	// Find the parent type
+	parentType := findType(schema, "AnonymousStructField")
+	if parentType == nil {
+		t.Fatal("AnonymousStructField type not found")
+	}
+
+	parentStruct, ok := parentType.(*ir.StructDescriptor)
+	if !ok {
+		t.Fatalf("AnonymousStructField is not a StructDescriptor, got %T", parentType)
+	}
+
+	// Find the Inner field
+	innerField := findFieldByName(parentStruct.Fields, "Inner")
+	if innerField == nil {
+		t.Fatal("Inner field not found")
+	}
+
+	// Inner should be a ReferenceDescriptor pointing to synthetic type
+	refDesc, ok := innerField.Type.(*ir.ReferenceDescriptor)
+	if !ok {
+		t.Fatalf("Inner field should be ReferenceDescriptor, got %T", innerField.Type)
+	}
+
+	// Check synthetic name follows pattern ParentType_FieldName
+	expectedName := "AnonymousStructField_Inner"
+	if refDesc.Target.Name != expectedName {
+		t.Errorf("Expected synthetic name %s, got %s", expectedName, refDesc.Target.Name)
+	}
+
+	// Find the synthetic type in Schema.Types
+	syntheticType := findType(schema, expectedName)
+	if syntheticType == nil {
+		t.Fatalf("Synthetic type %s not found in schema", expectedName)
+	}
+
+	syntheticStruct, ok := syntheticType.(*ir.StructDescriptor)
+	if !ok {
+		t.Fatalf("Synthetic type should be StructDescriptor, got %T", syntheticType)
+	}
+
+	// Verify synthetic struct has the expected fields
+	xField := findFieldByName(syntheticStruct.Fields, "X")
+	if xField == nil {
+		t.Error("X field not found in synthetic struct")
+	}
+	yField := findFieldByName(syntheticStruct.Fields, "Y")
+	if yField == nil {
+		t.Error("Y field not found in synthetic struct")
+	}
+}
+
+func TestSourceProvider_AnonymousStruct_Nested(t *testing.T) {
+	provider := &SourceProvider{}
+	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
+		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
+		RootTypes: []string{"NestedAnonymousStructs"},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	// Verify all synthetic types exist with correct chained names
+	expectedTypes := []string{
+		"NestedAnonymousStructs",
+		"NestedAnonymousStructs_Level1",
+		"NestedAnonymousStructs_Level1_Level2",
+		"NestedAnonymousStructs_Level1_Level2_Level3",
+	}
+
+	for _, typeName := range expectedTypes {
+		typ := findType(schema, typeName)
+		if typ == nil {
+			t.Errorf("Expected type %s not found", typeName)
+		}
+	}
+
+	// Verify Level3 has the DeepField
+	level3Type := findType(schema, "NestedAnonymousStructs_Level1_Level2_Level3")
+	if level3Type != nil {
+		level3Struct, ok := level3Type.(*ir.StructDescriptor)
+		if !ok {
+			t.Errorf("Level3 should be StructDescriptor, got %T", level3Type)
+		} else {
+			deepField := findFieldByName(level3Struct.Fields, "DeepField")
+			if deepField == nil {
+				t.Error("DeepField not found in Level3")
+			}
+		}
+	}
+}
+
+func TestSourceProvider_AnonymousStruct_Multiple(t *testing.T) {
+	provider := &SourceProvider{}
+	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
+		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
+		RootTypes: []string{"MultipleAnonymousFields"},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	// Both synthetic types should exist
+	firstType := findType(schema, "MultipleAnonymousFields_First")
+	if firstType == nil {
+		t.Error("MultipleAnonymousFields_First not found")
+	}
+
+	secondType := findType(schema, "MultipleAnonymousFields_Second")
+	if secondType == nil {
+		t.Error("MultipleAnonymousFields_Second not found")
+	}
+}
+
+func TestSourceProvider_AnonymousStruct_WithComplexTypes(t *testing.T) {
+	provider := &SourceProvider{}
+	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
+		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
+		RootTypes: []string{"AnonymousWithSliceAndMap"},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	// Find synthetic type
+	dataType := findType(schema, "AnonymousWithSliceAndMap_Data")
+	if dataType == nil {
+		t.Fatal("AnonymousWithSliceAndMap_Data not found")
+	}
+
+	dataStruct, ok := dataType.(*ir.StructDescriptor)
+	if !ok {
+		t.Fatalf("Data should be StructDescriptor, got %T", dataType)
+	}
+
+	// Verify Items field is slice
+	itemsField := findFieldByName(dataStruct.Fields, "Items")
+	if itemsField == nil {
+		t.Fatal("Items field not found")
+	}
+	if itemsField.Type.Kind() != ir.KindArray {
+		t.Errorf("Items should be KindArray, got %v", itemsField.Type.Kind())
+	}
+
+	// Verify Props field is map
+	propsField := findFieldByName(dataStruct.Fields, "Props")
+	if propsField == nil {
+		t.Fatal("Props field not found")
+	}
+	if propsField.Type.Kind() != ir.KindMap {
+		t.Errorf("Props should be KindMap, got %v", propsField.Type.Kind())
+	}
+}
+
+func TestSourceProvider_AnonymousStruct_WithEmbedding(t *testing.T) {
+	provider := &SourceProvider{}
+	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
+		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
+		RootTypes: []string{"AnonymousWithEmbedding"},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	// Find synthetic type
+	configType := findType(schema, "AnonymousWithEmbedding_Config")
+	if configType == nil {
+		t.Fatal("AnonymousWithEmbedding_Config not found")
+	}
+
+	configStruct, ok := configType.(*ir.StructDescriptor)
+	if !ok {
+		t.Fatalf("Config should be StructDescriptor, got %T", configType)
+	}
+
+	// Should have BaseType in Extends
+	if len(configStruct.Extends) != 1 {
+		t.Errorf("Expected 1 extended type, got %d", len(configStruct.Extends))
+	} else if configStruct.Extends[0].Name != "BaseType" {
+		t.Errorf("Expected extends BaseType, got %s", configStruct.Extends[0].Name)
+	}
+
+	// Should have Value field
+	valueField := findFieldByName(configStruct.Fields, "Value")
+	if valueField == nil {
+		t.Error("Value field not found")
+	}
+}
+
+func TestSourceProvider_AnonymousStruct_WithNamedEmbedding(t *testing.T) {
+	provider := &SourceProvider{}
+	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
+		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
+		RootTypes: []string{"AnonymousWithNamedEmbedding"},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	// Find synthetic type
+	settingsType := findType(schema, "AnonymousWithNamedEmbedding_Settings")
+	if settingsType == nil {
+		t.Fatal("AnonymousWithNamedEmbedding_Settings not found")
+	}
+
+	settingsStruct, ok := settingsType.(*ir.StructDescriptor)
+	if !ok {
+		t.Fatalf("Settings should be StructDescriptor, got %T", settingsType)
+	}
+
+	// Should NOT have anything in Extends (embedded with JSON tag is a regular field)
+	if len(settingsStruct.Extends) != 0 {
+		t.Errorf("Expected 0 extends, got %d", len(settingsStruct.Extends))
+	}
+
+	// Should have Base as regular field
+	baseField := findFieldByName(settingsStruct.Fields, "Base")
+	if baseField == nil {
+		t.Error("Base field not found")
+	} else if baseField.JSONName != "base" {
+		t.Errorf("Expected JSON name 'base', got %q", baseField.JSONName)
+	}
+}
+
+func TestSourceProvider_AnonymousStruct_NameCollision(t *testing.T) {
+	provider := &SourceProvider{}
+	// This should fail because CollisionTest_Inner already exists as a named type
+	// and CollisionTest.Inner would generate the same synthetic name
+	_, err := provider.BuildSchema(context.Background(), SourceInputOptions{
+		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
+		RootTypes: []string{"CollisionTest_Inner", "CollisionTest"},
+	})
+
+	if err == nil {
+		t.Fatal("Expected error due to name collision, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "collision") {
+		t.Errorf("Expected error message to mention 'collision', got: %v", err)
+	}
+}
+
+func TestSourceProvider_NameCollision(t *testing.T) {
+	// Create a test scenario where we try to extract the same type twice
+	// This simulates what would happen if there were duplicate type names
+	provider := &SourceProvider{}
+
+	// First extraction should succeed
+	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
+		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
+		RootTypes: []string{"CollisionTestA", "CollisionTestA"}, // Same type twice
+	})
+
+	// Should not error - duplicate entries in RootTypes should be deduplicated
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	// Should have exactly one CollisionTestA
+	count := 0
+	for _, typ := range schema.Types {
+		if typ.TypeName().Name == "CollisionTestA" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("Expected exactly 1 CollisionTestA, got %d", count)
+	}
+}
+
+func TestSourceProvider_NoCollisionDifferentTypes(t *testing.T) {
+	// Test that different types don't cause collisions
+	provider := &SourceProvider{}
+	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
+		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
+		RootTypes: []string{"CollisionTestA", "CollisionTestB"},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	// Should have both types
+	foundA := false
+	foundB := false
+	for _, typ := range schema.Types {
+		if typ.TypeName().Name == "CollisionTestA" {
+			foundA = true
+		}
+		if typ.TypeName().Name == "CollisionTestB" {
+			foundB = true
+		}
+	}
+
+	if !foundA {
+		t.Error("CollisionTestA not found")
+	}
+	if !foundB {
+		t.Error("CollisionTestB not found")
+	}
+}
+
+func TestSourceProvider_CollisionDetection_SameType(t *testing.T) {
+	// Test that the collision detection properly deduplicates
+	provider := &SourceProvider{}
+
+	// Extract a type multiple times in RootTypes - should deduplicate
+	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
+		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
+		RootTypes: []string{"DuplicateType", "DuplicateType", "DuplicateType"},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema should not error on duplicate root types: %v", err)
+	}
+
+	// Count how many times DuplicateType appears
+	count := 0
+	for _, typ := range schema.Types {
+		if typ.TypeName().Name == "DuplicateType" {
+			count++
+		}
+	}
+
+	if count != 1 {
+		t.Errorf("Expected DuplicateType to appear exactly once, got %d", count)
+	}
+}

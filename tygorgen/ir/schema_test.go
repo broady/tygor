@@ -441,14 +441,14 @@ func TestSchema_Validate_MultipleErrors(t *testing.T) {
 		Endpoints: []EndpointDescriptor{
 			{
 				Name:       "Create",
-				FullName:   "Wrong.Create",      // Invalid FullName
+				FullName:   "Wrong.Create", // Invalid FullName
 				HTTPMethod: "POST",
-				Path:       "/wrong/path",       // Invalid Path
+				Path:       "/wrong/path",         // Invalid Path
 				Request:    Ref("Missing", "api"), // Missing type
 				Response:   Ref("User", "api"),    // Missing type
 			},
 			{
-				Name:       "Create",           // Duplicate name
+				Name:       "Create", // Duplicate name
 				FullName:   "Users.Create",
 				HTTPMethod: "PUT",
 				Path:       "/Users/Create",
