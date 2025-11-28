@@ -42,7 +42,7 @@ fmt-check:
 # Update README with snippets
 # Uses -root for scoped snippet names (e.g., doc/examples/quickstart:types)
 readme:
-	@cd examples && go run ./cmd/snippet -root .. -inject ../README.md -format simple \
+	@cd examples && go run ./cmd/snippet -root .. -inject ../README.md -format mdx \
 		$(addprefix ../,$(GO_FILES)) \
 		$(addprefix ../,$(DOC_FILES)) \
 		newsserver/main.go newsserver/api/types.go newsserver/client/index.ts \
@@ -70,7 +70,7 @@ check: readme
 
 # Check quietly (for precommit)
 check-quiet:
-	@output=$$($(SNIPPET_TOOL) -root .. -inject ../README.md -format simple \
+	@output=$$($(SNIPPET_TOOL) -root .. -inject ../README.md -format mdx \
 		$(addprefix ../,$(GO_FILES)) \
 		$(addprefix ../,$(DOC_FILES)) \
 		newsserver/main.go newsserver/api/types.go newsserver/client/index.ts \
