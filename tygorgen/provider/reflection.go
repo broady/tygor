@@ -86,23 +86,26 @@ func (b *reflectionSchemaBuilder) extractType(ctx context.Context, t reflect.Typ
 	}
 
 	b.processing[t] = true
-	defer func() {
-		delete(b.processing, t)
-		b.visited[t] = true
-	}()
+	defer delete(b.processing, t)
 
 	// Handle based on kind
+	var err error
 	switch t.Kind() {
 	case reflect.Struct:
-		return b.extractStruct(ctx, t)
+		err = b.extractStruct(ctx, t)
 	default:
 		// For named types (including type aliases), create an alias descriptor
 		if t.Name() != "" && t.PkgPath() != "" {
-			return b.extractAlias(ctx, t)
+			err = b.extractAlias(ctx, t)
 		}
 		// Anonymous non-struct types are handled inline
-		return nil
 	}
+
+	// Only mark as visited if extraction succeeded
+	if err == nil {
+		b.visited[t] = true
+	}
+	return err
 }
 
 // extractStruct extracts a struct type.
@@ -152,7 +155,7 @@ func (b *reflectionSchemaBuilder) extractStruct(ctx context.Context, t reflect.T
 
 		// Handle embedding
 		if field.Anonymous {
-			if err := b.handleEmbedded(ctx, field, &fields, &extends); err != nil {
+			if err := b.handleEmbedded(ctx, field, &fields, &extends, pkg); err != nil {
 				return err
 			}
 			continue
@@ -164,7 +167,7 @@ func (b *reflectionSchemaBuilder) extractStruct(ctx context.Context, t reflect.T
 			continue // Skip this field
 		}
 
-		fd, err := b.buildFieldDescriptor(ctx, field)
+		fd, err := b.buildFieldDescriptor(ctx, field, pkg)
 		if err != nil {
 			return fmt.Errorf("field %s.%s: %w", name, field.Name, err)
 		}
@@ -267,14 +270,14 @@ func (b *reflectionSchemaBuilder) typeToDescriptorForAlias(ctx context.Context, 
 		if t.Elem().Kind() == reflect.Uint8 {
 			return ir.Bytes(), nil
 		}
-		elem, err := b.typeToDescriptor(ctx, t.Elem(), "")
+		elem, err := b.typeToDescriptor(ctx, t.Elem(), "", "")
 		if err != nil {
 			return nil, err
 		}
 		return ir.Slice(elem), nil
 
 	case reflect.Array:
-		elem, err := b.typeToDescriptor(ctx, t.Elem(), "")
+		elem, err := b.typeToDescriptor(ctx, t.Elem(), "", "")
 		if err != nil {
 			return nil, err
 		}
@@ -286,18 +289,18 @@ func (b *reflectionSchemaBuilder) typeToDescriptorForAlias(ctx context.Context, 
 			return nil, err
 		}
 
-		key, err := b.typeToDescriptor(ctx, t.Key(), "")
+		key, err := b.typeToDescriptor(ctx, t.Key(), "", "")
 		if err != nil {
 			return nil, err
 		}
-		value, err := b.typeToDescriptor(ctx, t.Elem(), "")
+		value, err := b.typeToDescriptor(ctx, t.Elem(), "", "")
 		if err != nil {
 			return nil, err
 		}
 		return ir.Map(key, value), nil
 
 	case reflect.Ptr:
-		elem, err := b.typeToDescriptor(ctx, t.Elem(), "")
+		elem, err := b.typeToDescriptor(ctx, t.Elem(), "", "")
 		if err != nil {
 			return nil, err
 		}
@@ -323,7 +326,7 @@ func (b *reflectionSchemaBuilder) typeToDescriptorForAlias(ctx context.Context, 
 }
 
 // handleEmbedded processes an embedded field.
-func (b *reflectionSchemaBuilder) handleEmbedded(ctx context.Context, field reflect.StructField, fields *[]ir.FieldDescriptor, extends *[]ir.GoIdentifier) error {
+func (b *reflectionSchemaBuilder) handleEmbedded(ctx context.Context, field reflect.StructField, fields *[]ir.FieldDescriptor, extends *[]ir.GoIdentifier, parentPkg string) error {
 	jsonTag := field.Tag.Get("json")
 
 	// json:"-" means skip entirely
@@ -351,7 +354,7 @@ func (b *reflectionSchemaBuilder) handleEmbedded(ctx context.Context, field refl
 		parts := strings.Split(jsonTag, ",")
 		jsonName := parts[0]
 
-		fd, err := b.buildFieldDescriptor(ctx, field)
+		fd, err := b.buildFieldDescriptor(ctx, field, parentPkg)
 		if err != nil {
 			return err
 		}
@@ -366,12 +369,13 @@ func (b *reflectionSchemaBuilder) handleEmbedded(ctx context.Context, field refl
 }
 
 // buildFieldDescriptor creates a FieldDescriptor from a reflect.StructField.
-func (b *reflectionSchemaBuilder) buildFieldDescriptor(ctx context.Context, field reflect.StructField) (ir.FieldDescriptor, error) {
+// parentPkg is the package path of the containing struct type.
+func (b *reflectionSchemaBuilder) buildFieldDescriptor(ctx context.Context, field reflect.StructField, parentPkg string) (ir.FieldDescriptor, error) {
 	jsonTag := field.Tag.Get("json")
 	jsonName, optional, skip, stringEncoded := parseJSONTag(jsonTag, field.Name)
 
 	// Build type descriptor
-	fieldType, err := b.typeToDescriptor(ctx, field.Type, field.Name)
+	fieldType, err := b.typeToDescriptor(ctx, field.Type, field.Name, parentPkg)
 	if err != nil {
 		return ir.FieldDescriptor{}, err
 	}
@@ -398,7 +402,8 @@ func (b *reflectionSchemaBuilder) buildFieldDescriptor(ctx context.Context, fiel
 
 // typeToDescriptor converts a reflect.Type to a TypeDescriptor.
 // parentName is used for generating synthetic names for anonymous structs.
-func (b *reflectionSchemaBuilder) typeToDescriptor(ctx context.Context, t reflect.Type, parentName string) (ir.TypeDescriptor, error) {
+// parentPkg is the package path of the containing type, used for anonymous struct references.
+func (b *reflectionSchemaBuilder) typeToDescriptor(ctx context.Context, t reflect.Type, parentName, parentPkg string) (ir.TypeDescriptor, error) {
 	// Check for special types first
 	if desc := b.checkSpecialType(t); desc != nil {
 		return desc, nil
@@ -465,14 +470,14 @@ func (b *reflectionSchemaBuilder) typeToDescriptor(ctx context.Context, t reflec
 		if t.Elem().Kind() == reflect.Uint8 {
 			return ir.Bytes(), nil
 		}
-		elem, err := b.typeToDescriptor(ctx, t.Elem(), "")
+		elem, err := b.typeToDescriptor(ctx, t.Elem(), "", "")
 		if err != nil {
 			return nil, err
 		}
 		return ir.Slice(elem), nil
 
 	case reflect.Array:
-		elem, err := b.typeToDescriptor(ctx, t.Elem(), "")
+		elem, err := b.typeToDescriptor(ctx, t.Elem(), "", "")
 		if err != nil {
 			return nil, err
 		}
@@ -484,18 +489,18 @@ func (b *reflectionSchemaBuilder) typeToDescriptor(ctx context.Context, t reflec
 			return nil, err
 		}
 
-		key, err := b.typeToDescriptor(ctx, t.Key(), "")
+		key, err := b.typeToDescriptor(ctx, t.Key(), "", "")
 		if err != nil {
 			return nil, err
 		}
-		value, err := b.typeToDescriptor(ctx, t.Elem(), "")
+		value, err := b.typeToDescriptor(ctx, t.Elem(), "", "")
 		if err != nil {
 			return nil, err
 		}
 		return ir.Map(key, value), nil
 
 	case reflect.Ptr:
-		elem, err := b.typeToDescriptor(ctx, t.Elem(), parentName)
+		elem, err := b.typeToDescriptor(ctx, t.Elem(), parentName, parentPkg)
 		if err != nil {
 			return nil, err
 		}
@@ -504,7 +509,7 @@ func (b *reflectionSchemaBuilder) typeToDescriptor(ctx context.Context, t reflec
 	case reflect.Struct:
 		// Anonymous struct
 		if t.Name() == "" {
-			return b.handleAnonymousStruct(ctx, t, parentName)
+			return b.handleAnonymousStruct(ctx, t, parentName, parentPkg)
 		}
 
 		// Named struct - extract and reference
@@ -608,16 +613,11 @@ func (b *reflectionSchemaBuilder) validateMapKeyType(t reflect.Type) error {
 }
 
 // handleAnonymousStruct handles anonymous struct types by generating synthetic names.
-func (b *reflectionSchemaBuilder) handleAnonymousStruct(ctx context.Context, t reflect.Type, parentName string) (ir.TypeDescriptor, error) {
+// parentPkg is the package path of the containing type.
+func (b *reflectionSchemaBuilder) handleAnonymousStruct(ctx context.Context, t reflect.Type, parentName, parentPkg string) (ir.TypeDescriptor, error) {
 	// Check if we've already seen this anonymous struct
 	if syntheticName, exists := b.anonStructs[t]; exists {
-		// Determine package from parent context
-		pkg := ""
-		if parentName != "" {
-			// Try to infer package from context
-			// For now, use empty package
-		}
-		return ir.Ref(syntheticName, pkg), nil
+		return ir.Ref(syntheticName, parentPkg), nil
 	}
 
 	// Generate synthetic name
@@ -629,11 +629,11 @@ func (b *reflectionSchemaBuilder) handleAnonymousStruct(ctx context.Context, t r
 	b.anonStructs[t] = syntheticName
 
 	// Extract the anonymous struct as a named type
-	if err := b.extractAnonymousStruct(ctx, t, syntheticName, ""); err != nil {
+	if err := b.extractAnonymousStruct(ctx, t, syntheticName, parentPkg); err != nil {
 		return nil, err
 	}
 
-	return ir.Ref(syntheticName, ""), nil
+	return ir.Ref(syntheticName, parentPkg), nil
 }
 
 // extractAnonymousStruct extracts an anonymous struct with a synthetic name.
@@ -659,7 +659,7 @@ func (b *reflectionSchemaBuilder) extractAnonymousStruct(ctx context.Context, t 
 
 		// Handle embedding
 		if field.Anonymous {
-			if err := b.handleEmbedded(ctx, field, &fields, &extends); err != nil {
+			if err := b.handleEmbedded(ctx, field, &fields, &extends, pkg); err != nil {
 				return err
 			}
 			continue
@@ -674,7 +674,7 @@ func (b *reflectionSchemaBuilder) extractAnonymousStruct(ctx context.Context, t 
 		// Generate field name for nested anonymous structs
 		fieldSyntheticName := syntheticName + "_" + field.Name
 
-		fd, err := b.buildFieldDescriptorWithName(ctx, field, fieldSyntheticName)
+		fd, err := b.buildFieldDescriptorWithName(ctx, field, fieldSyntheticName, pkg)
 		if err != nil {
 			return fmt.Errorf("field %s.%s: %w", syntheticName, field.Name, err)
 		}
@@ -694,12 +694,13 @@ func (b *reflectionSchemaBuilder) extractAnonymousStruct(ctx context.Context, t 
 }
 
 // buildFieldDescriptorWithName is like buildFieldDescriptor but passes along the synthetic name context.
-func (b *reflectionSchemaBuilder) buildFieldDescriptorWithName(ctx context.Context, field reflect.StructField, syntheticName string) (ir.FieldDescriptor, error) {
+// parentPkg is the package path of the containing struct type.
+func (b *reflectionSchemaBuilder) buildFieldDescriptorWithName(ctx context.Context, field reflect.StructField, syntheticName, parentPkg string) (ir.FieldDescriptor, error) {
 	jsonTag := field.Tag.Get("json")
 	jsonName, optional, skip, stringEncoded := parseJSONTag(jsonTag, field.Name)
 
 	// Build type descriptor
-	fieldType, err := b.typeToDescriptor(ctx, field.Type, syntheticName)
+	fieldType, err := b.typeToDescriptor(ctx, field.Type, syntheticName, parentPkg)
 	if err != nil {
 		return ir.FieldDescriptor{}, err
 	}
