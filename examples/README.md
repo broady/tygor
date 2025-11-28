@@ -9,6 +9,7 @@ This directory contains example applications demonstrating tygor features. Each 
 | [newsserver](./newsserver) | Simple CRUD API with branded types, enums, caching |
 | [blog](./blog) | Multi-service app with authentication and authorization |
 | [protobuf](./protobuf) | Using protobuf-generated types with tygor |
+| [react](./react) | React + Vite app with type-safe RPC client |
 | [reflection](./reflection) | Generic type instantiation with reflection provider |
 | [zod](./zod) | Zod schema generation from Go validate tags |
 
