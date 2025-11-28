@@ -1,21 +1,21 @@
 # Root Makefile for all examples
-MAKEFLAGS += -j
+# Note: parallelism is inherited from parent make via precommit targets
 
 EXAMPLES := newsserver blog protobuf multipackage reflection
 
 .PHONY: all test gen check fmt clean readme precommit $(EXAMPLES)
 
 # Generate precommit targets for each example (enables parallel execution)
+# Output is suppressed unless there's a failure
 define precommit-target
 .PHONY: precommit-$(1)
 precommit-$(1):
-	@echo "=== $(1) ===" && $$(MAKE) -C $(1) test check
+	@output=$$($$(MAKE) --no-print-directory -C $(1) test-quiet check-quiet 2>&1) || (echo "=== $(1) ==="; echo "$$output"; exit 1)
 endef
 $(foreach ex,$(EXAMPLES),$(eval $(call precommit-target,$(ex))))
 
 # Run precommit on all examples in parallel
 precommit: $(addprefix precommit-,$(EXAMPLES))
-	@echo "All examples OK"
 
 # Update all READMEs
 readme:

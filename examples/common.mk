@@ -9,7 +9,7 @@ GO_FILES ?= main.go $(wildcard api/*.go)
 TS_FILES ?= $(wildcard client/*.ts client/src/*.ts client/src/rpc/*.ts)
 GEN_DIR ?= ./client/src/rpc
 
-.PHONY: all test gen run clean check fmt snippet-go snippet-ts snippets readme lint-readme help
+.PHONY: all test test-quiet gen run clean check check-quiet fmt snippet-go snippet-ts snippets readme lint-readme help
 
 # Default target
 all: gen test
@@ -27,6 +27,20 @@ test:
 		(cd client && bun run typecheck) && \
 		echo "Running integration tests..." && \
 		(cd client && bun test); \
+	fi
+
+# Run tests quietly (output only on failure)
+test-quiet:
+	@output=$$(go build ./... 2>&1) || (echo "$$output"; exit 1)
+	@if [ -d client ] && [ -f client/package.json ]; then \
+		output=$$( \
+			(cd client && rm -rf node_modules && bun install) && \
+			mkdir -p client/node_modules/@tygor/client client/node_modules/@tygor/testing && \
+			cp ../../client/runtime.js ../../client/runtime.d.ts ../../client/package.json client/node_modules/@tygor/client/ && \
+			cp ../testing/*.ts ../testing/*.json client/node_modules/@tygor/testing/ && \
+			(cd client && bun run typecheck) && \
+			(cd client && bun test) 2>&1 \
+		) || (echo "$$output"; exit 1); \
 	fi
 
 # Generate TypeScript types
@@ -54,6 +68,21 @@ check: gen readme
 		exit 1; \
 	fi
 	@echo "Generated files are up-to-date."
+
+# Check quietly (output only on failure)
+check-quiet:
+	@mkdir -p $(GEN_DIR)
+	@output=$$(go run . -gen -out $(GEN_DIR) 2>&1) || (echo "$$output"; exit 1)
+	@output=$$($(SNIPPET_TOOL) -inject README.md $(GO_FILES) $(TS_FILES) 2>&1) || (echo "$$output"; exit 1)
+	@if [ -n "$$(git diff --name-only $(GEN_DIR) README.md 2>/dev/null)" ]; then \
+		echo ""; \
+		echo "ERROR: Generated files were out of sync with source code."; \
+		echo "The files have been updated. Please commit the changes:"; \
+		echo ""; \
+		git --no-pager diff --stat $(GEN_DIR) README.md; \
+		echo ""; \
+		exit 1; \
+	fi
 
 # Format code
 fmt:

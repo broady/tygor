@@ -296,7 +296,7 @@ func applyConfigDefaults(cfg *Config) *Config {
 // buildSchemaFromSource uses the source provider to extract types.
 func buildSchemaFromSource(ctx context.Context, routes internal.RouteMap, packages []string) (*ir.Schema, error) {
 	if len(packages) == 0 {
-		return nil, fmt.Errorf("Packages is required when using source provider")
+		return nil, fmt.Errorf("packages is required when using source provider")
 	}
 
 	// Collect root type names from routes
