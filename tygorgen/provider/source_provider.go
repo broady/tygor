@@ -71,11 +71,19 @@ func (p *SourceProvider) BuildSchema(ctx context.Context, opts SourceInputOption
 		enumCandidates: make(map[*types.Named][]enumConstant),
 	}
 
-	// Populate package info from first package
+	// Populate package info from first INPUT package (not first loaded package)
+	// packages.Load returns packages in dependency order, not input order
+	mainPkg := pkgs[0]
+	for _, pkg := range pkgs {
+		if pkg.PkgPath == opts.Packages[0] {
+			mainPkg = pkg
+			break
+		}
+	}
 	builder.schema.Package = ir.PackageInfo{
-		Path: pkgs[0].PkgPath,
-		Name: pkgs[0].Name,
-		Dir:  pkgs[0].PkgPath,
+		Path: mainPkg.PkgPath,
+		Name: mainPkg.Name,
+		Dir:  mainPkg.PkgPath,
 	}
 
 	// Find and process root types

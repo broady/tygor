@@ -22,6 +22,16 @@ type Config struct {
 	// e.g. "./client/src/rpc"
 	OutDir string
 
+	// Provider selects the type extraction strategy.
+	// "source" (default) - uses go/packages for full type info including enums and comments
+	// "reflection" - uses runtime reflection (faster, but no enum values or comments)
+	Provider string
+
+	// Packages are the Go package paths to analyze when using source provider.
+	// Required when Provider is "source".
+	// e.g. []string{"github.com/myorg/myapp/api"}
+	Packages []string
+
 	// TypeMappings allows overriding type mappings for tygo.
 	// e.g. map[string]string{"time.Time": "Date", "CustomType": "string"}
 	TypeMappings map[string]string
@@ -69,35 +79,21 @@ func Generate(app *tygor.App, cfg *Config) error {
 
 	ctx := context.Background()
 
-	// 1. Build schema from registered handlers using reflection provider
-	rootTypes := make([]reflect.Type, 0, len(routes)*2)
-	for _, route := range routes {
-		if route.Request != nil {
-			rootTypes = append(rootTypes, route.Request)
-		}
-		if route.Response != nil {
-			rootTypes = append(rootTypes, route.Response)
-		}
+	// 1. Build schema using configured provider
+	var schema *ir.Schema
+	var err error
+
+	switch cfg.Provider {
+	case "source":
+		schema, err = buildSchemaFromSource(ctx, routes, cfg.Packages)
+	case "reflection":
+		schema, err = buildSchemaFromReflection(ctx, routes)
+	default:
+		return fmt.Errorf("unknown provider: %q (expected \"source\" or \"reflection\")", cfg.Provider)
 	}
 
-	// Build IR schema
-	var schema *ir.Schema
-	if len(rootTypes) > 0 {
-		p := &provider.ReflectionProvider{}
-		opts := provider.ReflectionInputOptions{
-			RootTypes: rootTypes,
-		}
-		var err error
-		schema, err = p.BuildSchema(ctx, opts)
-		if err != nil {
-			return fmt.Errorf("failed to build schema: %w", err)
-		}
-	} else {
-		// Empty schema for apps with no handlers
-		schema = &ir.Schema{
-			Types:    []ir.TypeDescriptor{},
-			Services: []ir.ServiceDescriptor{},
-		}
+	if err != nil {
+		return fmt.Errorf("failed to build schema: %w", err)
 	}
 
 	// 2. Build service descriptors from routes
@@ -280,6 +276,9 @@ func applyConfigDefaults(cfg *Config) *Config {
 	// Make a copy to avoid mutating the input
 	result := *cfg
 
+	if result.Provider == "" {
+		result.Provider = "source"
+	}
 	if result.PreserveComments == "" {
 		result.PreserveComments = "default"
 	}
@@ -291,4 +290,75 @@ func applyConfigDefaults(cfg *Config) *Config {
 	}
 
 	return &result
+}
+
+// buildSchemaFromSource uses the source provider to extract types.
+func buildSchemaFromSource(ctx context.Context, routes internal.RouteMap, packages []string) (*ir.Schema, error) {
+	if len(packages) == 0 {
+		return nil, fmt.Errorf("Packages is required when using source provider")
+	}
+
+	// Collect root type names from routes
+	rootTypes := collectRootTypeNames(routes)
+
+	p := &provider.SourceProvider{}
+	opts := provider.SourceInputOptions{
+		Packages:  packages,
+		RootTypes: rootTypes,
+	}
+	return p.BuildSchema(ctx, opts)
+}
+
+// buildSchemaFromReflection uses the reflection provider to extract types.
+func buildSchemaFromReflection(ctx context.Context, routes internal.RouteMap) (*ir.Schema, error) {
+	// Collect reflect.Types from routes
+	rootTypes := make([]reflect.Type, 0, len(routes)*2)
+	for _, route := range routes {
+		if route.Request != nil {
+			rootTypes = append(rootTypes, route.Request)
+		}
+		if route.Response != nil {
+			rootTypes = append(rootTypes, route.Response)
+		}
+	}
+
+	if len(rootTypes) == 0 {
+		// Empty schema for apps with no handlers
+		return &ir.Schema{
+			Types:    []ir.TypeDescriptor{},
+			Services: []ir.ServiceDescriptor{},
+		}, nil
+	}
+
+	p := &provider.ReflectionProvider{}
+	opts := provider.ReflectionInputOptions{
+		RootTypes: rootTypes,
+	}
+	return p.BuildSchema(ctx, opts)
+}
+
+// collectRootTypeNames extracts type names from routes for source provider.
+func collectRootTypeNames(routes internal.RouteMap) []string {
+	seen := make(map[string]bool)
+	var names []string
+
+	for _, route := range routes {
+		if route.Request != nil {
+			name := route.Request.Name()
+			if name != "" && !seen[name] {
+				seen[name] = true
+				names = append(names, name)
+			}
+		}
+		if route.Response != nil {
+			name := route.Response.Name()
+			if name != "" && !seen[name] {
+				seen[name] = true
+				names = append(names, name)
+			}
+		}
+	}
+
+	sort.Strings(names)
+	return names
 }

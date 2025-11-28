@@ -116,6 +116,7 @@ func main() {
 		}
 		if err := tygorgen.Generate(app, &tygorgen.Config{
 			OutDir:           *outDir,
+			Packages:         []string{"github.com/broady/tygor/examples/newsserver/api"},
 			PreserveComments: "default",
 			EnumStyle:        "union",
 			OptionalType:     "undefined",

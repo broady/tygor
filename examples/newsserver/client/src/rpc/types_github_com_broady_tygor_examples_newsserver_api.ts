@@ -20,14 +20,17 @@ export const DateTime = {
   },
 };
 
+/** CreateNewsParams contains the parameters for creating a new news article. */
 export interface CreateNewsParams {
   title: string;
   body?: string;
 }
+/** ListNewsParams contains pagination parameters for listing news articles. */
 export interface ListNewsParams {
   limit: number | null;
   offset: number | null;
 }
+/** News represents a news article in the system. */
 export interface News {
   id: number;
   title: string;
@@ -35,4 +38,5 @@ export interface News {
   status: NewsStatus;
   created_at?: DateTime;
 }
-export type NewsStatus = string;
+/** NewsStatus represents the publication status of a news article. */
+export type NewsStatus = "archived" | "draft" | "published";

@@ -22,7 +22,8 @@ func TestApplyConfigDefaults(t *testing.T) {
 			name:  "empty config gets defaults",
 			input: &Config{OutDir: "/tmp"},
 			check: func(c *Config) bool {
-				return c.PreserveComments == "default" &&
+				return c.Provider == "source" &&
+					c.PreserveComments == "default" &&
 					c.EnumStyle == "union" &&
 					c.OptionalType == "undefined"
 			},
@@ -107,7 +108,7 @@ func TestGenerate_EmptyApp(t *testing.T) {
 	reg := tygor.NewApp()
 	outDir := t.TempDir()
 
-	cfg := &Config{OutDir: outDir, SingleFile: true}
+	cfg := &Config{OutDir: outDir, SingleFile: true, Provider: "reflection"}
 
 	err := Generate(reg, cfg)
 	if err != nil {
@@ -143,7 +144,7 @@ func TestGenerate_WithHandlers(t *testing.T) {
 	}
 	reg.Service("Users").Register("Create", tygor.Exec(handler))
 
-	cfg := &Config{OutDir: outDir, SingleFile: true}
+	cfg := &Config{OutDir: outDir, SingleFile: true, Provider: "reflection"}
 
 	err := Generate(reg, cfg)
 	if err != nil {
@@ -179,7 +180,7 @@ func TestGenerate_ManifestStructure(t *testing.T) {
 	reg.Service("Users").Register("Create", tygor.Exec(createHandler))
 	reg.Service("Posts").Register("List", tygor.Query(listHandler))
 
-	cfg := &Config{OutDir: outDir, SingleFile: true}
+	cfg := &Config{OutDir: outDir, SingleFile: true, Provider: "reflection"}
 
 	err := Generate(reg, cfg)
 	if err != nil {
@@ -218,7 +219,7 @@ func TestGenerate_TypesFile(t *testing.T) {
 	}
 	reg.Service("Users").Register("Create", tygor.Exec(handler))
 
-	cfg := &Config{OutDir: outDir, SingleFile: true}
+	cfg := &Config{OutDir: outDir, SingleFile: true, Provider: "reflection"}
 
 	err := Generate(reg, cfg)
 	if err != nil {
@@ -250,6 +251,7 @@ func TestGenerate_CustomConfig(t *testing.T) {
 	cfg := &Config{
 		OutDir:           outDir,
 		SingleFile:       true,
+		Provider:         "reflection",
 		PreserveComments: "none",
 		EnumStyle:        "enum",
 		OptionalType:     "null",
@@ -290,7 +292,7 @@ func TestGenerate_GETParamsUseLowercaseNames(t *testing.T) {
 	}
 	reg.Service("Posts").Register("List", tygor.Query(listHandler))
 
-	cfg := &Config{OutDir: outDir, SingleFile: true}
+	cfg := &Config{OutDir: outDir, SingleFile: true, Provider: "reflection"}
 
 	err := Generate(reg, cfg)
 	if err != nil {
