@@ -416,41 +416,72 @@ func (b *reflectionSchemaBuilder) typeToDescriptor(ctx context.Context, t reflec
 
 	switch t.Kind() {
 	case reflect.Bool:
-		return ir.Bool(), nil
-
-	case reflect.Int:
+		// Check if this is a named bool type (alias)
 		if t.Name() != "" && t.PkgPath() != "" {
 			if err := b.extractType(ctx, t); err != nil {
 				return nil, err
 			}
 			return ir.Ref(b.getTypeName(t), t.PkgPath()), nil
 		}
-		return ir.Int(0), nil
-	case reflect.Int8:
-		return ir.Int(8), nil
-	case reflect.Int16:
-		return ir.Int(16), nil
-	case reflect.Int32:
-		return ir.Int(32), nil
-	case reflect.Int64:
-		return ir.Int(64), nil
+		return ir.Bool(), nil
 
-	case reflect.Uint:
-		return ir.Uint(0), nil
-	case reflect.Uint8:
-		return ir.Uint(8), nil
-	case reflect.Uint16:
-		return ir.Uint(16), nil
-	case reflect.Uint32:
-		return ir.Uint(32), nil
-	case reflect.Uint64:
-		return ir.Uint(64), nil
-	case reflect.Uintptr:
-		return ir.Uint(0), nil
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		// Check if this is a named integer type (alias)
+		if t.Name() != "" && t.PkgPath() != "" {
+			if err := b.extractType(ctx, t); err != nil {
+				return nil, err
+			}
+			return ir.Ref(b.getTypeName(t), t.PkgPath()), nil
+		}
+		// Return appropriate primitive based on kind
+		switch t.Kind() {
+		case reflect.Int:
+			return ir.Int(0), nil
+		case reflect.Int8:
+			return ir.Int(8), nil
+		case reflect.Int16:
+			return ir.Int(16), nil
+		case reflect.Int32:
+			return ir.Int(32), nil
+		default: // Int64
+			return ir.Int(64), nil
+		}
 
-	case reflect.Float32:
-		return ir.Float(32), nil
-	case reflect.Float64:
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		// Check if this is a named unsigned integer type (alias)
+		if t.Name() != "" && t.PkgPath() != "" {
+			if err := b.extractType(ctx, t); err != nil {
+				return nil, err
+			}
+			return ir.Ref(b.getTypeName(t), t.PkgPath()), nil
+		}
+		// Return appropriate primitive based on kind
+		switch t.Kind() {
+		case reflect.Uint:
+			return ir.Uint(0), nil
+		case reflect.Uint8:
+			return ir.Uint(8), nil
+		case reflect.Uint16:
+			return ir.Uint(16), nil
+		case reflect.Uint32:
+			return ir.Uint(32), nil
+		case reflect.Uint64:
+			return ir.Uint(64), nil
+		default: // Uintptr
+			return ir.Uint(0), nil
+		}
+
+	case reflect.Float32, reflect.Float64:
+		// Check if this is a named float type (alias)
+		if t.Name() != "" && t.PkgPath() != "" {
+			if err := b.extractType(ctx, t); err != nil {
+				return nil, err
+			}
+			return ir.Ref(b.getTypeName(t), t.PkgPath()), nil
+		}
+		if t.Kind() == reflect.Float32 {
+			return ir.Float(32), nil
+		}
 		return ir.Float(64), nil
 
 	case reflect.String:
