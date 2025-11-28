@@ -183,11 +183,13 @@ func buildServiceDescriptors(routes internal.RouteMap) []ir.ServiceDescriptor {
 		}
 
 		// Build endpoint descriptor
+		// Note: key is typically "Service.Method" (one dot) from the registry,
+		// but we replace all dots defensively in case of nested service names.
 		endpoint := ir.EndpointDescriptor{
 			Name:       methodName,
 			FullName:   key,
 			HTTPMethod: route.HTTPMethod,
-			Path:       "/" + strings.Replace(key, ".", "/", 1),
+			Path:       "/" + strings.ReplaceAll(key, ".", "/"),
 		}
 
 		// Convert request type to descriptor
