@@ -55,6 +55,15 @@ type GeneratorConfig struct {
 	TypeCase           string // "preserve", "camel", "pascal", "snake", "kebab"
 	PropertyNameSource string // "field" or "tag:json", "tag:xml", etc.
 
+	// StripPackagePrefix removes this prefix from package paths when qualifying type names.
+	// Types from packages matching this prefix are qualified with the remaining path.
+	// Example: "github.com/foo/bar/" makes "github.com/foo/bar/api/v1.User" → "api_v1_User"
+	// Types from the main package (Schema.Package) are never qualified.
+	StripPackagePrefix string
+
+	// Output structure
+	SingleFile bool // If true, emit all types in one types.ts. Default false emits one file per package.
+
 	// Formatting
 	IndentStyle     string // "space" or "tab"
 	IndentSize      int    // Spaces per indent level (when IndentStyle is "space")
@@ -63,6 +72,17 @@ type GeneratorConfig struct {
 
 	// Features
 	EmitComments bool // Include documentation comments in output
+
+	// Frontmatter is content added to the top of generated type files (after the header comment).
+	// Useful for custom type definitions, branded types, or additional imports.
+	// Example: "export type DateTime = string & { readonly __brand: 'DateTime' };"
+	Frontmatter string
+
+	// TypeMappings maps Go type names to custom TypeScript types.
+	// Keys are fully-qualified Go type names (e.g., "time.Time", "github.com/foo/bar.MyType").
+	// Values are the TypeScript type to emit instead of the default.
+	// Example: map[string]string{"time.Time": "DateTime"} makes time.Time fields emit as DateTime.
+	TypeMappings map[string]string
 
 	// Custom contains generator-specific options (e.g., TypeScriptConfig).
 	Custom map[string]any
@@ -85,6 +105,12 @@ type TypeScriptConfig struct {
 	// EnumStyle controls enum generation.
 	// MUST be one of: "enum", "const_enum", "union", "object"
 	EnumStyle string
+
+	// OptionalType controls how optional/nullable fields are typed.
+	// "default" - §4.9 spec behavior: omitempty→optional(?:), pointers/slices/maps→nullable(|null)
+	// "null"    - all optional/nullable fields use | null (no ?:)
+	// "undefined" - all optional/nullable fields use ?: (no | null)
+	OptionalType string
 
 	// UnknownType specifies the type for Go's 'any' or 'interface{}'.
 	// SHOULD be one of: "unknown", "any"

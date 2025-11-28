@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"go/ast"
 	"go/constant"
+	"go/token"
 	"go/types"
+	"path/filepath"
 	"strings"
 
 	"github.com/broady/tygor/tygorgen/ir"
@@ -41,6 +43,7 @@ func (p *SourceProvider) BuildSchema(ctx context.Context, opts SourceInputOption
 			packages.NeedFiles |
 			packages.NeedCompiledGoFiles |
 			packages.NeedImports |
+			packages.NeedDeps |
 			packages.NeedTypes |
 			packages.NeedSyntax |
 			packages.NeedTypesInfo,
@@ -69,13 +72,30 @@ func (p *SourceProvider) BuildSchema(ctx context.Context, opts SourceInputOption
 		seen:           make(map[types.Type]bool),
 		namedTypes:     make(map[string]ir.TypeDescriptor),
 		enumCandidates: make(map[*types.Named][]enumConstant),
+		typeNames:      make(map[string]bool),
 	}
 
-	// Populate package info from first package
+	// Populate package info from first INPUT package (not first loaded package)
+	// packages.Load returns packages in dependency order, not input order
+	var mainPkg *packages.Package
+	for _, pkg := range pkgs {
+		if pkg.PkgPath == opts.Packages[0] {
+			mainPkg = pkg
+			break
+		}
+	}
+	if mainPkg == nil {
+		return nil, fmt.Errorf("input package %s not found in loaded packages", opts.Packages[0])
+	}
+	// Get the actual directory from the package's files
+	pkgDir := mainPkg.PkgPath // fallback to package path
+	if len(mainPkg.GoFiles) > 0 {
+		pkgDir = filepath.Dir(mainPkg.GoFiles[0])
+	}
 	builder.schema.Package = ir.PackageInfo{
-		Path: pkgs[0].PkgPath,
-		Name: pkgs[0].Name,
-		Dir:  pkgs[0].PkgPath,
+		Path: mainPkg.PkgPath,
+		Name: mainPkg.Name,
+		Dir:  pkgDir,
 	}
 
 	// Find and process root types
@@ -103,12 +123,14 @@ type schemaBuilder struct {
 	seen           map[types.Type]bool
 	namedTypes     map[string]ir.TypeDescriptor // key: pkgPath.Name
 	enumCandidates map[*types.Named][]enumConstant
+	typeNames      map[string]bool // track used type names for collision detection (§3.5)
 }
 
 // enumConstant represents a const declaration that might be an enum member.
 type enumConstant struct {
 	name  string
 	value constant.Value
+	obj   *types.Const // Store the const object for doc extraction
 }
 
 // extractRootType finds and extracts a named type by name.
@@ -168,6 +190,18 @@ func (b *schemaBuilder) extractNamedType(tn *types.TypeName) error {
 		return nil
 	}
 
+	// Check for name collision (§3.5)
+	name := tn.Name()
+	pkg := ""
+	if named.Obj() != nil && named.Obj().Pkg() != nil {
+		pkg = named.Obj().Pkg().Path()
+	}
+	fullName := pkg + "." + name
+	if b.typeNames[fullName] {
+		return fmt.Errorf("name collision: type %s already exists", name)
+	}
+	b.typeNames[fullName] = true
+
 	// First, scan for enum constants before processing the type
 	b.scanEnumConstants(tn)
 
@@ -177,7 +211,11 @@ func (b *schemaBuilder) extractNamedType(tn *types.TypeName) error {
 
 	// Check if this is an enum type
 	if consts, isEnum := b.enumCandidates[named]; isEnum && len(consts) > 0 {
-		enumDesc := b.buildEnumDescriptor(tn.Name(), named.Obj().Pkg().Path(), consts, doc, src)
+		pkgPath := ""
+		if named.Obj() != nil && named.Obj().Pkg() != nil {
+			pkgPath = named.Obj().Pkg().Path()
+		}
+		enumDesc := b.buildEnumDescriptor(tn.Name(), pkgPath, consts, doc, src)
 		b.namedTypes[key] = enumDesc
 		b.schema.AddType(enumDesc)
 		return nil
@@ -185,14 +223,18 @@ func (b *schemaBuilder) extractNamedType(tn *types.TypeName) error {
 
 	// Check for custom marshalers on the named type itself
 	if b.hasCustomMarshaler(named) {
+		pkgPath := ""
+		if named.Obj() != nil && named.Obj().Pkg() != nil {
+			pkgPath = named.Obj().Pkg().Path()
+		}
 		b.schema.AddWarning(ir.Warning{
 			Code:     "CUSTOM_MARSHALER",
-			Message:  fmt.Sprintf("type %s implements custom marshaler, mapped to 'any'", tn.Name()),
+			Message:  fmt.Sprintf("type %s implements custom marshaler, mapped to 'unknown'", tn.Name()),
 			TypeName: tn.Name(),
 		})
 		// Create an alias to PrimitiveAny
 		aliasDesc := &ir.AliasDescriptor{
-			Name:          ir.GoIdentifier{Name: tn.Name(), Package: named.Obj().Pkg().Path()},
+			Name:          ir.GoIdentifier{Name: tn.Name(), Package: pkgPath},
 			Underlying:    ir.Any(),
 			Documentation: doc,
 			Source:        src,
@@ -214,14 +256,18 @@ func (b *schemaBuilder) extractNamedType(tn *types.TypeName) error {
 
 	case *types.Interface:
 		// Interfaces are emitted as PrimitiveAny with a warning
+		pkgPath := ""
+		if named.Obj() != nil && named.Obj().Pkg() != nil {
+			pkgPath = named.Obj().Pkg().Path()
+		}
 		b.schema.AddWarning(ir.Warning{
 			Code:     "INTERFACE_TYPE",
-			Message:  fmt.Sprintf("interface type %s mapped to 'any'", tn.Name()),
+			Message:  fmt.Sprintf("interface type %s mapped to 'unknown'", tn.Name()),
 			TypeName: tn.Name(),
 		})
 		// Create an alias to PrimitiveAny
 		aliasDesc := &ir.AliasDescriptor{
-			Name:          ir.GoIdentifier{Name: tn.Name(), Package: named.Obj().Pkg().Path()},
+			Name:          ir.GoIdentifier{Name: tn.Name(), Package: pkgPath},
 			Underlying:    ir.Any(),
 			Documentation: doc,
 			Source:        src,
@@ -235,8 +281,12 @@ func (b *schemaBuilder) extractNamedType(tn *types.TypeName) error {
 		if err != nil {
 			return err
 		}
+		pkgPath := ""
+		if named.Obj() != nil && named.Obj().Pkg() != nil {
+			pkgPath = named.Obj().Pkg().Path()
+		}
 		aliasDesc := &ir.AliasDescriptor{
-			Name:          ir.GoIdentifier{Name: tn.Name(), Package: named.Obj().Pkg().Path()},
+			Name:          ir.GoIdentifier{Name: tn.Name(), Package: pkgPath},
 			Underlying:    underlying,
 			Documentation: doc,
 			Source:        src,
@@ -266,7 +316,7 @@ func (b *schemaBuilder) convertType(t types.Type) (ir.TypeDescriptor, error) {
 
 	switch typ := t.(type) {
 	case *types.Basic:
-		return b.convertBasicType(typ), nil
+		return b.convertBasicType(typ)
 
 	case *types.Named:
 		// Reference to a named type
@@ -321,13 +371,16 @@ func (b *schemaBuilder) convertType(t types.Type) (ir.TypeDescriptor, error) {
 		// Non-empty interface
 		b.schema.AddWarning(ir.Warning{
 			Code:    "INTERFACE_TYPE",
-			Message: fmt.Sprintf("interface type %s mapped to 'any'", typ.String()),
+			Message: fmt.Sprintf("interface type %s mapped to 'unknown'", typ.String()),
 		})
 		return ir.Any(), nil
 
 	case *types.Struct:
 		// Anonymous struct - need to generate a synthetic name
-		return nil, fmt.Errorf("anonymous structs should be handled by caller")
+		// This is called when processing struct fields, so we don't have
+		// context about the parent. Return error - caller should use
+		// convertFieldType which has parent context
+		return nil, fmt.Errorf("anonymous structs need parent context for synthetic naming")
 
 	case *types.TypeParam:
 		// Generic type parameter
@@ -375,11 +428,21 @@ func (b *schemaBuilder) handleSpecialType(t types.Type) ir.TypeDescriptor {
 			return ir.Duration()
 		}
 
+		// json.Number
+		if pkgPath == "encoding/json" && name == "Number" {
+			return ir.String()
+		}
+
+		// json.RawMessage
+		if pkgPath == "encoding/json" && name == "RawMessage" {
+			return ir.Any()
+		}
+
 		// Check for custom marshalers
 		if b.hasCustomMarshaler(typ) {
 			b.schema.AddWarning(ir.Warning{
 				Code:     "CUSTOM_MARSHALER",
-				Message:  fmt.Sprintf("type %s implements custom marshaler, mapped to 'any'", name),
+				Message:  fmt.Sprintf("type %s implements custom marshaler, mapped to 'unknown'", name),
 				TypeName: name,
 			})
 			return ir.Any()
@@ -397,14 +460,43 @@ func (b *schemaBuilder) hasCustomMarshaler(named *types.Named) bool {
 		if method.Name() == "MarshalJSON" {
 			sig := method.Type().(*types.Signature)
 			if sig.Params().Len() == 0 && sig.Results().Len() == 2 {
-				// Check return types: []byte, error
-				return true
+				// Check return types: first must be []byte, second must be error
+				results := sig.Results()
+				firstType := results.At(0).Type()
+				secondType := results.At(1).Type()
+
+				// Check first result is []byte
+				if slice, ok := firstType.(*types.Slice); ok {
+					if basic, ok := slice.Elem().(*types.Basic); ok {
+						if basic.Kind() == types.Byte || basic.Kind() == types.Uint8 {
+							// Check second result is error
+							if secondType.String() == "error" {
+								return true
+							}
+						}
+					}
+				}
 			}
 		}
 		if method.Name() == "MarshalText" {
 			sig := method.Type().(*types.Signature)
 			if sig.Params().Len() == 0 && sig.Results().Len() == 2 {
-				return true
+				// Check return types: first must be []byte, second must be error
+				results := sig.Results()
+				firstType := results.At(0).Type()
+				secondType := results.At(1).Type()
+
+				// Check first result is []byte
+				if slice, ok := firstType.(*types.Slice); ok {
+					if basic, ok := slice.Elem().(*types.Basic); ok {
+						if basic.Kind() == types.Byte || basic.Kind() == types.Uint8 {
+							// Check second result is error
+							if secondType.String() == "error" {
+								return true
+							}
+						}
+					}
+				}
 			}
 		}
 	}
@@ -439,7 +531,22 @@ func (b *schemaBuilder) hasTextMarshaler(named *types.Named) bool {
 		if method.Name() == "MarshalText" {
 			sig := method.Type().(*types.Signature)
 			if sig.Params().Len() == 0 && sig.Results().Len() == 2 {
-				return true
+				// Check return types: first must be []byte, second must be error
+				results := sig.Results()
+				firstType := results.At(0).Type()
+				secondType := results.At(1).Type()
+
+				// Check first result is []byte
+				if slice, ok := firstType.(*types.Slice); ok {
+					if basic, ok := slice.Elem().(*types.Basic); ok {
+						if basic.Kind() == types.Byte || basic.Kind() == types.Uint8 {
+							// Check second result is error
+							if secondType.String() == "error" {
+								return true
+							}
+						}
+					}
+				}
 			}
 		}
 	}
@@ -447,41 +554,42 @@ func (b *schemaBuilder) hasTextMarshaler(named *types.Named) bool {
 }
 
 // convertBasicType converts a Go basic type to an IR primitive.
-func (b *schemaBuilder) convertBasicType(basic *types.Basic) ir.TypeDescriptor {
+func (b *schemaBuilder) convertBasicType(basic *types.Basic) (ir.TypeDescriptor, error) {
 	switch basic.Kind() {
 	case types.Bool:
-		return ir.Bool()
+		return ir.Bool(), nil
 	case types.String:
-		return ir.String()
+		return ir.String(), nil
 	case types.Int:
-		return ir.Int(0)
+		return ir.Int(0), nil
 	case types.Int8:
-		return ir.Int(8)
+		return ir.Int(8), nil
 	case types.Int16:
-		return ir.Int(16)
+		return ir.Int(16), nil
 	case types.Int32:
-		return ir.Int(32)
+		return ir.Int(32), nil
 	case types.Int64:
-		return ir.Int(64)
+		return ir.Int(64), nil
 	case types.Uint, types.Uintptr:
-		return ir.Uint(0)
+		return ir.Uint(0), nil
 	case types.Uint8: // types.Byte is an alias for Uint8
-		return ir.Uint(8)
+		return ir.Uint(8), nil
 	case types.Uint16:
-		return ir.Uint(16)
+		return ir.Uint(16), nil
 	case types.Uint32:
-		return ir.Uint(32)
+		return ir.Uint(32), nil
 	case types.Uint64:
-		return ir.Uint(64)
+		return ir.Uint(64), nil
 	case types.Float32:
-		return ir.Float(32)
+		return ir.Float(32), nil
 	case types.Float64:
-		return ir.Float(64)
+		return ir.Float(64), nil
 	case types.UntypedNil:
-		return ir.Any()
+		return ir.Any(), nil
+	case types.Complex64, types.Complex128, types.UnsafePointer:
+		return nil, fmt.Errorf("unsupported basic type: %s", basic.String())
 	default:
-		// Unsupported basic types
-		return ir.Any()
+		return nil, fmt.Errorf("unsupported basic type: %s", basic.String())
 	}
 }
 
@@ -590,6 +698,101 @@ func (b *schemaBuilder) extractSource(obj types.Object) ir.Source {
 	return ir.Source{}
 }
 
+// extractConstDocumentation extracts documentation for a const declaration.
+func (b *schemaBuilder) extractConstDocumentation(cnst *types.Const) ir.Documentation {
+	if cnst == nil {
+		return ir.Documentation{}
+	}
+
+	pos := cnst.Pos()
+	if !pos.IsValid() {
+		return ir.Documentation{}
+	}
+
+	for _, pkg := range b.pkgs {
+		if pkg.Types != cnst.Pkg() {
+			continue
+		}
+
+		for _, file := range pkg.Syntax {
+			if file.Pos() > pos || file.End() < pos {
+				continue
+			}
+
+			// Search for the const declaration
+			var docGroup *ast.CommentGroup
+			ast.Inspect(file, func(n ast.Node) bool {
+				if decl, ok := n.(*ast.GenDecl); ok && decl.Tok == token.CONST {
+					for _, spec := range decl.Specs {
+						if vs, ok := spec.(*ast.ValueSpec); ok {
+							for _, name := range vs.Names {
+								if name.Pos() == pos {
+									// Found the const - prefer spec doc, fall back to decl doc
+									docGroup = vs.Doc
+									if docGroup == nil {
+										docGroup = decl.Doc
+									}
+									return false
+								}
+							}
+						}
+					}
+				}
+				return true
+			})
+
+			if docGroup != nil {
+				return b.parseDocumentation(docGroup)
+			}
+		}
+	}
+
+	return ir.Documentation{}
+}
+
+// extractFieldDocumentation extracts documentation for a struct field.
+func (b *schemaBuilder) extractFieldDocumentation(structObj types.Object, fieldPos token.Pos) ir.Documentation {
+	if structObj == nil || !fieldPos.IsValid() {
+		return ir.Documentation{}
+	}
+
+	for _, pkg := range b.pkgs {
+		if pkg.Types != structObj.Pkg() {
+			continue
+		}
+
+		for _, file := range pkg.Syntax {
+			if file.Pos() > fieldPos || file.End() < fieldPos {
+				continue
+			}
+
+			// Search for the field in the struct declaration
+			var docGroup *ast.CommentGroup
+			ast.Inspect(file, func(n ast.Node) bool {
+				if ts, ok := n.(*ast.TypeSpec); ok {
+					if st, ok := ts.Type.(*ast.StructType); ok {
+						for _, f := range st.Fields.List {
+							for _, name := range f.Names {
+								if name.Pos() == fieldPos {
+									docGroup = f.Doc
+									return false
+								}
+							}
+						}
+					}
+				}
+				return true
+			})
+
+			if docGroup != nil {
+				return b.parseDocumentation(docGroup)
+			}
+		}
+	}
+
+	return ir.Documentation{}
+}
+
 // scanEnumConstants scans for const declarations that might be enum members.
 func (b *schemaBuilder) scanEnumConstants(tn *types.TypeName) {
 	named, ok := tn.Type().(*types.Named)
@@ -618,10 +821,13 @@ func (b *schemaBuilder) scanEnumConstants(tn *types.TypeName) {
 		}
 
 		// Check if const has the same type as our named type
-		if types.Identical(cnst.Type(), named) {
+		// Only include exported constants - unexported constants are internal
+		// implementation details and shouldn't appear in generated code
+		if types.Identical(cnst.Type(), named) && cnst.Exported() {
 			b.enumCandidates[named] = append(b.enumCandidates[named], enumConstant{
 				name:  cnst.Name(),
 				value: cnst.Val(),
+				obj:   cnst,
 			})
 		}
 	}
@@ -635,7 +841,7 @@ func (b *schemaBuilder) buildEnumDescriptor(name, pkgPath string, consts []enumC
 		members[i] = ir.EnumMember{
 			Name:          c.name,
 			Value:         value,
-			Documentation: ir.Documentation{}, // TODO: extract const documentation
+			Documentation: b.extractConstDocumentation(c.obj),
 		}
 	}
 
@@ -735,9 +941,13 @@ func (b *schemaBuilder) buildStructDescriptor(named *types.Named, name string, d
 				}
 				if named, ok := fieldType.(*types.Named); ok {
 					obj := named.Obj()
+					embeddedPkgPath := ""
+					if obj != nil && obj.Pkg() != nil {
+						embeddedPkgPath = obj.Pkg().Path()
+					}
 					descriptor.Extends = append(descriptor.Extends, ir.GoIdentifier{
 						Name:    obj.Name(),
-						Package: obj.Pkg().Path(),
+						Package: embeddedPkgPath,
 					})
 				}
 				continue
@@ -745,8 +955,8 @@ func (b *schemaBuilder) buildStructDescriptor(named *types.Named, name string, d
 			// Has JSON tag - treat as regular field
 		}
 
-		// Convert field type
-		fieldTypeDesc, err := b.convertType(field.Type())
+		// Convert field type - use convertFieldType to handle anonymous structs
+		fieldTypeDesc, err := b.convertFieldType(field.Type(), name, field.Name(), pkgPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert field %s: %w", field.Name(), err)
 		}
@@ -787,7 +997,7 @@ func (b *schemaBuilder) buildStructDescriptor(named *types.Named, name string, d
 			Skip:          false,
 			ValidateTag:   validateTag,
 			RawTags:       b.parseAllTags(tag),
-			Documentation: ir.Documentation{}, // TODO: extract field documentation
+			Documentation: b.extractFieldDocumentation(named.Obj(), field.Pos()),
 		}
 
 		descriptor.Fields = append(descriptor.Fields, fieldDesc)
@@ -850,6 +1060,30 @@ func (b *schemaBuilder) convertTypeParamConstraint(constraint types.Type) ir.Typ
 		return b.convertTypeParamConstraint(underlying)
 	}
 
+	// Handle named interface constraints (e.g., type Stringish interface { ~string | ~int })
+	// We need to look at the underlying interface to extract union type sets
+	if named, ok := constraint.(*types.Named); ok {
+		underlying := named.Underlying()
+		if iface, ok := underlying.(*types.Interface); ok {
+			// Recursively process the underlying interface to extract union type sets
+			result := b.convertTypeParamConstraint(iface)
+			if result != nil {
+				return result
+			}
+			// If the interface has methods but no union type set, return a reference
+			// to the named constraint type (e.g., [T Stringer] -> Ref("Stringer"))
+			if iface.NumMethods() > 0 {
+				obj := named.Obj()
+				pkgPath := ""
+				if obj != nil && obj.Pkg() != nil {
+					pkgPath = obj.Pkg().Path()
+				}
+				return ir.Ref(obj.Name(), pkgPath)
+			}
+		}
+		// Fall through to convertType for other named types
+	}
+
 	// Check for interface constraints
 	iface, ok := constraint.(*types.Interface)
 	if !ok {
@@ -858,6 +1092,12 @@ func (b *schemaBuilder) convertTypeParamConstraint(constraint types.Type) ir.Typ
 		if err == nil {
 			return desc
 		}
+		// Conversion failed - add a warning and return nil (unconstrained)
+		b.schema.AddWarning(ir.Warning{
+			Code:     "CONSTRAINT_CONVERSION_FAILED",
+			Message:  fmt.Sprintf("failed to convert type parameter constraint %s: %v", constraint.String(), err),
+			TypeName: constraint.String(),
+		})
 		return nil
 	}
 
@@ -872,10 +1112,201 @@ func (b *schemaBuilder) convertTypeParamConstraint(constraint types.Type) ir.Typ
 		return nil
 	}
 
-	// For other interface constraints with type sets (unions), we should extract them
-	// For now, return nil since union constraint handling is complex
-	// TODO: properly extract union constraints from type sets using iface.EmbeddedType()
+	// Extract union constraints from interface type sets
+	// For [T ~string | ~int], the interface has embedded types that form a union
+	if iface.NumEmbeddeds() > 0 {
+		var unionTypes []ir.TypeDescriptor
+
+		for i := 0; i < iface.NumEmbeddeds(); i++ {
+			embedded := iface.EmbeddedType(i)
+
+			// Check if this is a union type (e.g., ~string | ~int)
+			if union, ok := embedded.(*types.Union); ok {
+				for j := 0; j < union.Len(); j++ {
+					term := union.Term(j)
+					// term.Tilde() indicates ~T (approximation), but for IR purposes
+					// we only care about the underlying type since JSON behavior is the same
+					termType := term.Type()
+					desc, err := b.convertType(termType)
+					if err == nil && desc != nil {
+						unionTypes = append(unionTypes, desc)
+					} else if err != nil {
+						// Log warning but continue processing other union terms
+						b.schema.AddWarning(ir.Warning{
+							Code:     "UNION_TERM_CONVERSION_FAILED",
+							Message:  fmt.Sprintf("failed to convert union term %s: %v", termType.String(), err),
+							TypeName: termType.String(),
+						})
+					}
+				}
+			} else {
+				// Single embedded type (not a union)
+				desc, err := b.convertType(embedded)
+				if err == nil && desc != nil {
+					unionTypes = append(unionTypes, desc)
+				} else if err != nil {
+					// Log warning but continue processing
+					b.schema.AddWarning(ir.Warning{
+						Code:     "CONSTRAINT_EMBEDDED_CONVERSION_FAILED",
+						Message:  fmt.Sprintf("failed to convert embedded constraint type %s: %v", embedded.String(), err),
+						TypeName: embedded.String(),
+					})
+				}
+			}
+		}
+
+		if len(unionTypes) > 1 {
+			return ir.Union(unionTypes...)
+		} else if len(unionTypes) == 1 {
+			return unionTypes[0]
+		}
+	}
+
 	return nil
+}
+
+// convertFieldType converts a field type, handling anonymous structs with parent context.
+// For anonymous structs, it generates a synthetic name and adds the struct to Schema.Types.
+func (b *schemaBuilder) convertFieldType(t types.Type, parentName, fieldName, pkgPath string) (ir.TypeDescriptor, error) {
+	// Check if this is an anonymous struct
+	if structType, ok := t.(*types.Struct); ok {
+		return b.handleAnonymousStruct(structType, parentName, fieldName, pkgPath)
+	}
+
+	// Check if this is a pointer to an anonymous struct
+	if ptr, ok := t.(*types.Pointer); ok {
+		if structType, ok := ptr.Elem().(*types.Struct); ok {
+			// Handle the anonymous struct, then wrap in Ptr
+			innerDesc, err := b.handleAnonymousStruct(structType, parentName, fieldName, pkgPath)
+			if err != nil {
+				return nil, err
+			}
+			return ir.Ptr(innerDesc), nil
+		}
+	}
+
+	// For non-struct types, use regular conversion
+	return b.convertType(t)
+}
+
+// handleAnonymousStruct generates a synthetic name for an anonymous struct and adds it to Schema.Types.
+func (b *schemaBuilder) handleAnonymousStruct(structType *types.Struct, parentName, fieldName, pkgPath string) (ir.TypeDescriptor, error) {
+	// Generate synthetic name: ParentType_FieldName (§3.5)
+	syntheticName := parentName + "_" + fieldName
+
+	// Check for name collision (§3.5)
+	fullKey := pkgPath + "." + syntheticName
+	if b.typeNames[fullKey] {
+		return nil, fmt.Errorf("name collision: synthetic name %s already exists", syntheticName)
+	}
+
+	// Mark this synthetic name as used
+	b.typeNames[fullKey] = true
+
+	// Build the struct descriptor for the anonymous struct
+	descriptor := &ir.StructDescriptor{
+		Name:    ir.GoIdentifier{Name: syntheticName, Package: pkgPath},
+		Fields:  []ir.FieldDescriptor{},
+		Extends: []ir.GoIdentifier{},
+	}
+
+	// Process fields of the anonymous struct
+	for i := 0; i < structType.NumFields(); i++ {
+		field := structType.Field(i)
+		tag := structType.Tag(i)
+
+		// Skip unexported fields
+		if !field.Exported() {
+			continue
+		}
+
+		// Parse struct tags
+		jsonTag, jsonOpts := b.parseJSONTag(tag)
+
+		// Skip fields with json:"-"
+		if jsonTag == "-" {
+			continue
+		}
+
+		// Handle embedded fields
+		if field.Embedded() {
+			if jsonTag == "" {
+				// No JSON tag - this is inheritance (Extends)
+				fieldType := field.Type()
+				// Dereference pointer
+				if ptr, ok := fieldType.(*types.Pointer); ok {
+					fieldType = ptr.Elem()
+				}
+				if named, ok := fieldType.(*types.Named); ok {
+					obj := named.Obj()
+					pkgPath := ""
+					if obj != nil && obj.Pkg() != nil {
+						pkgPath = obj.Pkg().Path()
+					}
+					descriptor.Extends = append(descriptor.Extends, ir.GoIdentifier{
+						Name:    obj.Name(),
+						Package: pkgPath,
+					})
+				}
+				continue
+			}
+			// Has JSON tag - treat as regular field
+		}
+
+		// Convert field type - use recursive call for nested anonymous structs
+		fieldTypeDesc, err := b.convertFieldType(field.Type(), syntheticName, field.Name(), pkgPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert field %s.%s: %w", syntheticName, field.Name(), err)
+		}
+
+		// Determine JSON name
+		jsonName := jsonTag
+		if jsonName == "" {
+			jsonName = field.Name()
+		}
+
+		// Check for omitempty/omitzero
+		optional := false
+		for _, opt := range jsonOpts {
+			if opt == "omitempty" || opt == "omitzero" {
+				optional = true
+				break
+			}
+		}
+
+		// Check for string encoding
+		stringEncoded := false
+		for _, opt := range jsonOpts {
+			if opt == "string" {
+				stringEncoded = true
+				break
+			}
+		}
+
+		// Extract validate tag
+		validateTag := b.extractTag(tag, "validate")
+
+		fieldDesc := ir.FieldDescriptor{
+			Name:          field.Name(),
+			Type:          fieldTypeDesc,
+			JSONName:      jsonName,
+			Optional:      optional,
+			StringEncoded: stringEncoded,
+			Skip:          false,
+			ValidateTag:   validateTag,
+			RawTags:       b.parseAllTags(tag),
+			Documentation: ir.Documentation{}, // Anonymous struct fields don't have documentation positions
+		}
+
+		descriptor.Fields = append(descriptor.Fields, fieldDesc)
+	}
+
+	// Add the synthetic struct to Schema.Types
+	b.namedTypes[fullKey] = descriptor
+	b.schema.AddType(descriptor)
+
+	// Return a reference to the synthetic type
+	return ir.Ref(syntheticName, pkgPath), nil
 }
 
 // parseStructTag parses a struct tag string into a map.

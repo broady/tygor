@@ -1,5 +1,7 @@
 package testdata
 
+import "encoding/json"
+
 // AllBasicTypes has all basic type variations
 type AllBasicTypes struct {
 	Bool    bool    `json:"bool"`
@@ -43,3 +45,19 @@ const (
 	BoolFalse EnumBool = false
 	BoolTrue  EnumBool = true
 )
+
+// JSONSpecialTypes demonstrates json.Number and json.RawMessage
+type JSONSpecialTypes struct {
+	// Number is a json.Number field, should map to string
+	Number json.Number `json:"number"`
+	// OptionalNumber is an optional json.Number
+	OptionalNumber json.Number `json:"optional_number,omitempty"`
+	// RawMessage is a json.RawMessage field, should map to any
+	RawMessage json.RawMessage `json:"raw_message"`
+	// OptionalRaw is an optional json.RawMessage
+	OptionalRaw json.RawMessage `json:"optional_raw,omitempty"`
+	// NumberPtr is a pointer to json.Number
+	NumberPtr *json.Number `json:"number_ptr"`
+	// RawPtr is a pointer to json.RawMessage
+	RawPtr *json.RawMessage `json:"raw_ptr,omitempty"`
+}

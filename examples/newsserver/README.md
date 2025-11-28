@@ -49,26 +49,27 @@ const (
 ```
 <!-- [/snippet:enum-type] -->
 
-<!-- [snippet:request-types] -->
+<!-- [snippet:list-params] -->
 ```go title="types.go"
 // ListNewsParams contains pagination parameters for listing news articles.
 type ListNewsParams struct {
-	// Limit is the maximum number of articles to return.
-	Limit *int32 `json:"limit" schema:"limit"`
-	// Offset is the number of articles to skip.
+	Limit  *int32 `json:"limit" schema:"limit"`
 	Offset *int32 `json:"offset" schema:"offset"`
 }
 
+```
+<!-- [/snippet:list-params] -->
+
+<!-- [snippet:create-params] -->
+```go title="types.go"
 // CreateNewsParams contains the parameters for creating a new news article.
 type CreateNewsParams struct {
-	// Title is the article headline (required, 3-100 characters).
-	Title string `json:"title" validate:"required,min=3"`
-	// Body is the optional article content.
-	Body *string `json:"body,omitempty"`
+	Title string  `json:"title" validate:"required,min=3"`
+	Body  *string `json:"body,omitempty"`
 }
 
 ```
-<!-- [/snippet:request-types] -->
+<!-- [/snippet:create-params] -->
 
 ### Handlers
 
@@ -84,77 +85,72 @@ func ListNews(ctx context.Context, req *api.ListNewsParams) ([]*api.News, error)
 	}, nil
 }
 
-func CreateNews(ctx context.Context, req *api.CreateNewsParams) (*api.News, error) {
-	if req.Title == "error" {
-		return nil, tygor.NewError(tygor.CodeInvalidArgument, "simulated error")
-	}
-	now := time.Now()
-	return &api.News{
-		ID:        123,
-		Title:     req.Title,
-		Body:      req.Body,
-		Status:    api.NewsStatusDraft, // New articles start as drafts
-		CreatedAt: &now,
-	}, nil
-}
-
 ```
 <!-- [/snippet:handlers] -->
 
 ### App Setup
 
-<!-- [snippet:app-setup] -->
+<!-- [snippet:error-transformer] -->
 ```go title="main.go"
-// 1. Create App
 app := tygor.NewApp().
 	WithErrorTransformer(func(err error) *tygor.Error {
-		// Example custom error mapping
 		if err.Error() == "database connection failed" {
-			return tygor.NewError(tygor.CodeUnavailable, "db down")
+			return tygor.NewError(tygor.CodeUnavailable, "service unavailable")
 		}
 		return nil
-	}).
-	WithUnaryInterceptor(middleware.LoggingInterceptor(logger)).
-	WithMiddleware(middleware.CORS(middleware.DefaultCORSConfig()))
+	})
+
 ```
-<!-- [/snippet:app-setup] -->
+<!-- [/snippet:error-transformer] -->
+
+<!-- [snippet:global-interceptor] -->
+```go title="main.go"
+app = app.WithUnaryInterceptor(middleware.LoggingInterceptor(logger))
+
+```
+<!-- [/snippet:global-interceptor] -->
+
+<!-- [snippet:middleware] -->
+```go title="main.go"
+app = app.WithMiddleware(middleware.CORS(middleware.DefaultCORSConfig()))
+
+```
+<!-- [/snippet:middleware] -->
 
 ### Service Registration
 
-<!-- [snippet:service-registration] -->
+<!-- [snippet:cache-control] -->
 ```go title="main.go"
-// 2. Register Services
-news := app.Service("News")
-
 news.Register("List", tygor.Query(ListNews).
 	CacheControl(tygor.CacheConfig{
 		MaxAge: 1 * time.Minute,
 		Public: true,
 	}))
 
+```
+<!-- [/snippet:cache-control] -->
+
+<!-- [snippet:handler-interceptor] -->
+```go title="main.go"
 news.Register("Create", tygor.Exec(CreateNews).
 	WithUnaryInterceptor(func(ctx tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
-		// Example: Set a custom header
-		ctx.HTTPWriter().Header().Set("X-Created-By", "Tygorpc")
+		ctx.HTTPWriter().Header().Set("X-Created-By", "tygor")
 		return handler(ctx, req)
 	}))
+
 ```
-<!-- [/snippet:service-registration] -->
+<!-- [/snippet:handler-interceptor] -->
 
 ### TypeScript Client
 
 <!-- [snippet:client-setup] -->
 ```typescript title="index.ts"
-// 1. Create the strictly typed client
-const client = createClient(
-  registry,
-  {
-    baseUrl: 'http://localhost:8080',
-    headers: () => ({
-      'Authorization': 'Bearer my-token'
-    })
-  }
-);
+const client = createClient(registry, {
+  baseUrl: 'http://localhost:8080',
+  headers: () => ({
+    'Authorization': 'Bearer my-token'
+  })
+});
 ```
 <!-- [/snippet:client-setup] -->
 

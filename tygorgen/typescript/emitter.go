@@ -3,6 +3,7 @@ package typescript
 import (
 	"bytes"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/broady/tygor/tygorgen/ir"
@@ -10,10 +11,56 @@ import (
 
 // Emitter handles TypeScript code emission for IR type descriptors.
 type Emitter struct {
-	schema   *ir.Schema
-	config   GeneratorConfig
-	tsConfig TypeScriptConfig
-	indent   string
+	schema    *ir.Schema
+	config    GeneratorConfig
+	tsConfig  TypeScriptConfig
+	indent    string // current indentation prefix (for nested emissions)
+	indentStr string // single indent unit (tab or spaces from config)
+}
+
+// qualifyTypeName returns the qualified TypeScript name for a Go type.
+// Types from the main package (Schema.Package) are not qualified.
+// Types from other packages are qualified with the sanitized package path
+// after removing StripPackagePrefix.
+func (e *Emitter) qualifyTypeName(id ir.GoIdentifier) string {
+	typeName := applyNameTransforms(id.Name, e.config)
+
+	// If no StripPackagePrefix is configured, don't qualify anything (backward compat)
+	if e.config.StripPackagePrefix == "" {
+		return typeName
+	}
+
+	// Main package types are not qualified
+	if id.Package == "" || id.Package == e.schema.Package.Path {
+		return typeName
+	}
+
+	// External package - qualify with sanitized path
+	pkgPath := id.Package
+
+	// Strip the prefix
+	pkgPath = strings.TrimPrefix(pkgPath, e.config.StripPackagePrefix)
+
+	// If nothing was stripped (prefix didn't match), use full path
+	// Sanitize the path: replace / and . with _
+	sanitized := strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			return r
+		}
+		return '_'
+	}, pkgPath)
+
+	// Remove leading/trailing underscores and collapse multiple underscores
+	for strings.Contains(sanitized, "__") {
+		sanitized = strings.ReplaceAll(sanitized, "__", "_")
+	}
+	sanitized = strings.Trim(sanitized, "_")
+
+	// Combine: pkg_prefix_TypeName
+	if sanitized != "" {
+		return sanitized + "_" + typeName
+	}
+	return typeName
 }
 
 // EmitType emits a top-level type declaration.
@@ -39,8 +86,8 @@ func (e *Emitter) EmitType(buf *bytes.Buffer, typ ir.TypeDescriptor) ([]ir.Warni
 func (e *Emitter) emitStruct(buf *bytes.Buffer, s *ir.StructDescriptor) ([]ir.Warning, error) {
 	var warnings []ir.Warning
 
-	// Apply name transforms
-	typeName := applyNameTransforms(s.Name.Name, e.config)
+	// Apply name transforms with package qualification
+	typeName := e.qualifyTypeName(s.Name)
 	typeName = escapeReservedWord(typeName)
 
 	// Emit export keyword
@@ -54,33 +101,24 @@ func (e *Emitter) emitStruct(buf *bytes.Buffer, s *ir.StructDescriptor) ([]ir.Wa
 	// Emit type parameters
 	typeParams := ""
 	if len(s.TypeParameters) > 0 {
-		typeParams = e.emitTypeParameters(s.TypeParameters)
+		var err error
+		typeParams, err = e.emitTypeParameters(s.TypeParameters)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Decide whether to use interface or type
 	useInterface := e.tsConfig.UseInterface && len(s.Extends) == 0
 
 	if useInterface {
+		// Note: useInterface is only true when len(s.Extends) == 0,
+		// so we don't need to handle extends here. Structs with extends
+		// use the type alias syntax with intersection types below.
 		buf.WriteString("interface ")
 		buf.WriteString(typeName)
 		buf.WriteString(typeParams)
-		buf.WriteString(" ")
-
-		// Handle extends
-		if len(s.Extends) > 0 {
-			buf.WriteString("extends ")
-			for i, ext := range s.Extends {
-				if i > 0 {
-					buf.WriteString(", ")
-				}
-				extName := applyNameTransforms(ext.Name, e.config)
-				extName = escapeReservedWord(extName)
-				buf.WriteString(extName)
-			}
-			buf.WriteString(" ")
-		}
-
-		buf.WriteString("{\n")
+		buf.WriteString(" {\n")
 	} else {
 		buf.WriteString("type ")
 		buf.WriteString(typeName)
@@ -90,7 +128,7 @@ func (e *Emitter) emitStruct(buf *bytes.Buffer, s *ir.StructDescriptor) ([]ir.Wa
 		// Handle extends with intersection types
 		if len(s.Extends) > 0 {
 			for _, ext := range s.Extends {
-				extName := applyNameTransforms(ext.Name, e.config)
+				extName := e.qualifyTypeName(ext)
 				extName = escapeReservedWord(extName)
 				buf.WriteString(extName)
 				buf.WriteString(" & ")
@@ -106,15 +144,20 @@ func (e *Emitter) emitStruct(buf *bytes.Buffer, s *ir.StructDescriptor) ([]ir.Wa
 			continue
 		}
 
+		// Check for large integer warning (Appendix A.2)
+		if w := e.checkLargeIntegerWarning(field, s.Name.Name); w != nil {
+			warnings = append(warnings, *w)
+		}
+
 		// Field documentation
 		if e.config.EmitComments && !field.Documentation.IsZero() {
 			buf.WriteString(e.indent)
-			buf.WriteString("  ")
+			buf.WriteString(e.indentStr)
 			e.emitJSDoc(buf, field.Documentation)
 		}
 
 		buf.WriteString(e.indent)
-		buf.WriteString("  ")
+		buf.WriteString(e.indentStr)
 
 		// Field name (escape if reserved word or needs quoting)
 		fieldName := e.getPropertyName(field)
@@ -139,7 +182,19 @@ func (e *Emitter) emitStruct(buf *bytes.Buffer, s *ir.StructDescriptor) ([]ir.Wa
 		buf.WriteString(": ")
 
 		// Emit type
-		typeExpr, err := e.EmitTypeExpr(field.Type)
+		// For pointer fields, unwrap ALL nested pointers before emitting since
+		// emitPtr adds | null and we handle nullability/optionality separately
+		// at field level. Go's encoding/json flattens multiple pointer levels,
+		// so **string behaves like *string in JSON serialization.
+		fieldType := field.Type
+		for {
+			if ptr, ok := fieldType.(*ir.PtrDescriptor); ok {
+				fieldType = ptr.Element
+			} else {
+				break
+			}
+		}
+		typeExpr, err := e.EmitTypeExpr(fieldType)
 		if err != nil {
 			return nil, fmt.Errorf("failed to emit field %s type: %w", field.Name, err)
 		}
@@ -165,8 +220,8 @@ func (e *Emitter) emitStruct(buf *bytes.Buffer, s *ir.StructDescriptor) ([]ir.Wa
 
 // emitAlias emits a type alias.
 func (e *Emitter) emitAlias(buf *bytes.Buffer, a *ir.AliasDescriptor) ([]ir.Warning, error) {
-	// Apply name transforms
-	typeName := applyNameTransforms(a.Name.Name, e.config)
+	// Apply name transforms with package qualification
+	typeName := e.qualifyTypeName(a.Name)
 	typeName = escapeReservedWord(typeName)
 
 	// Emit export keyword
@@ -182,7 +237,11 @@ func (e *Emitter) emitAlias(buf *bytes.Buffer, a *ir.AliasDescriptor) ([]ir.Warn
 
 	// Emit type parameters
 	if len(a.TypeParameters) > 0 {
-		buf.WriteString(e.emitTypeParameters(a.TypeParameters))
+		typeParams, err := e.emitTypeParameters(a.TypeParameters)
+		if err != nil {
+			return nil, err
+		}
+		buf.WriteString(typeParams)
 	}
 
 	buf.WriteString(" = ")
@@ -200,8 +259,8 @@ func (e *Emitter) emitAlias(buf *bytes.Buffer, a *ir.AliasDescriptor) ([]ir.Warn
 
 // emitEnum emits an enum based on the configured style.
 func (e *Emitter) emitEnum(buf *bytes.Buffer, enum *ir.EnumDescriptor) ([]ir.Warning, error) {
-	// Apply name transforms
-	typeName := applyNameTransforms(enum.Name.Name, e.config)
+	// Apply name transforms with package qualification
+	typeName := e.qualifyTypeName(enum.Name)
 	typeName = escapeReservedWord(typeName)
 
 	switch e.tsConfig.EnumStyle {
@@ -267,11 +326,11 @@ func (e *Emitter) emitEnumAsEnum(buf *bytes.Buffer, typeName string, enum *ir.En
 
 		// Member documentation
 		if e.config.EmitComments && !member.Documentation.IsZero() {
-			buf.WriteString("  ")
+			buf.WriteString(e.indentStr)
 			e.emitJSDoc(buf, member.Documentation)
-			buf.WriteString("  ")
+			buf.WriteString(e.indentStr)
 		} else {
-			buf.WriteString("  ")
+			buf.WriteString(e.indentStr)
 		}
 
 		memberName := escapeReservedWord(member.Name)
@@ -303,7 +362,15 @@ func (e *Emitter) emitEnumAsObject(buf *bytes.Buffer, typeName string, enum *ir.
 			buf.WriteString(",\n")
 		}
 
-		buf.WriteString("  ")
+		// Member documentation
+		if e.config.EmitComments && !member.Documentation.IsZero() {
+			buf.WriteString(e.indentStr)
+			e.emitJSDoc(buf, member.Documentation)
+			buf.WriteString(e.indentStr)
+		} else {
+			buf.WriteString(e.indentStr)
+		}
+
 		memberName := escapeReservedWord(member.Name)
 		buf.WriteString(memberName)
 		buf.WriteString(": ")
@@ -349,8 +416,16 @@ func (e *Emitter) emitPrimitive(p *ir.PrimitiveDescriptor) string {
 	case ir.PrimitiveBytes:
 		return "string" // base64
 	case ir.PrimitiveTime:
+		// Check for custom type mapping
+		if mapped, ok := e.config.TypeMappings["time.Time"]; ok {
+			return mapped
+		}
 		return "string" // RFC 3339
 	case ir.PrimitiveDuration:
+		// Check for custom type mapping
+		if mapped, ok := e.config.TypeMappings["time.Duration"]; ok {
+			return mapped
+		}
 		return "number" // nanoseconds
 	case ir.PrimitiveAny:
 		return e.tsConfig.UnknownType
@@ -411,21 +486,33 @@ func (e *Emitter) emitMap(m *ir.MapDescriptor) (string, error) {
 
 // emitReference emits a reference to a named type.
 func (e *Emitter) emitReference(r *ir.ReferenceDescriptor) string {
-	typeName := applyNameTransforms(r.Target.Name, e.config)
+	typeName := e.qualifyTypeName(r.Target)
 	return escapeReservedWord(typeName)
 }
 
 // emitPtr emits a pointer type.
 // Note: PtrDescriptor nullability is context-dependent (§4.9).
-// This method only handles nested pointers; field-level nullability
-// is handled by determineOptionalNullable.
+// For field-level pointers, determineOptionalNullable handles nullability.
+// For nested contexts (array elements, map values), we add | null here.
+// This method recursively unwraps nested pointers to avoid (T | null) | null.
 func (e *Emitter) emitPtr(p *ir.PtrDescriptor) (string, error) {
-	elemType, err := e.EmitTypeExpr(p.Element)
+	// Unwrap all nested pointers to get to the base type
+	elem := p.Element
+	for {
+		if innerPtr, ok := elem.(*ir.PtrDescriptor); ok {
+			elem = innerPtr.Element
+		} else {
+			break
+		}
+	}
+
+	elemType, err := e.EmitTypeExpr(elem)
 	if err != nil {
 		return "", err
 	}
-	// In nested contexts, pointer always adds null
-	return elemType, nil
+	// Parenthesize to ensure correct precedence in compound types
+	// e.g., []*string → (string | null)[] not string | null[]
+	return "(" + elemType + " | null)", nil
 }
 
 // emitUnion emits a union type.
@@ -447,9 +534,9 @@ func (e *Emitter) emitTypeParameter(tp *ir.TypeParameterDescriptor) string {
 }
 
 // emitTypeParameters emits type parameter declarations.
-func (e *Emitter) emitTypeParameters(params []ir.TypeParameterDescriptor) string {
+func (e *Emitter) emitTypeParameters(params []ir.TypeParameterDescriptor) (string, error) {
 	if len(params) == 0 {
-		return ""
+		return "", nil
 	}
 
 	var parts []string
@@ -457,56 +544,67 @@ func (e *Emitter) emitTypeParameters(params []ir.TypeParameterDescriptor) string
 		part := param.ParamName
 		if param.Constraint != nil {
 			constraintType, err := e.EmitTypeExpr(param.Constraint)
-			if err == nil {
-				part += " extends " + constraintType
+			if err != nil {
+				return "", fmt.Errorf("failed to emit constraint for type parameter %s: %w", param.ParamName, err)
 			}
+			part += " extends " + constraintType
 		}
 		parts = append(parts, part)
 	}
 
-	return "<" + strings.Join(parts, ", ") + ">"
+	return "<" + strings.Join(parts, ", ") + ">", nil
 }
 
 // determineOptionalNullable determines if a field should be optional and/or nullable.
-// Implements the decision tree from §4.9.
+// Implements the decision tree from §4.9, with OptionalType override.
 func (e *Emitter) determineOptionalNullable(field ir.FieldDescriptor) (optional, nullable bool, err error) {
-	// Decision tree from §4.9:
-	// 1. If Optional is true → field is optional (field?: T)
-	// 2. Else if field type is pointer (*T) → field can be null (field: T | null)
-	// 3. Else if field type is slice or map → field can be null (field: T | null)
-	// 4. Else → field is required (field: T)
+	// First, determine if the field can be absent based on Go semantics
+	canBeAbsent := false
+	reason := "" // "optional", "pointer", "slice", "map"
 
 	if field.Optional {
-		optional = true
-		// Check for the rare case of pointer to collection
+		canBeAbsent = true
+		reason = "optional"
+		// Check for the rare case of pointer to collection (always nullable too)
 		if ptr, ok := field.Type.(*ir.PtrDescriptor); ok {
 			if _, isArray := ptr.Element.(*ir.ArrayDescriptor); isArray {
-				nullable = true
+				// Optional pointer to slice: field?: T | null
+				return true, true, nil
 			} else if _, isMap := ptr.Element.(*ir.MapDescriptor); isMap {
-				nullable = true
+				// Optional pointer to map: field?: T | null
+				return true, true, nil
 			}
 		}
-		return
+	} else if _, ok := field.Type.(*ir.PtrDescriptor); ok {
+		canBeAbsent = true
+		reason = "pointer"
+	} else if _, ok := field.Type.(*ir.ArrayDescriptor); ok {
+		canBeAbsent = true
+		reason = "slice"
+	} else if _, ok := field.Type.(*ir.MapDescriptor); ok {
+		canBeAbsent = true
+		reason = "map"
 	}
 
-	// Check if pointer
-	if _, ok := field.Type.(*ir.PtrDescriptor); ok {
-		nullable = true
-		return
+	if !canBeAbsent {
+		return false, false, nil
 	}
 
-	// Check if slice or map
-	if _, ok := field.Type.(*ir.ArrayDescriptor); ok {
-		nullable = true
-		return
+	// Apply OptionalType setting
+	switch e.tsConfig.OptionalType {
+	case "null":
+		// All absent fields use | null
+		return false, true, nil
+	case "undefined":
+		// All absent fields use ?:
+		return true, false, nil
+	default: // "default" or ""
+		// §4.9 spec behavior: omitempty→optional, pointers/slices/maps→nullable
+		if reason == "optional" {
+			return true, false, nil
+		}
+		return false, true, nil
 	}
-	if _, ok := field.Type.(*ir.MapDescriptor); ok {
-		nullable = true
-		return
-	}
-
-	// Required field
-	return false, false, nil
 }
 
 // getPropertyName returns the property name for a field.
@@ -566,8 +664,56 @@ func formatEnumValue(value any) string {
 	case int64:
 		return fmt.Sprintf("%d", v)
 	case float64:
-		return fmt.Sprintf("%g", v)
+		// Use strconv.FormatFloat to avoid scientific notation (e.g., 1e+06)
+		// which is invalid in TypeScript enum values
+		return strconv.FormatFloat(v, 'f', -1, 64)
 	default:
 		return fmt.Sprintf("%v", v)
+	}
+}
+
+// checkLargeIntegerWarning checks if a field uses int64/uint64 without ,string tag
+// and returns a warning per Appendix A.2 of the spec.
+func (e *Emitter) checkLargeIntegerWarning(field ir.FieldDescriptor, typeName string) *ir.Warning {
+	// If the field uses json:",string", no warning needed
+	if field.StringEncoded {
+		return nil
+	}
+
+	// Extract the base type, unwrapping pointers
+	baseType := field.Type
+	for {
+		if ptr, ok := baseType.(*ir.PtrDescriptor); ok {
+			baseType = ptr.Element
+		} else {
+			break
+		}
+	}
+
+	// Check if it's a primitive int64 or uint64
+	prim, ok := baseType.(*ir.PrimitiveDescriptor)
+	if !ok {
+		return nil
+	}
+
+	// Only warn for 64-bit integers
+	if prim.BitSize != 64 {
+		return nil
+	}
+
+	if prim.PrimitiveKind != ir.PrimitiveInt && prim.PrimitiveKind != ir.PrimitiveUint {
+		return nil
+	}
+
+	// Construct warning
+	kindName := "int64"
+	if prim.PrimitiveKind == ir.PrimitiveUint {
+		kindName = "uint64"
+	}
+
+	return &ir.Warning{
+		Code:     "LARGE_INT_PRECISION",
+		Message:  fmt.Sprintf("%s field %q in type %q may lose precision in JavaScript (max safe integer: 2^53-1). Consider using json:\",string\" tag.", kindName, field.Name, typeName),
+		TypeName: typeName,
 	}
 }

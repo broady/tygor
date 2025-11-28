@@ -27,6 +27,7 @@ func TestTypeScriptGenerator_Generate_EmitDeclare(t *testing.T) {
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
 		Sink: memSink,
 		Config: GeneratorConfig{
+			SingleFile: true,
 			Custom: map[string]any{
 				"EmitDeclare": true,
 			},
@@ -59,6 +60,7 @@ func TestTypeScriptGenerator_Generate_NoExport(t *testing.T) {
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
 		Sink: memSink,
 		Config: GeneratorConfig{
+			SingleFile: true,
 			Custom: map[string]any{
 				"EmitExport": false,
 			},
@@ -104,8 +106,9 @@ func TestTypeScriptGenerator_Generate_MultipleExtends(t *testing.T) {
 	gen := &TypeScriptGenerator{}
 
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
-		Sink:   memSink,
-		Config: GeneratorConfig{},
+		Sink: memSink,
+		Config: GeneratorConfig{
+			SingleFile: true},
 	})
 
 	if err != nil {
@@ -138,8 +141,9 @@ func TestTypeScriptGenerator_Generate_SkipField(t *testing.T) {
 	gen := &TypeScriptGenerator{}
 
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
-		Sink:   memSink,
-		Config: GeneratorConfig{},
+		Sink: memSink,
+		Config: GeneratorConfig{
+			SingleFile: true},
 	})
 
 	if err != nil {
@@ -170,8 +174,9 @@ func TestTypeScriptGenerator_Generate_QuotedFieldName(t *testing.T) {
 	gen := &TypeScriptGenerator{}
 
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
-		Sink:   memSink,
-		Config: GeneratorConfig{},
+		Sink: memSink,
+		Config: GeneratorConfig{
+			SingleFile: true},
 	})
 
 	if err != nil {
@@ -211,8 +216,9 @@ func TestTypeScriptGenerator_Generate_AliasWithGenerics(t *testing.T) {
 	gen := &TypeScriptGenerator{}
 
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
-		Sink:   memSink,
-		Config: GeneratorConfig{},
+		Sink: memSink,
+		Config: GeneratorConfig{
+			SingleFile: true},
 	})
 
 	if err != nil {
@@ -222,7 +228,9 @@ func TestTypeScriptGenerator_Generate_AliasWithGenerics(t *testing.T) {
 	content := string(memSink.Get("types.ts"))
 	t.Logf("Generated:\n%s", content)
 
-	want := "export type Maybe<T> = T;"
+	// The underlying type is *T (pointer to type parameter), so it should emit T | null
+	// because pointers can be null in JSON serialization
+	want := "export type Maybe<T> = (T | null);"
 	if !strings.Contains(content, want) {
 		t.Errorf("output should contain %q, got:\n%s", want, content)
 	}
@@ -248,6 +256,7 @@ func TestTypeScriptGenerator_Generate_PrimitiveAllTypes(t *testing.T) {
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
 		Sink: memSink,
 		Config: GeneratorConfig{
+			SingleFile: true,
 			Custom: map[string]any{
 				"UnknownType": "any",
 			},
@@ -291,6 +300,7 @@ func TestTypeScriptGenerator_Generate_ConstEnum(t *testing.T) {
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
 		Sink: memSink,
 		Config: GeneratorConfig{
+			SingleFile: true,
 			Custom: map[string]any{
 				"EnumStyle": "const_enum",
 			},
@@ -342,6 +352,7 @@ func TestTypeScriptGenerator_Generate_EnumWithDocumentation(t *testing.T) {
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
 		Sink: memSink,
 		Config: GeneratorConfig{
+			SingleFile:   true,
 			EmitComments: true,
 			Custom: map[string]any{
 				"EnumStyle": "enum",
@@ -390,6 +401,7 @@ func TestTypeScriptGenerator_Generate_PropertyNameWithTagPrefix(t *testing.T) {
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
 		Sink: memSink,
 		Config: GeneratorConfig{
+			SingleFile:         true,
 			PropertyNameSource: "tag:json",
 		},
 	})
@@ -440,8 +452,9 @@ func TestTypeScriptGenerator_Generate_ArrayFixedLengthEdgeCase(t *testing.T) {
 			gen := &TypeScriptGenerator{}
 
 			_, err := gen.Generate(context.Background(), schema, GenerateOptions{
-				Sink:   memSink,
-				Config: GeneratorConfig{},
+				Sink: memSink,
+				Config: GeneratorConfig{
+					SingleFile: true},
 			})
 
 			if err != nil {
@@ -489,8 +502,9 @@ func TestTypeScriptGenerator_Generate_ReferenceToAlias(t *testing.T) {
 	gen := &TypeScriptGenerator{}
 
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
-		Sink:   memSink,
-		Config: GeneratorConfig{},
+		Sink: memSink,
+		Config: GeneratorConfig{
+			SingleFile: true},
 	})
 
 	if err != nil {

@@ -29,6 +29,10 @@ func ListNews(ctx context.Context, req *api.ListNewsParams) ([]*api.News, error)
 	}, nil
 }
 
+// [/snippet:handlers]
+
+// [snippet:error-handling]
+
 func CreateNews(ctx context.Context, req *api.CreateNewsParams) (*api.News, error) {
 	if req.Title == "error" {
 		return nil, tygor.NewError(tygor.CodeInvalidArgument, "simulated error")
@@ -38,12 +42,12 @@ func CreateNews(ctx context.Context, req *api.CreateNewsParams) (*api.News, erro
 		ID:        123,
 		Title:     req.Title,
 		Body:      req.Body,
-		Status:    api.NewsStatusDraft, // New articles start as drafts
+		Status:    api.NewsStatusDraft,
 		CreatedAt: &now,
 	}, nil
 }
 
-// [/snippet:handlers]
+// [/snippet:error-handling]
 
 // --- Main ---
 
@@ -58,23 +62,33 @@ func main() {
 		Level: slog.LevelInfo,
 	}))
 
-	// [snippet:app-setup]
-	// 1. Create App
+	// [snippet:error-transformer]
+
 	app := tygor.NewApp().
 		WithErrorTransformer(func(err error) *tygor.Error {
-			// Example custom error mapping
 			if err.Error() == "database connection failed" {
-				return tygor.NewError(tygor.CodeUnavailable, "db down")
+				return tygor.NewError(tygor.CodeUnavailable, "service unavailable")
 			}
 			return nil
-		}).
-		WithUnaryInterceptor(middleware.LoggingInterceptor(logger)).
-		WithMiddleware(middleware.CORS(middleware.DefaultCORSConfig()))
-	// [/snippet:app-setup]
+		})
 
-	// [snippet:service-registration]
-	// 2. Register Services
+	// [/snippet:error-transformer]
+
+	// [snippet:global-interceptor]
+
+	app = app.WithUnaryInterceptor(middleware.LoggingInterceptor(logger))
+
+	// [/snippet:global-interceptor]
+
+	// [snippet:middleware]
+
+	app = app.WithMiddleware(middleware.CORS(middleware.DefaultCORSConfig()))
+
+	// [/snippet:middleware]
+
 	news := app.Service("News")
+
+	// [snippet:cache-control]
 
 	news.Register("List", tygor.Query(ListNews).
 		CacheControl(tygor.CacheConfig{
@@ -82,13 +96,17 @@ func main() {
 			Public: true,
 		}))
 
+	// [/snippet:cache-control]
+
+	// [snippet:handler-interceptor]
+
 	news.Register("Create", tygor.Exec(CreateNews).
 		WithUnaryInterceptor(func(ctx tygor.Context, req any, handler tygor.HandlerFunc) (any, error) {
-			// Example: Set a custom header
-			ctx.HTTPWriter().Header().Set("X-Created-By", "Tygorpc")
+			ctx.HTTPWriter().Header().Set("X-Created-By", "tygor")
 			return handler(ctx, req)
 		}))
-	// [/snippet:service-registration]
+
+	// [/snippet:handler-interceptor]
 
 	// 3. Generation Mode
 	if *genFlag {

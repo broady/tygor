@@ -37,7 +37,6 @@ async function main() {
     // [snippet:client-calls]
     // Public endpoint: list published posts
     const posts = await client.Posts.List({
-      author_id: null,
       published: true,
       limit: 10,
       offset: 0,

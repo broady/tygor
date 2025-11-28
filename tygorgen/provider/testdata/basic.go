@@ -38,6 +38,8 @@ const (
 	StatusInactive Status = "inactive"
 	// StatusPending means awaiting approval
 	StatusPending Status = "pending"
+	// statusInternal is unexported and should NOT appear in generated enums
+	statusInternal Status = "internal"
 )
 
 // Priority is an integer enum.

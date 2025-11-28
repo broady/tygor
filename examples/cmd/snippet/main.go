@@ -24,6 +24,12 @@
 //	<!-- [snippet:example-name] -->
 //	<!-- [/snippet:example-name] -->
 //
+// Whole-file snippets (no markers needed in source):
+//
+//	<!-- [snippet-file:path/to/file.ts] -->
+//
+// Lint mode (-lint) checks for large code blocks not covered by snippets.
+//
 // Scoped snippets:
 //
 // When -root is specified, snippet names are scoped by directory path relative to root.
@@ -45,12 +51,14 @@ import (
 )
 
 var (
-	nameFlag   = flag.String("name", "", "Extract specific snippet (default: all)")
-	langFlag   = flag.String("lang", "", "Override language detection")
-	formatFlag = flag.String("format", "mdx", "Output format: simple|mdx")
-	outFlag    = flag.String("out", "", "Output file (default: stdout)")
-	injectFlag = flag.String("inject", "", "Inject snippets into this file (e.g., README.md)")
-	rootFlag   = flag.String("root", "", "Root directory for scoping snippet names (e.g., dir:name)")
+	nameFlag     = flag.String("name", "", "Extract specific snippet (default: all)")
+	langFlag     = flag.String("lang", "", "Override language detection")
+	formatFlag   = flag.String("format", "mdx", "Output format: simple|mdx")
+	outFlag      = flag.String("out", "", "Output file (default: stdout)")
+	injectFlag   = flag.String("inject", "", "Inject snippets into this file (e.g., README.md)")
+	rootFlag     = flag.String("root", "", "Root directory for scoping snippet names (e.g., dir:name)")
+	lintFlag     = flag.Bool("lint", false, "Check for large code blocks not covered by snippets")
+	lintMinLines = flag.Int("lint-min-lines", 5, "Minimum lines for lint warnings (default: 5)")
 )
 
 // Snippet represents an extracted code snippet.
@@ -72,10 +80,39 @@ var (
 	// README markers: <!-- [snippet:name] --> and <!-- [/snippet:name] -->
 	readmeStartPattern = regexp.MustCompile(`<!--\s*\[snippet:([^\]]+)\]\s*-->`)
 	readmeEndPattern   = regexp.MustCompile(`<!--\s*\[/snippet:([^\]]+)\]\s*-->`)
+
+	// Whole-file snippet: <!-- [snippet-file:path/to/file.ts] -->
+	fileSnippetPattern = regexp.MustCompile(`<!--\s*\[snippet-file:([^\]]+)\]\s*-->`)
+
+	// Lint ignore marker: <!-- snippet-ignore --> (block-level)
+	ignorePattern = regexp.MustCompile(`<!--\s*snippet-ignore\s*-->`)
+
+	// Lint disable marker: <!-- snippet-lint-disable --> (file-level)
+	lintDisablePattern = regexp.MustCompile(`<!--\s*snippet-lint-disable\s*-->`)
+
+	// Code block detection for linting
+	codeBlockStartPattern = regexp.MustCompile("^```")
+	codeBlockEndPattern   = regexp.MustCompile("^```$")
 )
 
 func main() {
 	flag.Parse()
+
+	// Lint mode: check README for unmanaged code blocks
+	if *lintFlag {
+		if flag.NArg() == 0 {
+			fmt.Fprintln(os.Stderr, "Usage: snippet -lint <readme-file>")
+			os.Exit(1)
+		}
+		issues := lintReadme(flag.Arg(0), *lintMinLines)
+		if len(issues) > 0 {
+			for _, issue := range issues {
+				fmt.Fprintln(os.Stderr, issue)
+			}
+			os.Exit(1)
+		}
+		return
+	}
 
 	if flag.NArg() == 0 {
 		fmt.Fprintln(os.Stderr, "Usage: snippet [flags] <file>...")
@@ -118,7 +155,7 @@ func main() {
 
 	// Inject mode: update a README file with snippets
 	if *injectFlag != "" {
-		if err := injectSnippets(*injectFlag, allSnippets, *formatFlag); err != nil {
+		if err := injectSnippets(*injectFlag, allSnippets, *formatFlag, root); err != nil {
 			fmt.Fprintf(os.Stderr, "Error injecting snippets: %v\n", err)
 			os.Exit(1)
 		}
@@ -330,11 +367,54 @@ func formatSnippets(snippets []Snippet, format string) string {
 	return sb.String()
 }
 
-func injectSnippets(filename string, snippets []Snippet, format string) error {
+// lookupSnippet finds a snippet by name with hierarchical fallback.
+// For "examples/newsserver:list-params", it first tries exact match,
+// then searches for any snippet named "list-params" under "examples/newsserver/**".
+func lookupSnippet(snippetMap map[string]Snippet, name string) (Snippet, bool) {
+	// Try exact match first
+	if s, ok := snippetMap[name]; ok {
+		return s, true
+	}
+
+	// Parse into scope and snippet name
+	idx := strings.LastIndex(name, ":")
+	if idx == -1 {
+		return Snippet{}, false
+	}
+	requestedScope := name[:idx]
+	snippetName := name[idx+1:]
+
+	// Search for any snippet under the requested scope with matching name
+	for fullName, s := range snippetMap {
+		idx := strings.LastIndex(fullName, ":")
+		if idx == -1 {
+			continue
+		}
+		scope := fullName[:idx]
+		sName := fullName[idx+1:]
+
+		// Check if scope is under requestedScope and name matches
+		if sName == snippetName && strings.HasPrefix(scope, requestedScope) {
+			return s, true
+		}
+	}
+
+	return Snippet{}, false
+}
+
+func injectSnippets(filename string, snippets []Snippet, format string, root string) error {
 	// Build a map of snippets by name
 	snippetMap := make(map[string]Snippet)
 	for _, s := range snippets {
 		snippetMap[s.Name] = s
+	}
+
+	var missingSnippets []string
+
+	// Resolve base directory for file snippets (relative to the README's directory)
+	baseDir := filepath.Dir(filename)
+	if root != "" {
+		baseDir = root
 	}
 
 	// Read the file
@@ -348,17 +428,64 @@ func injectSnippets(filename string, snippets []Snippet, format string) error {
 	var currentSnippet string
 	var skipping bool
 
-	for _, line := range lines {
+	var skipUntilCodeBlockEnd bool // For snippet-file: skip existing code block
+
+	for i, line := range lines {
+		// Skip existing code block content after snippet-file marker
+		if skipUntilCodeBlockEnd {
+			if codeBlockEndPattern.MatchString(line) {
+				skipUntilCodeBlockEnd = false
+			}
+			continue
+		}
+
+		// Check for whole-file snippet marker
+		if matches := fileSnippetPattern.FindStringSubmatch(line); matches != nil {
+			filePath := matches[1]
+			// Resolve relative to base directory
+			if !filepath.IsAbs(filePath) {
+				filePath = filepath.Join(baseDir, filePath)
+			}
+
+			fileContent, err := os.ReadFile(filePath)
+			if err != nil {
+				return fmt.Errorf("line %d: cannot read file %q: %v", i+1, matches[1], err)
+			}
+
+			// Create a synthetic snippet for the file
+			s := Snippet{
+				Name:    matches[1],
+				File:    filepath.Base(filePath),
+				Content: strings.TrimSuffix(string(fileContent), "\n"),
+				Lang:    detectLang(filePath),
+			}
+			result = append(result, line)
+			result = append(result, formatSnippet(s, format))
+
+			// Check if next non-empty line starts a code block - if so, skip it
+			for j := i + 1; j < len(lines); j++ {
+				nextLine := strings.TrimSpace(lines[j])
+				if nextLine == "" {
+					continue
+				}
+				if codeBlockStartPattern.MatchString(lines[j]) {
+					skipUntilCodeBlockEnd = true
+				}
+				break
+			}
+			continue
+		}
+
 		// Check for start marker
 		if matches := readmeStartPattern.FindStringSubmatch(line); matches != nil {
 			currentSnippet = matches[1]
 			result = append(result, line)
 
 			// Insert the snippet content
-			if s, ok := snippetMap[currentSnippet]; ok {
+			if s, ok := lookupSnippet(snippetMap, currentSnippet); ok {
 				result = append(result, formatSnippet(s, format))
 			} else {
-				fmt.Fprintf(os.Stderr, "Warning: snippet %q not found\n", currentSnippet)
+				missingSnippets = append(missingSnippets, currentSnippet)
 			}
 			skipping = true
 			continue
@@ -387,6 +514,100 @@ func injectSnippets(filename string, snippets []Snippet, format string) error {
 		return fmt.Errorf("unclosed README snippet marker %q", currentSnippet)
 	}
 
+	if len(missingSnippets) > 0 {
+		return fmt.Errorf("missing snippets: %v", missingSnippets)
+	}
+
 	// Write back
 	return os.WriteFile(filename, []byte(strings.Join(result, "\n")), 0644)
+}
+
+// lintReadme checks for large code blocks that aren't managed by snippets.
+func lintReadme(filename string, minLines int) []string {
+	content, err := os.ReadFile(filename)
+	if err != nil {
+		return []string{fmt.Sprintf("Error reading %s: %v", filename, err)}
+	}
+
+	lines := strings.Split(string(content), "\n")
+	var issues []string
+
+	var inSnippet bool     // Inside <!-- [snippet:...] --> markers
+	var inCodeBlock bool   // Inside ``` markers
+	var codeBlockStart int // Line number where code block started
+	var codeBlockLines int // Number of lines in current code block
+	var codeBlockLang string
+	var ignoreNext bool // <!-- snippet-ignore --> seen before code block
+
+	for i, line := range lines {
+		lineNum := i + 1
+
+		// Check for file-level disable
+		if lintDisablePattern.MatchString(line) {
+			return nil // Skip entire file
+		}
+
+		// Check for ignore marker
+		if ignorePattern.MatchString(line) {
+			ignoreNext = true
+			continue
+		}
+
+		// Track snippet regions
+		if readmeStartPattern.MatchString(line) || fileSnippetPattern.MatchString(line) {
+			inSnippet = true
+			continue
+		}
+		if readmeEndPattern.MatchString(line) {
+			inSnippet = false
+			continue
+		}
+
+		// Track code blocks
+		if !inCodeBlock && codeBlockStartPattern.MatchString(line) {
+			inCodeBlock = true
+			codeBlockStart = lineNum
+			codeBlockLines = 0
+			// Extract language from ```lang
+			codeBlockLang = strings.TrimPrefix(line, "```")
+			codeBlockLang = strings.TrimSpace(strings.Split(codeBlockLang, " ")[0])
+			continue
+		}
+
+		if inCodeBlock {
+			if codeBlockEndPattern.MatchString(line) {
+				// Code block ended - check if it needs a snippet
+				if !inSnippet && !ignoreNext && codeBlockLines >= minLines && isCodeLang(codeBlockLang) {
+					issues = append(issues, fmt.Sprintf(
+						"%s:%d: %d-line %s code block not covered by snippet",
+						filename, codeBlockStart, codeBlockLines, langOrDefault(codeBlockLang),
+					))
+				}
+				inCodeBlock = false
+				codeBlockLines = 0
+				ignoreNext = false
+			} else {
+				codeBlockLines++
+			}
+		}
+	}
+
+	return issues
+}
+
+// isCodeLang returns true if the language is a programming language (not bash, text, etc.)
+func isCodeLang(lang string) bool {
+	switch strings.ToLower(lang) {
+	case "go", "typescript", "ts", "javascript", "js", "tsx", "jsx", "proto", "protobuf":
+		return true
+	default:
+		return false
+	}
+}
+
+func langOrDefault(lang string) string {
+	if lang == "" {
+		return "unknown"
+	}
+	return lang
 }

@@ -24,8 +24,9 @@ func TestTypeScriptGenerator_Generate_UnsupportedTypeKind(t *testing.T) {
 	gen := &TypeScriptGenerator{}
 
 	result, err := gen.Generate(context.Background(), schema, GenerateOptions{
-		Sink:   memSink,
-		Config: GeneratorConfig{},
+		Sink: memSink,
+		Config: GeneratorConfig{
+			SingleFile: true},
 	})
 
 	if err != nil {
@@ -56,6 +57,7 @@ func TestTypeScriptGenerator_Generate_EnumDefaultStyle(t *testing.T) {
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
 		Sink: memSink,
 		Config: GeneratorConfig{
+			SingleFile: true,
 			Custom: map[string]any{
 				"EnumStyle": "invalid_style",
 			},
@@ -84,8 +86,12 @@ func TestEmitter_PrefixTypeReferences_ComplexCases(t *testing.T) {
 		{"simple type", "User", "types.User"},
 		{"array type", "User[]", "types.User[]"},
 		{"primitive", "string", "string"},
-		{"Record", "Record<string, User>", "Record<string, User>"},
-		{"complex", "User | null", "User | null"},
+		{"Record with user type", "Record<string, User>", "Record<string, types.User>"},
+		{"union with null", "User | null", "types.User | null"},
+		{"generic type", "Response<User>", "types.Response<types.User>"},
+		{"nested generics", "Response<Array<User>>", "types.Response<Array<types.User>>"},
+		{"multiple types in union", "User | Admin | null", "types.User | types.Admin | null"},
+		{"array of generic", "Response<User>[]", "types.Response<types.User>[]"},
 	}
 
 	for _, tt := range tests {
@@ -115,6 +121,7 @@ func TestTypeScriptGenerator_Generate_UseInterfaceNoExtends(t *testing.T) {
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
 		Sink: memSink,
 		Config: GeneratorConfig{
+			SingleFile: true,
 			Custom: map[string]any{
 				"UseInterface": true,
 			},
@@ -149,6 +156,7 @@ func TestTypeScriptGenerator_Generate_TypePrefixSuffix(t *testing.T) {
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
 		Sink: memSink,
 		Config: GeneratorConfig{
+			SingleFile: true,
 			TypePrefix: "Generated",
 			TypeSuffix: "Type",
 		},
@@ -201,7 +209,8 @@ func TestTypeScriptGenerator_Generate_FieldCaseTransforms(t *testing.T) {
 			_, err := gen.Generate(context.Background(), schema, GenerateOptions{
 				Sink: memSink,
 				Config: GeneratorConfig{
-					FieldCase: tt.fieldCase,
+					SingleFile: true,
+					FieldCase:  tt.fieldCase,
 				},
 			})
 
@@ -237,8 +246,9 @@ func TestTypeScriptGenerator_Generate_MapWithPrimitiveKey(t *testing.T) {
 	gen := &TypeScriptGenerator{}
 
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
-		Sink:   memSink,
-		Config: GeneratorConfig{},
+		Sink: memSink,
+		Config: GeneratorConfig{
+			SingleFile: true},
 	})
 
 	if err != nil {
@@ -275,8 +285,9 @@ func TestTypeScriptGenerator_Generate_NestedPtr(t *testing.T) {
 	gen := &TypeScriptGenerator{}
 
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
-		Sink:   memSink,
-		Config: GeneratorConfig{},
+		Sink: memSink,
+		Config: GeneratorConfig{
+			SingleFile: true},
 	})
 
 	if err != nil {
@@ -310,8 +321,9 @@ func TestTypeScriptGenerator_Generate_DefaultUnknownType(t *testing.T) {
 	gen := &TypeScriptGenerator{}
 
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
-		Sink:   memSink,
+		Sink: memSink,
 		Config: GeneratorConfig{
+			SingleFile: true,
 			// Don't specify UnknownType - should default to "unknown"
 		},
 	})
@@ -346,6 +358,7 @@ func TestTypeScriptGenerator_Generate_EmitEnumAsUnionWithDeclare(t *testing.T) {
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
 		Sink: memSink,
 		Config: GeneratorConfig{
+			SingleFile: true,
 			Custom: map[string]any{
 				"EmitDeclare": true,
 				"EnumStyle":   "union",
@@ -383,8 +396,9 @@ func TestTypeScriptGenerator_Generate_WithWarnings(t *testing.T) {
 	gen := &TypeScriptGenerator{}
 
 	result, err := gen.Generate(context.Background(), schema, GenerateOptions{
-		Sink:   memSink,
-		Config: GeneratorConfig{},
+		Sink: memSink,
+		Config: GeneratorConfig{
+			SingleFile: true},
 	})
 
 	if err != nil {

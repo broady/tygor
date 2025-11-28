@@ -30,6 +30,7 @@ func TestTypeScriptGenerator_Generate_EnumObject(t *testing.T) {
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
 		Sink: memSink,
 		Config: GeneratorConfig{
+			SingleFile: true,
 			Custom: map[string]any{
 				"EnumStyle": "object",
 			},
@@ -77,6 +78,7 @@ func TestTypeScriptGenerator_Generate_EnumIntValues(t *testing.T) {
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
 		Sink: memSink,
 		Config: GeneratorConfig{
+			SingleFile: true,
 			Custom: map[string]any{
 				"EnumStyle": "union",
 			},
@@ -113,8 +115,9 @@ func TestTypeScriptGenerator_Generate_EnumFloatValues(t *testing.T) {
 	gen := &TypeScriptGenerator{}
 
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
-		Sink:   memSink,
-		Config: GeneratorConfig{},
+		Sink: memSink,
+		Config: GeneratorConfig{
+			SingleFile: true},
 	})
 
 	if err != nil {
@@ -150,8 +153,9 @@ func TestTypeScriptGenerator_Generate_Union(t *testing.T) {
 	gen := &TypeScriptGenerator{}
 
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
-		Sink:   memSink,
-		Config: GeneratorConfig{},
+		Sink: memSink,
+		Config: GeneratorConfig{
+			SingleFile: true},
 	})
 
 	if err != nil {
@@ -198,8 +202,9 @@ func TestTypeScriptGenerator_Generate_GenericConstraint(t *testing.T) {
 	gen := &TypeScriptGenerator{}
 
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
-		Sink:   memSink,
-		Config: GeneratorConfig{},
+		Sink: memSink,
+		Config: GeneratorConfig{
+			SingleFile: true},
 	})
 
 	if err != nil {
@@ -218,6 +223,50 @@ func TestTypeScriptGenerator_Generate_GenericConstraint(t *testing.T) {
 		if !strings.Contains(content, want) {
 			t.Errorf("output should contain %q, got:\n%s", want, content)
 		}
+	}
+}
+
+func TestTypeScriptGenerator_Generate_GenericConstraintError(t *testing.T) {
+	// Test that invalid constraints propagate errors instead of being silently dropped
+	schema := &ir.Schema{
+		Types: []ir.TypeDescriptor{
+			&ir.StructDescriptor{
+				Name: ir.GoIdentifier{Name: "Container", Package: "test"},
+				TypeParameters: []ir.TypeParameterDescriptor{
+					{
+						ParamName: "T",
+						// StructDescriptor is not valid as a constraint type expression
+						Constraint: &ir.StructDescriptor{
+							Name: ir.GoIdentifier{Name: "Invalid", Package: "test"},
+						},
+					},
+				},
+				Fields: []ir.FieldDescriptor{
+					{
+						Name:     "Value",
+						JSONName: "value",
+						Type:     &ir.TypeParameterDescriptor{ParamName: "T"},
+					},
+				},
+			},
+		},
+	}
+
+	memSink := sink.NewMemorySink()
+	gen := &TypeScriptGenerator{}
+
+	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
+		Sink: memSink,
+		Config: GeneratorConfig{
+			SingleFile: true},
+	})
+
+	if err == nil {
+		t.Fatal("Generate() should have returned an error for invalid constraint")
+	}
+
+	if !strings.Contains(err.Error(), "constraint") {
+		t.Errorf("error should mention 'constraint', got: %v", err)
 	}
 }
 
@@ -243,6 +292,7 @@ func TestTypeScriptGenerator_Generate_PropertyNameField(t *testing.T) {
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
 		Sink: memSink,
 		Config: GeneratorConfig{
+			SingleFile:         true,
 			PropertyNameSource: "field",
 			FieldCase:          "camel",
 		},
@@ -289,8 +339,9 @@ func TestTypeScriptGenerator_Generate_MapWithNamedKeyType(t *testing.T) {
 	gen := &TypeScriptGenerator{}
 
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
-		Sink:   memSink,
-		Config: GeneratorConfig{},
+		Sink: memSink,
+		Config: GeneratorConfig{
+			SingleFile: true},
 	})
 
 	if err != nil {
@@ -334,6 +385,7 @@ func TestTypeScriptGenerator_Generate_UseInterfaceWithExtends(t *testing.T) {
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
 		Sink: memSink,
 		Config: GeneratorConfig{
+			SingleFile: true,
 			Custom: map[string]any{
 				"UseInterface": false,
 			},
@@ -384,6 +436,7 @@ func TestTypeScriptGenerator_Generate_ReadonlyArrays(t *testing.T) {
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
 		Sink: memSink,
 		Config: GeneratorConfig{
+			SingleFile: true,
 			Custom: map[string]any{
 				"UseReadonlyArrays": true,
 			},
@@ -425,6 +478,7 @@ func TestTypeScriptGenerator_Generate_JSDocMultiline(t *testing.T) {
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
 		Sink: memSink,
 		Config: GeneratorConfig{
+			SingleFile:   true,
 			EmitComments: true,
 		},
 	})
@@ -469,6 +523,7 @@ func TestTypeScriptGenerator_Generate_LineEndings(t *testing.T) {
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
 		Sink: memSink,
 		Config: GeneratorConfig{
+			SingleFile: true,
 			LineEnding: "crlf",
 		},
 	})
@@ -507,8 +562,9 @@ func TestTypeScriptGenerator_Generate_PointerToSlice(t *testing.T) {
 	gen := &TypeScriptGenerator{}
 
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
-		Sink:   memSink,
-		Config: GeneratorConfig{},
+		Sink: memSink,
+		Config: GeneratorConfig{
+			SingleFile: true},
 	})
 
 	if err != nil {
@@ -547,8 +603,9 @@ func TestTypeScriptGenerator_Generate_PointerToMap(t *testing.T) {
 	gen := &TypeScriptGenerator{}
 
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
-		Sink:   memSink,
-		Config: GeneratorConfig{},
+		Sink: memSink,
+		Config: GeneratorConfig{
+			SingleFile: true},
 	})
 
 	if err != nil {
@@ -574,8 +631,9 @@ func TestTypeScriptGenerator_Generate_EmptySchema(t *testing.T) {
 	gen := &TypeScriptGenerator{}
 
 	result, err := gen.Generate(context.Background(), schema, GenerateOptions{
-		Sink:   memSink,
-		Config: GeneratorConfig{},
+		Sink: memSink,
+		Config: GeneratorConfig{
+			SingleFile: true},
 	})
 
 	if err != nil {
@@ -597,8 +655,9 @@ func TestTypeScriptGenerator_Generate_NoSink(t *testing.T) {
 	gen := &TypeScriptGenerator{}
 
 	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
-		Sink:   nil,
-		Config: GeneratorConfig{},
+		Sink: nil,
+		Config: GeneratorConfig{
+			SingleFile: true},
 	})
 
 	if err == nil {
