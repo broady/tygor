@@ -33,11 +33,12 @@ func (p *ReflectionProvider) BuildSchema(ctx context.Context, opts ReflectionInp
 	}
 
 	b := &reflectionSchemaBuilder{
-		schema:      &ir.Schema{},
-		visited:     make(map[reflect.Type]bool),
-		processing:  make(map[reflect.Type]bool),
-		anonStructs: make(map[reflect.Type]string),
-		typeNames:   make(map[string]bool),
+		schema:           &ir.Schema{},
+		visited:          make(map[reflect.Type]bool),
+		processing:       make(map[reflect.Type]bool),
+		expandingGeneric: make(map[string]bool),
+		anonStructs:      make(map[reflect.Type]string),
+		typeNames:        make(map[string]bool),
 	}
 
 	// Process all root types
@@ -52,11 +53,12 @@ func (p *ReflectionProvider) BuildSchema(ctx context.Context, opts ReflectionInp
 
 // reflectionSchemaBuilder maintains state during schema construction.
 type reflectionSchemaBuilder struct {
-	schema      *ir.Schema
-	visited     map[reflect.Type]bool   // Types already processed
-	processing  map[reflect.Type]bool   // Types currently being processed (cycle detection)
-	anonStructs map[reflect.Type]string // Anonymous struct -> synthetic name
-	typeNames   map[string]bool         // Track used type names for collision detection
+	schema           *ir.Schema
+	visited          map[reflect.Type]bool // Types already processed
+	processing       map[reflect.Type]bool // Types currently being processed (cycle detection)
+	expandingGeneric map[string]bool       // Base generic names currently being expanded (§3.4 cycle detection)
+	anonStructs      map[reflect.Type]string // Anonymous struct -> synthetic name
+	typeNames        map[string]bool         // Track used type names for collision detection
 }
 
 // extractType processes a type and adds it to the schema.
@@ -112,6 +114,21 @@ func (b *reflectionSchemaBuilder) extractStruct(ctx context.Context, t reflect.T
 	// Generate name for this struct
 	name := b.getTypeName(t)
 	pkg := t.PkgPath()
+
+	// §3.4 Generic expansion cycle detection: track base generic names to prevent
+	// infinite recursion on types like Container[Container[Container[T]]]
+	rawName := t.Name()
+	if idx := strings.Index(rawName, "["); idx >= 0 {
+		baseGeneric := pkg + "." + rawName[:idx]
+		if b.expandingGeneric[baseGeneric] {
+			// Already expanding this base generic - cycle detected
+			b.addWarning("GENERIC_CYCLE", fmt.Sprintf(
+				"Recursive generic expansion detected for %s, using reference", rawName), rawName)
+			return nil
+		}
+		b.expandingGeneric[baseGeneric] = true
+		defer delete(b.expandingGeneric, baseGeneric)
+	}
 
 	// Check for name collision
 	fullName := pkg + "." + name
