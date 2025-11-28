@@ -32,9 +32,6 @@ type FilesystemSink struct {
 	// Overwrite controls behavior for existing files.
 	// If false, returns an error when a file exists.
 	Overwrite bool
-
-	// mu protects concurrent writes when Overwrite is false
-	mu sync.Mutex
 }
 
 // NewFilesystemSink creates a new FilesystemSink writing to the specified root directory.
@@ -74,17 +71,6 @@ func (s *FilesystemSink) WriteFile(ctx context.Context, path string, content []b
 	}
 	if !strings.HasPrefix(absPath, absRoot+string(filepath.Separator)) && absPath != absRoot {
 		return fmt.Errorf("path escapes root directory: %q", path)
-	}
-
-	// Lock to make the stat+write sequence atomic when Overwrite is false
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Check if file exists and Overwrite is false
-	if !s.Overwrite {
-		if _, err := os.Stat(fullPath); err == nil {
-			return fmt.Errorf("file already exists: %q", path)
-		}
 	}
 
 	// Create parent directories
@@ -141,9 +127,25 @@ func (s *FilesystemSink) WriteFile(ctx context.Context, path string, content []b
 		return err
 	}
 
-	if err := os.Rename(tempPath, fullPath); err != nil {
-		cleanupTempFile()
-		return fmt.Errorf("failed to rename temp file: %w", err)
+	// Finalize the write: either overwrite or create-if-not-exists
+	if s.Overwrite {
+		// os.Rename atomically replaces any existing file
+		if err := os.Rename(tempPath, fullPath); err != nil {
+			cleanupTempFile()
+			return fmt.Errorf("failed to rename temp file: %w", err)
+		}
+	} else {
+		// os.Link atomically fails with LinkError if target exists (EEXIST),
+		// avoiding the TOCTOU race of stat+rename
+		if err := os.Link(tempPath, fullPath); err != nil {
+			cleanupTempFile()
+			if errors.Is(err, os.ErrExist) {
+				return fmt.Errorf("file already exists: %q", path)
+			}
+			return fmt.Errorf("failed to create file: %w", err)
+		}
+		// Remove the temp file (we created a hard link, so data persists)
+		_ = os.Remove(tempPath)
 	}
 
 	return nil
