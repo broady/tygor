@@ -121,6 +121,7 @@ func Generate(app *tygor.App, cfg *Config) error {
 			"UseInterface":      true,
 			"UseReadonlyArrays": false,
 			"EnumStyle":         cfg.EnumStyle,
+			"OptionalType":      cfg.OptionalType,
 			"UnknownType":       "unknown",
 		},
 	}

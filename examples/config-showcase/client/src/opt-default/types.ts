@@ -20,27 +20,9 @@ export interface ListTasksParams {
   offset?: number;
 }
 /** Priority represents task urgency levels. */
-export const enum Priority {
-  /** PriorityCritical is for immediate attention. */
-  PriorityCritical = 4,
-  /** PriorityHigh is for urgent tasks. */
-  PriorityHigh = 3,
-  /** PriorityLow is for non-urgent tasks. */
-  PriorityLow = 1,
-  /** PriorityMedium is the default priority. */
-  PriorityMedium = 2,
-}
+export type Priority = 4 | 3 | 1 | 2;
 /** Status represents the state of a task. */
-export const enum Status {
-  /** StatusCancelled indicates the task was cancelled. */
-  StatusCancelled = "cancelled",
-  /** StatusCompleted indicates the task has been finished. */
-  StatusCompleted = "completed",
-  /** StatusInProgress indicates the task is currently being worked on. */
-  StatusInProgress = "in_progress",
-  /** StatusPending indicates the task is waiting to be started. */
-  StatusPending = "pending",
-}
+export type Status = "cancelled" | "completed" | "in_progress" | "pending";
 /** Task represents a work item in the system. */
 export interface Task {
   /** ID is the unique identifier for the task. */
@@ -58,7 +40,7 @@ export interface Task {
   /** DueDate is when the task should be completed. */
   due_date?: string;
   /** Tags are labels for categorization. */
-  tags?: string[];
+  tags: string[] | null;
   /** CreatedAt is when the task was created. */
   created_at: string;
 }

@@ -529,45 +529,55 @@ func (e *Emitter) emitTypeParameters(params []ir.TypeParameterDescriptor) string
 }
 
 // determineOptionalNullable determines if a field should be optional and/or nullable.
-// Implements the decision tree from §4.9.
+// Implements the decision tree from §4.9, with OptionalType override.
 func (e *Emitter) determineOptionalNullable(field ir.FieldDescriptor) (optional, nullable bool, err error) {
-	// Decision tree from §4.9:
-	// 1. If Optional is true → field is optional (field?: T)
-	// 2. Else if field type is pointer (*T) → field can be null (field: T | null)
-	// 3. Else if field type is slice or map → field can be null (field: T | null)
-	// 4. Else → field is required (field: T)
+	// First, determine if the field can be absent based on Go semantics
+	canBeAbsent := false
+	reason := "" // "optional", "pointer", "slice", "map"
 
 	if field.Optional {
-		optional = true
-		// Check for the rare case of pointer to collection
+		canBeAbsent = true
+		reason = "optional"
+		// Check for the rare case of pointer to collection (always nullable too)
 		if ptr, ok := field.Type.(*ir.PtrDescriptor); ok {
 			if _, isArray := ptr.Element.(*ir.ArrayDescriptor); isArray {
-				nullable = true
+				// Optional pointer to slice: field?: T | null
+				return true, true, nil
 			} else if _, isMap := ptr.Element.(*ir.MapDescriptor); isMap {
-				nullable = true
+				// Optional pointer to map: field?: T | null
+				return true, true, nil
 			}
 		}
-		return
+	} else if _, ok := field.Type.(*ir.PtrDescriptor); ok {
+		canBeAbsent = true
+		reason = "pointer"
+	} else if _, ok := field.Type.(*ir.ArrayDescriptor); ok {
+		canBeAbsent = true
+		reason = "slice"
+	} else if _, ok := field.Type.(*ir.MapDescriptor); ok {
+		canBeAbsent = true
+		reason = "map"
 	}
 
-	// Check if pointer
-	if _, ok := field.Type.(*ir.PtrDescriptor); ok {
-		nullable = true
-		return
+	if !canBeAbsent {
+		return false, false, nil
 	}
 
-	// Check if slice or map
-	if _, ok := field.Type.(*ir.ArrayDescriptor); ok {
-		nullable = true
-		return
+	// Apply OptionalType setting
+	switch e.tsConfig.OptionalType {
+	case "null":
+		// All absent fields use | null
+		return false, true, nil
+	case "undefined":
+		// All absent fields use ?:
+		return true, false, nil
+	default: // "default" or ""
+		// §4.9 spec behavior: omitempty→optional, pointers/slices/maps→nullable
+		if reason == "optional" {
+			return true, false, nil
+		}
+		return false, true, nil
 	}
-	if _, ok := field.Type.(*ir.MapDescriptor); ok {
-		nullable = true
-		return
-	}
-
-	// Required field
-	return false, false, nil
 }
 
 // getPropertyName returns the property name for a field.

@@ -8,6 +8,9 @@
 //   - client/src/enum/        - EnumStyle: "enum" (TypeScript enums with member docs)
 //   - client/src/const/       - EnumStyle: "const_enum" (inlined at compile time)
 //   - client/src/object/      - EnumStyle: "object" (const objects, runtime accessible)
+//   - client/src/opt-default/ - OptionalType: "default" (§4.9: omitempty→?:, pointers→|null)
+//   - client/src/opt-null/    - OptionalType: "null" (all optional fields use | null)
+//   - client/src/opt-undef/   - OptionalType: "undefined" (all optional fields use ?:)
 //   - client/src/no-comments/ - PreserveComments: "none" (no JSDoc comments)
 //
 // Run: go run . -gen
@@ -87,6 +90,30 @@ func generateAll(app *tygor.App) {
 			outDir: "./client/src/object",
 			modify: func(c *tygorgen.Config) {
 				c.EnumStyle = "object"
+			},
+		},
+		{
+			name:   "OptionalType: default (§4.9 spec)",
+			outDir: "./client/src/opt-default",
+			modify: func(c *tygorgen.Config) {
+				c.EnumStyle = "union"
+				c.OptionalType = "default"
+			},
+		},
+		{
+			name:   "OptionalType: null (all | null)",
+			outDir: "./client/src/opt-null",
+			modify: func(c *tygorgen.Config) {
+				c.EnumStyle = "union"
+				c.OptionalType = "null"
+			},
+		},
+		{
+			name:   "OptionalType: undefined (all ?:)",
+			outDir: "./client/src/opt-undef",
+			modify: func(c *tygorgen.Config) {
+				c.EnumStyle = "union"
+				c.OptionalType = "undefined"
 			},
 		},
 		{

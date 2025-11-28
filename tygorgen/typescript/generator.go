@@ -424,6 +424,9 @@ func getTypeScriptConfig(config GeneratorConfig) TypeScriptConfig {
 	if v, ok := config.Custom["EnumStyle"].(string); ok {
 		tsConfig.EnumStyle = v
 	}
+	if v, ok := config.Custom["OptionalType"].(string); ok {
+		tsConfig.OptionalType = v
+	}
 	if v, ok := config.Custom["UnknownType"].(string); ok {
 		tsConfig.UnknownType = v
 	}

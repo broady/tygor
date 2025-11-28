@@ -58,7 +58,7 @@ export interface Task {
   /** DueDate is when the task should be completed. */
   due_date?: string;
   /** Tags are labels for categorization. */
-  tags: string[] | null;
+  tags?: string[];
   /** CreatedAt is when the task was created. */
   created_at: string;
 }

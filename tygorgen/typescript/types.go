@@ -106,6 +106,12 @@ type TypeScriptConfig struct {
 	// MUST be one of: "enum", "const_enum", "union", "object"
 	EnumStyle string
 
+	// OptionalType controls how optional/nullable fields are typed.
+	// "default" - §4.9 spec behavior: omitempty→optional(?:), pointers/slices/maps→nullable(|null)
+	// "null"    - all optional/nullable fields use | null (no ?:)
+	// "undefined" - all optional/nullable fields use ?: (no | null)
+	OptionalType string
+
 	// UnknownType specifies the type for Go's 'any' or 'interface{}'.
 	// SHOULD be one of: "unknown", "any"
 	UnknownType string

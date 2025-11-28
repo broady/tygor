@@ -3,44 +3,26 @@
 /** CreateTaskRequest contains the data needed to create a new task. */
 export interface CreateTaskRequest {
   title: string;
-  description?: string;
+  description: string | null;
   priority: Priority;
-  assignee?: string;
-  tags?: string[];
+  assignee: string | null;
+  tags: string[] | null;
 }
 /** ListTasksParams contains query parameters for listing tasks. */
 export interface ListTasksParams {
   /** Status filters tasks by their current status. */
-  status?: Status;
+  status: Status | null;
   /** Assignee filters tasks by assigned user. */
-  assignee?: string;
+  assignee: string | null;
   /** Limit is the maximum number of results. */
-  limit?: number;
+  limit: number | null;
   /** Offset is the pagination offset. */
-  offset?: number;
+  offset: number | null;
 }
 /** Priority represents task urgency levels. */
-export const enum Priority {
-  /** PriorityCritical is for immediate attention. */
-  PriorityCritical = 4,
-  /** PriorityHigh is for urgent tasks. */
-  PriorityHigh = 3,
-  /** PriorityLow is for non-urgent tasks. */
-  PriorityLow = 1,
-  /** PriorityMedium is the default priority. */
-  PriorityMedium = 2,
-}
+export type Priority = 4 | 3 | 1 | 2;
 /** Status represents the state of a task. */
-export const enum Status {
-  /** StatusCancelled indicates the task was cancelled. */
-  StatusCancelled = "cancelled",
-  /** StatusCompleted indicates the task has been finished. */
-  StatusCompleted = "completed",
-  /** StatusInProgress indicates the task is currently being worked on. */
-  StatusInProgress = "in_progress",
-  /** StatusPending indicates the task is waiting to be started. */
-  StatusPending = "pending",
-}
+export type Status = "cancelled" | "completed" | "in_progress" | "pending";
 /** Task represents a work item in the system. */
 export interface Task {
   /** ID is the unique identifier for the task. */
@@ -48,17 +30,17 @@ export interface Task {
   /** Title is the task's headline. */
   title: string;
   /** Description is the detailed task description. */
-  description?: string;
+  description: string | null;
   /** Status is the current state of the task. */
   status: Status;
   /** Priority determines the task's urgency. */
   priority: Priority;
   /** Assignee is the user responsible for the task. */
-  assignee?: string;
+  assignee: string | null;
   /** DueDate is when the task should be completed. */
-  due_date?: string;
+  due_date: string | null;
   /** Tags are labels for categorization. */
-  tags?: string[];
+  tags: string[] | null;
   /** CreatedAt is when the task was created. */
   created_at: string;
 }
