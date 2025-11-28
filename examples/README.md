@@ -10,6 +10,7 @@ This directory contains example applications demonstrating tygor features. Each 
 | [blog](./blog) | Multi-service app with authentication and authorization |
 | [protobuf](./protobuf) | Using protobuf-generated types with tygor |
 | [reflection](./reflection) | Generic type instantiation with reflection provider |
+| [zod](./zod) | Zod schema generation from Go validate tags |
 
 ## Running Examples
 

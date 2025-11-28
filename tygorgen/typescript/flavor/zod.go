@@ -104,8 +104,9 @@ func (f *ZodFlavor) emitFieldSchema(ctx *EmitContext, field ir.FieldDescriptor, 
 		return schema, nil
 	}
 
-	// Get base schema from type
-	baseSchema, err := f.typeToZod(ctx, field.Type)
+	// Get base schema from type, tracking nullability separately
+	// so we can apply validations before .nullable()
+	baseSchema, isNullable, err := f.typeToZodWithNullable(ctx, field.Type)
 	if err != nil {
 		return "", err
 	}
@@ -128,12 +129,31 @@ func (f *ZodFlavor) emitFieldSchema(ctx *EmitContext, field ir.FieldDescriptor, 
 
 	schema := baseSchema + validations.String()
 
+	// Apply nullable after validations (Zod requires this order)
+	if isNullable {
+		schema += ".nullable()"
+	}
+
 	// Handle optionality
 	if field.Optional {
 		schema += ".optional()"
 	}
 
 	return schema, nil
+}
+
+// typeToZodWithNullable returns the Zod schema and whether it's nullable.
+// This allows callers to apply validations before .nullable().
+func (f *ZodFlavor) typeToZodWithNullable(ctx *EmitContext, typ ir.TypeDescriptor) (string, bool, error) {
+	if ptr, ok := typ.(*ir.PtrDescriptor); ok {
+		inner, err := f.typeToZod(ctx, ptr.Element)
+		if err != nil {
+			return "", false, err
+		}
+		return inner, true, nil
+	}
+	schema, err := f.typeToZod(ctx, typ)
+	return schema, false, err
 }
 
 func (f *ZodFlavor) typeToZod(ctx *EmitContext, typ ir.TypeDescriptor) (string, error) {
