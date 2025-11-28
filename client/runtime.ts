@@ -65,10 +65,89 @@ export type Empty = null;
 
 export type FetchFunction = (url: string, init?: RequestInit) => Promise<globalThis.Response>;
 
+/**
+ * Standard Schema interface (v1) for runtime validation.
+ * Compatible with Zod, Valibot, ArkType, and other conforming libraries.
+ * @see https://standardschema.dev/
+ */
+export interface StandardSchema<Input = unknown, Output = Input> {
+  readonly "~standard": {
+    readonly version: 1;
+    readonly vendor: string;
+    readonly validate: (value: unknown) => StandardSchemaResult<Output> | Promise<StandardSchemaResult<Output>>;
+  };
+}
+
+/** Result of Standard Schema validation */
+export type StandardSchemaResult<T> = StandardSchemaSuccess<T> | StandardSchemaFailure;
+
+/** Successful validation result */
+export interface StandardSchemaSuccess<T> {
+  readonly value: T;
+  readonly issues?: undefined;
+}
+
+/** Failed validation result */
+export interface StandardSchemaFailure {
+  readonly issues: readonly StandardSchemaIssue[];
+}
+
+/** Validation issue from Standard Schema */
+export interface StandardSchemaIssue {
+  readonly message: string;
+  readonly path?: readonly (PropertyKey | { readonly key: PropertyKey })[];
+}
+
+/**
+ * ValidationError is thrown when client-side schema validation fails.
+ */
+export class ValidationError extends Error {
+  readonly kind = "validation" as const;
+  issues: readonly StandardSchemaIssue[];
+  direction: "input" | "output";
+  endpoint: string;
+
+  constructor(endpoint: string, direction: "input" | "output", issues: readonly StandardSchemaIssue[]) {
+    const paths = issues.map((i) => i.path?.join(".") || "(root)").join(", ");
+    super(`${direction} validation failed for ${endpoint}: ${paths}`);
+    this.name = "ValidationError";
+    this.endpoint = endpoint;
+    this.direction = direction;
+    this.issues = issues;
+  }
+}
+
+/**
+ * Schema map entry for a single endpoint.
+ */
+export interface SchemaMapEntry {
+  input: StandardSchema;
+  output: StandardSchema;
+}
+
+/**
+ * Schema map type - maps endpoint names to their input/output schemas.
+ */
+export type SchemaMap = Record<string, SchemaMapEntry>;
+
+/**
+ * Validation configuration.
+ */
+export interface ValidateConfig {
+  /** Validate request data before sending. Default: true if schemas provided */
+  input?: boolean;
+  /** Validate response data after receiving. Default: false */
+  output?: boolean;
+}
+
 export interface ClientConfig {
   baseUrl: string;
   headers?: () => Record<string, string>;
   fetch?: FetchFunction;
+  /** Schema map for client-side validation. Import from schemas.map.ts */
+  schemas?: SchemaMap;
+  /** Validation options. Only applies if schemas is provided */
+  validate?: ValidateConfig;
 }
 
 export interface ServiceRegistry<Manifest extends Record<string, any>> {
@@ -81,6 +160,11 @@ export function createClient<Manifest extends Record<string, any>>(
   config: ClientConfig
 ): Client<Manifest> {
   const fetchFn = config.fetch || globalThis.fetch;
+
+  // Determine validation settings
+  const schemas = config.schemas;
+  const validateInput = schemas && (config.validate?.input ?? true); // Default: true if schemas provided
+  const validateOutput = schemas && (config.validate?.output ?? false); // Default: false
 
   return new Proxy(
     {},
@@ -97,6 +181,15 @@ export function createClient<Manifest extends Record<string, any>>(
               }
 
               return async (req: any) => {
+                // Input validation (before request)
+                if (validateInput && schemas?.[opId]?.input) {
+                  const schema = schemas[opId].input;
+                  const result = await schema["~standard"].validate(req);
+                  if (result.issues) {
+                    throw new ValidationError(opId, "input", result.issues);
+                  }
+                }
+
                 const headers = config.headers ? config.headers() : {};
                 let url = config.baseUrl + meta.path;
                 const options: RequestInit = {
@@ -178,6 +271,15 @@ export function createClient<Manifest extends Record<string, any>>(
                     httpStatus,
                     envelope.error.details
                   );
+                }
+
+                // Output validation (after successful response)
+                if (validateOutput && schemas?.[opId]?.output) {
+                  const schema = schemas[opId].output;
+                  const result = await schema["~standard"].validate(envelope.result);
+                  if (result.issues) {
+                    throw new ValidationError(opId, "output", result.issues);
+                  }
                 }
 
                 // Return the unwrapped result

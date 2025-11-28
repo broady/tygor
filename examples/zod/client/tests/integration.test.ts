@@ -1,123 +1,117 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { createClient, ServerError } from "@tygor/client";
+import { createClient, ServerError, ValidationError } from "@tygor/client";
 import { startServer, type RunningServer } from "@tygor/testing";
 import { registry } from "../src/rpc/manifest";
-import { CreateUserRequestSchema, CreateTaskRequestSchema } from "../src/rpc/schemas.zod";
+import { schemaMap } from "../src/rpc/schemas.map";
 
-// [snippet:two-way-validation]
+// [snippet:client-validation]
 
 /**
- * This test demonstrates two-way validation:
- * 1. Client-side: Zod validates before sending request
- * 2. Server-side: go-playground/validator validates in Go
+ * This test demonstrates automatic client-side validation:
+ * 1. Client validates input before sending (using schemaMap)
+ * 2. Server validates with go-playground/validator
  *
  * Both use the same validation rules from Go struct tags.
  */
 
 let server: RunningServer;
-let client: ReturnType<typeof createClient<typeof registry.manifest>>;
+
+// Client WITH validation (input validation enabled by default when schemas provided)
+let validatedClient: ReturnType<typeof createClient<typeof registry.manifest>>;
+
+// Client WITHOUT validation (for testing server-side validation)
+let rawClient: ReturnType<typeof createClient<typeof registry.manifest>>;
 
 beforeAll(async () => {
   server = await startServer({
     cwd: new URL("../../", import.meta.url).pathname,
   });
-  client = createClient(registry, { baseUrl: server.url });
+
+  // Create client with automatic input validation
+  validatedClient = createClient(registry, {
+    baseUrl: server.url,
+    schemas: schemaMap,
+  });
+
+  // Create client without validation (to test server behavior)
+  rawClient = createClient(registry, { baseUrl: server.url });
 });
 
 afterAll(async () => {
   await server?.stop();
 });
 
-describe("Two-way validation", () => {
-  test("client-side Zod catches invalid username before request", () => {
-    // Zod validation happens on the client - no network request made
-    const result = CreateUserRequestSchema.safeParse({
-      username: "ab", // too short (min=3)
-      email: "test@example.com",
-      password: "password123",
-    });
-
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.issues[0].path).toContain("username");
-    }
-  });
-
-  test("server-side go-playground/validator rejects invalid data", async () => {
-    // Even if client skips validation, server enforces the same rules
+describe("Automatic client validation", () => {
+  test("client throws ValidationError for invalid input before request", async () => {
     try {
-      await client.Users.Create({
-        username: "ab", // too short (min=3) - TypeScript allows it, server rejects
+      await validatedClient.Users.Create({
+        username: "ab", // too short (min=3)
         email: "test@example.com",
         password: "password123",
       });
-      expect.unreachable("Should have thrown");
+      expect.unreachable("Should have thrown ValidationError");
+    } catch (e) {
+      expect(e).toBeInstanceOf(ValidationError);
+      if (e instanceof ValidationError) {
+        expect(e.direction).toBe("input");
+        expect(e.endpoint).toBe("Users.Create");
+      }
+    }
+  });
+
+  test("server-side validation still works for unvalidated clients", async () => {
+    // rawClient doesn't validate, so request goes to server
+    try {
+      await rawClient.Users.Create({
+        username: "ab", // too short - server will reject
+        email: "test@example.com",
+        password: "password123",
+      });
+      expect.unreachable("Should have thrown ServerError");
     } catch (e) {
       expect(e).toBeInstanceOf(ServerError);
       if (e instanceof ServerError) {
-        // Server returns invalid_argument for validation failures
         expect(e.code).toBe("invalid_argument");
       }
     }
   });
 
-  test("both client and server accept valid data", async () => {
-    const validData = {
+  test("valid data passes both client and server validation", async () => {
+    const user = await validatedClient.Users.Create({
       username: "validuser",
       email: "valid@example.com",
       password: "securepass123",
-    };
+    });
 
-    // Client-side Zod validation passes
-    const clientResult = CreateUserRequestSchema.safeParse(validData);
-    expect(clientResult.success).toBe(true);
-
-    // Server-side validation also passes
-    const user = await client.Users.Create(validData);
     expect(user.username).toBe("validuser");
     expect(user.email).toBe("valid@example.com");
   });
 
-  test("email validation works on both sides", async () => {
-    const invalidEmail = {
-      username: "testuser",
-      email: "not-an-email",
-      password: "password123",
-    };
-
-    // Client-side Zod catches it
-    const clientResult = CreateUserRequestSchema.safeParse(invalidEmail);
-    expect(clientResult.success).toBe(false);
-
-    // Server-side also rejects it
+  test("email validation catches invalid format", async () => {
     try {
-      await client.Users.Create(invalidEmail);
-      expect.unreachable("Should have thrown");
+      await validatedClient.Users.Create({
+        username: "testuser",
+        email: "not-an-email",
+        password: "password123",
+      });
+      expect.unreachable("Should have thrown ValidationError");
     } catch (e) {
-      expect(e).toBeInstanceOf(ServerError);
-      if (e instanceof ServerError) {
-        expect(e.code).toBe("invalid_argument");
-      }
+      expect(e).toBeInstanceOf(ValidationError);
     }
   });
 
-  test("oneof/enum validation on both sides", async () => {
-    // Client-side: Zod validates priority enum
-    const invalidPriority = CreateTaskRequestSchema.safeParse({
-      title: "Test task",
-      priority: "urgent", // not in oneof
-      tags: [],
-    });
-    expect(invalidPriority.success).toBe(false);
-
-    // Valid priority works
-    const validTask = CreateTaskRequestSchema.safeParse({
-      title: "Test task",
-      priority: "high",
-      tags: [],
-    });
-    expect(validTask.success).toBe(true);
+  test("enum validation catches invalid values", async () => {
+    try {
+      await validatedClient.Tasks.Create({
+        title: "Test task",
+        priority: "urgent" as any, // not in enum
+        tags: [],
+      });
+      expect.unreachable("Should have thrown ValidationError");
+    } catch (e) {
+      expect(e).toBeInstanceOf(ValidationError);
+    }
   });
 });
 
-// [/snippet:two-way-validation]
+// [/snippet:client-validation]
