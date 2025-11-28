@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -528,43 +529,37 @@ func toKebabCase(s string) string {
 	return strings.ReplaceAll(toSnakeCase(s), "_", "-")
 }
 
+// typeIdentifierRe matches PascalCase identifiers (user-defined types).
+// Uses word boundaries to avoid matching within other identifiers.
+var typeIdentifierRe = regexp.MustCompile(`\b([A-Z][A-Za-z0-9_]*)\b`)
+
 // prefixTypeReferences adds a prefix to type references in a type expression.
 // This is used to add "types." before user-defined types in manifest generation.
-// It preserves TypeScript keywords and primitives (string, number, boolean, etc.).
+// It preserves TypeScript keywords, primitives, and utility types.
 func prefixTypeReferences(typeExpr string, prefix string) string {
-	// List of TypeScript primitives and keywords that should not be prefixed
-	primitives := map[string]bool{
-		"string":  true,
-		"number":  true,
-		"boolean": true,
-		"unknown": true,
-		"any":     true,
-		"never":   true,
-		"null":    true,
-		"void":    true,
-		"Record":  true, // TypeScript utility type
+	// TypeScript primitives and utility types that should not be prefixed
+	skipTypes := map[string]bool{
+		"Record":   true,
+		"Partial":  true,
+		"Required": true,
+		"Readonly": true,
+		"Pick":     true,
+		"Omit":     true,
+		"Exclude":  true,
+		"Extract":  true,
+		"NonNullable": true,
+		"ReturnType":  true,
+		"Parameters":  true,
+		"Array":    true,
+		"Promise":  true,
+		"Map":      true,
+		"Set":      true,
 	}
 
-	// Simple heuristic: split on common delimiters and prefix identifiers
-	// that are not primitives or keywords
-	result := typeExpr
-
-	// Handle arrays: "User[]" -> "types.User[]"
-	// Handle Record: "Record<string, User>" -> "Record<string, types.User>"
-	// This is a simplified approach; a full parser would be better
-
-	// For now, we'll handle the common case of "TypeName[]"
-	if strings.HasSuffix(typeExpr, "[]") {
-		baseType := strings.TrimSuffix(typeExpr, "[]")
-		if !primitives[baseType] && !strings.Contains(baseType, "<") && !strings.Contains(baseType, " ") {
-			return prefix + baseType + "[]"
+	return typeIdentifierRe.ReplaceAllStringFunc(typeExpr, func(match string) string {
+		if skipTypes[match] {
+			return match
 		}
-	}
-
-	// For simple identifiers (no special characters)
-	if !primitives[typeExpr] && !strings.ContainsAny(typeExpr, "[]<>| ") {
-		return prefix + typeExpr
-	}
-
-	return result
+		return prefix + match
+	})
 }

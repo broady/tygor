@@ -86,8 +86,12 @@ func TestEmitter_PrefixTypeReferences_ComplexCases(t *testing.T) {
 		{"simple type", "User", "types.User"},
 		{"array type", "User[]", "types.User[]"},
 		{"primitive", "string", "string"},
-		{"Record", "Record<string, User>", "Record<string, User>"},
-		{"complex", "User | null", "User | null"},
+		{"Record with user type", "Record<string, User>", "Record<string, types.User>"},
+		{"union with null", "User | null", "types.User | null"},
+		{"generic type", "Response<User>", "types.Response<types.User>"},
+		{"nested generics", "Response<Array<User>>", "types.Response<Array<types.User>>"},
+		{"multiple types in union", "User | Admin | null", "types.User | types.Admin | null"},
+		{"array of generic", "Response<User>[]", "types.Response<types.User>[]"},
 	}
 
 	for _, tt := range tests {
