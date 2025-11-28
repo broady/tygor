@@ -566,3 +566,98 @@ func findFieldByName(fields []ir.FieldDescriptor, name string) *ir.FieldDescript
 	}
 	return nil
 }
+
+func TestSourceProvider_FieldDocumentation(t *testing.T) {
+	provider := &SourceProvider{}
+	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
+		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
+		RootTypes: []string{"User"},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	userType := findType(schema, "User")
+	if userType == nil {
+		t.Fatal("User type not found")
+	}
+
+	structDesc, ok := userType.(*ir.StructDescriptor)
+	if !ok {
+		t.Fatal("User should be a struct")
+	}
+
+	// Check field documentation
+	tests := []struct {
+		fieldName   string
+		wantSummary string
+	}{
+		{"ID", "ID is the unique identifier"},
+		{"Name", "Name is the user's display name"},
+		{"Email", "Email is optional"},
+		{"Age", "Age may be nil"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.fieldName, func(t *testing.T) {
+			field := findFieldByName(structDesc.Fields, tt.fieldName)
+			if field == nil {
+				t.Fatalf("Field %s not found", tt.fieldName)
+			}
+			if field.Documentation.Summary != tt.wantSummary {
+				t.Errorf("Field %s doc summary = %q, want %q", tt.fieldName, field.Documentation.Summary, tt.wantSummary)
+			}
+		})
+	}
+}
+
+func TestSourceProvider_EnumMemberDocumentation(t *testing.T) {
+	provider := &SourceProvider{}
+	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
+		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
+		RootTypes: []string{"Status"},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	statusType := findType(schema, "Status")
+	if statusType == nil {
+		t.Fatal("Status type not found")
+	}
+
+	enumDesc, ok := statusType.(*ir.EnumDescriptor)
+	if !ok {
+		t.Fatal("Status should be an enum")
+	}
+
+	// Check enum member documentation
+	tests := []struct {
+		memberName  string
+		wantSummary string
+	}{
+		{"StatusActive", "StatusActive means the user is active"},
+		{"StatusInactive", "StatusInactive means the user is inactive"},
+		{"StatusPending", "StatusPending means awaiting approval"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.memberName, func(t *testing.T) {
+			var found *ir.EnumMember
+			for i := range enumDesc.Members {
+				if enumDesc.Members[i].Name == tt.memberName {
+					found = &enumDesc.Members[i]
+					break
+				}
+			}
+			if found == nil {
+				t.Fatalf("Enum member %s not found", tt.memberName)
+			}
+			if found.Documentation.Summary != tt.wantSummary {
+				t.Errorf("Enum member %s doc summary = %q, want %q", tt.memberName, found.Documentation.Summary, tt.wantSummary)
+			}
+		})
+	}
+}

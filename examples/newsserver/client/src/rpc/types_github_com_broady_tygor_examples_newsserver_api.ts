@@ -32,10 +32,15 @@ export interface ListNewsParams {
 }
 /** News represents a news article in the system. */
 export interface News {
+  /** ID is the unique identifier for the article. */
   id: number;
+  /** Title is the article headline. */
   title: string;
+  /** Body is the optional article content. */
   body?: string;
+  /** Status is the current publication status of the article. */
   status: NewsStatus;
+  /** CreatedAt is the timestamp when the article was created. */
   created_at?: DateTime;
 }
 /** NewsStatus represents the publication status of a news article. */

@@ -348,7 +348,15 @@ func (e *Emitter) emitEnumAsObject(buf *bytes.Buffer, typeName string, enum *ir.
 			buf.WriteString(",\n")
 		}
 
-		buf.WriteString("  ")
+		// Member documentation
+		if e.config.EmitComments && !member.Documentation.IsZero() {
+			buf.WriteString("  ")
+			e.emitJSDoc(buf, member.Documentation)
+			buf.WriteString("  ")
+		} else {
+			buf.WriteString("  ")
+		}
+
 		memberName := escapeReservedWord(member.Name)
 		buf.WriteString(memberName)
 		buf.WriteString(": ")

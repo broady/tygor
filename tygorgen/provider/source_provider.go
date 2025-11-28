@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/constant"
+	"go/token"
 	"go/types"
 	"strings"
 
@@ -117,6 +118,7 @@ type schemaBuilder struct {
 type enumConstant struct {
 	name  string
 	value constant.Value
+	obj   *types.Const // Store the const object for doc extraction
 }
 
 // extractRootType finds and extracts a named type by name.
@@ -598,6 +600,101 @@ func (b *schemaBuilder) extractSource(obj types.Object) ir.Source {
 	return ir.Source{}
 }
 
+// extractConstDocumentation extracts documentation for a const declaration.
+func (b *schemaBuilder) extractConstDocumentation(cnst *types.Const) ir.Documentation {
+	if cnst == nil {
+		return ir.Documentation{}
+	}
+
+	pos := cnst.Pos()
+	if !pos.IsValid() {
+		return ir.Documentation{}
+	}
+
+	for _, pkg := range b.pkgs {
+		if pkg.Types != cnst.Pkg() {
+			continue
+		}
+
+		for _, file := range pkg.Syntax {
+			if file.Pos() > pos || file.End() < pos {
+				continue
+			}
+
+			// Search for the const declaration
+			var docGroup *ast.CommentGroup
+			ast.Inspect(file, func(n ast.Node) bool {
+				if decl, ok := n.(*ast.GenDecl); ok && decl.Tok == token.CONST {
+					for _, spec := range decl.Specs {
+						if vs, ok := spec.(*ast.ValueSpec); ok {
+							for _, name := range vs.Names {
+								if name.Pos() == pos {
+									// Found the const - prefer spec doc, fall back to decl doc
+									docGroup = vs.Doc
+									if docGroup == nil {
+										docGroup = decl.Doc
+									}
+									return false
+								}
+							}
+						}
+					}
+				}
+				return true
+			})
+
+			if docGroup != nil {
+				return b.parseDocumentation(docGroup)
+			}
+		}
+	}
+
+	return ir.Documentation{}
+}
+
+// extractFieldDocumentation extracts documentation for a struct field.
+func (b *schemaBuilder) extractFieldDocumentation(structObj types.Object, fieldPos token.Pos) ir.Documentation {
+	if structObj == nil || !fieldPos.IsValid() {
+		return ir.Documentation{}
+	}
+
+	for _, pkg := range b.pkgs {
+		if pkg.Types != structObj.Pkg() {
+			continue
+		}
+
+		for _, file := range pkg.Syntax {
+			if file.Pos() > fieldPos || file.End() < fieldPos {
+				continue
+			}
+
+			// Search for the field in the struct declaration
+			var docGroup *ast.CommentGroup
+			ast.Inspect(file, func(n ast.Node) bool {
+				if ts, ok := n.(*ast.TypeSpec); ok {
+					if st, ok := ts.Type.(*ast.StructType); ok {
+						for _, f := range st.Fields.List {
+							for _, name := range f.Names {
+								if name.Pos() == fieldPos {
+									docGroup = f.Doc
+									return false
+								}
+							}
+						}
+					}
+				}
+				return true
+			})
+
+			if docGroup != nil {
+				return b.parseDocumentation(docGroup)
+			}
+		}
+	}
+
+	return ir.Documentation{}
+}
+
 // scanEnumConstants scans for const declarations that might be enum members.
 func (b *schemaBuilder) scanEnumConstants(tn *types.TypeName) {
 	named, ok := tn.Type().(*types.Named)
@@ -630,6 +727,7 @@ func (b *schemaBuilder) scanEnumConstants(tn *types.TypeName) {
 			b.enumCandidates[named] = append(b.enumCandidates[named], enumConstant{
 				name:  cnst.Name(),
 				value: cnst.Val(),
+				obj:   cnst,
 			})
 		}
 	}
@@ -643,7 +741,7 @@ func (b *schemaBuilder) buildEnumDescriptor(name, pkgPath string, consts []enumC
 		members[i] = ir.EnumMember{
 			Name:          c.name,
 			Value:         value,
-			Documentation: ir.Documentation{}, // TODO: extract const documentation
+			Documentation: b.extractConstDocumentation(c.obj),
 		}
 	}
 
@@ -795,7 +893,7 @@ func (b *schemaBuilder) buildStructDescriptor(named *types.Named, name string, d
 			Skip:          false,
 			ValidateTag:   validateTag,
 			RawTags:       b.parseAllTags(tag),
-			Documentation: ir.Documentation{}, // TODO: extract field documentation
+			Documentation: b.extractFieldDocumentation(named.Obj(), field.Pos()),
 		}
 
 		descriptor.Fields = append(descriptor.Fields, fieldDesc)
