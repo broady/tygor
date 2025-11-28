@@ -10,6 +10,6 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
-    "@tygor/client": "^0.6.3"
+    "@tygor/client": "^0.7.0"
   }
 }
