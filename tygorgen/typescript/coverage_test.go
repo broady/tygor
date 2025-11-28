@@ -226,6 +226,50 @@ func TestTypeScriptGenerator_Generate_GenericConstraint(t *testing.T) {
 	}
 }
 
+func TestTypeScriptGenerator_Generate_GenericConstraintError(t *testing.T) {
+	// Test that invalid constraints propagate errors instead of being silently dropped
+	schema := &ir.Schema{
+		Types: []ir.TypeDescriptor{
+			&ir.StructDescriptor{
+				Name: ir.GoIdentifier{Name: "Container", Package: "test"},
+				TypeParameters: []ir.TypeParameterDescriptor{
+					{
+						ParamName: "T",
+						// StructDescriptor is not valid as a constraint type expression
+						Constraint: &ir.StructDescriptor{
+							Name: ir.GoIdentifier{Name: "Invalid", Package: "test"},
+						},
+					},
+				},
+				Fields: []ir.FieldDescriptor{
+					{
+						Name:     "Value",
+						JSONName: "value",
+						Type:     &ir.TypeParameterDescriptor{ParamName: "T"},
+					},
+				},
+			},
+		},
+	}
+
+	memSink := sink.NewMemorySink()
+	gen := &TypeScriptGenerator{}
+
+	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
+		Sink: memSink,
+		Config: GeneratorConfig{
+			SingleFile: true},
+	})
+
+	if err == nil {
+		t.Fatal("Generate() should have returned an error for invalid constraint")
+	}
+
+	if !strings.Contains(err.Error(), "constraint") {
+		t.Errorf("error should mention 'constraint', got: %v", err)
+	}
+}
+
 func TestTypeScriptGenerator_Generate_PropertyNameField(t *testing.T) {
 	schema := &ir.Schema{
 		Types: []ir.TypeDescriptor{
