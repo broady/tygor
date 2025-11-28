@@ -129,7 +129,7 @@ http.ListenAndServe(":8080", app.Handler())
 
 <!-- [snippet:doc/examples/quickstart:generation] -->
 ```go
-if err := tygorgen.Generate(app, &tygorgen.Config{
+if _, err := tygorgen.Generate(app, &tygorgen.Config{
 	OutDir: "./client/src/rpc",
 }); err != nil {
 	log.Fatal(err)

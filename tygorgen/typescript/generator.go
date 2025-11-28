@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/broady/tygor/tygorgen/ir"
+	"github.com/broady/tygor/tygorgen/typescript/flavor"
 )
 
 // Generator transforms IR schemas into TypeScript source code.
@@ -32,6 +33,7 @@ func (g *TypeScriptGenerator) Generate(ctx context.Context, schema *ir.Schema, o
 
 	// Apply defaults to TypeScript config
 	tsConfig := getTypeScriptConfig(opts.Config)
+	flavorCfg := getFlavorConfig(opts.Config)
 
 	result := &GenerateResult{
 		Files:          []OutputFile{},
@@ -39,35 +41,56 @@ func (g *TypeScriptGenerator) Generate(ctx context.Context, schema *ir.Schema, o
 		Warnings:       append([]ir.Warning{}, schema.Warnings...),
 	}
 
-	if opts.Config.SingleFile {
-		// Single file mode: all types in one types.ts
-		typesContent, typesGenerated, warnings, err := g.generateTypes(ctx, schema, opts.Config, tsConfig)
+	// Generate base types unless EmitTypes is explicitly false
+	if flavorCfg.EmitTypes {
+		if opts.Config.SingleFile {
+			// Single file mode: all types in one types.ts
+			typesContent, typesGenerated, warnings, err := g.generateTypes(ctx, schema, opts.Config, tsConfig)
+			if err != nil {
+				return nil, fmt.Errorf("failed to generate types: %w", err)
+			}
+
+			result.TypesGenerated = typesGenerated
+			result.Warnings = append(result.Warnings, warnings...)
+
+			typesPath := "types.ts"
+			if err := opts.Sink.WriteFile(ctx, typesPath, typesContent); err != nil {
+				return nil, fmt.Errorf("failed to write %s: %w", typesPath, err)
+			}
+			result.Files = append(result.Files, OutputFile{
+				Path: typesPath,
+				Size: int64(len(typesContent)),
+			})
+		} else {
+			// Multi-file mode: one file per package + barrel
+			files, typesGenerated, warnings, err := g.generateMultiFileTypes(ctx, schema, opts.Config, tsConfig)
+			if err != nil {
+				return nil, fmt.Errorf("failed to generate types: %w", err)
+			}
+
+			result.TypesGenerated = typesGenerated
+			result.Warnings = append(result.Warnings, warnings...)
+
+			for _, f := range files {
+				if err := opts.Sink.WriteFile(ctx, f.Path, f.Content); err != nil {
+					return nil, fmt.Errorf("failed to write %s: %w", f.Path, err)
+				}
+				result.Files = append(result.Files, OutputFile{
+					Path: f.Path,
+					Size: int64(len(f.Content)),
+				})
+			}
+		}
+	}
+
+	// Generate flavor outputs
+	if len(flavorCfg.Flavors) > 0 {
+		flavorFiles, err := g.generateFlavors(ctx, schema, opts.Config, flavorCfg)
 		if err != nil {
-			return nil, fmt.Errorf("failed to generate types: %w", err)
+			return nil, fmt.Errorf("failed to generate flavors: %w", err)
 		}
 
-		result.TypesGenerated = typesGenerated
-		result.Warnings = append(result.Warnings, warnings...)
-
-		typesPath := "types.ts"
-		if err := opts.Sink.WriteFile(ctx, typesPath, typesContent); err != nil {
-			return nil, fmt.Errorf("failed to write %s: %w", typesPath, err)
-		}
-		result.Files = append(result.Files, OutputFile{
-			Path: typesPath,
-			Size: int64(len(typesContent)),
-		})
-	} else {
-		// Multi-file mode: one file per package + barrel
-		files, typesGenerated, warnings, err := g.generateMultiFileTypes(ctx, schema, opts.Config, tsConfig)
-		if err != nil {
-			return nil, fmt.Errorf("failed to generate types: %w", err)
-		}
-
-		result.TypesGenerated = typesGenerated
-		result.Warnings = append(result.Warnings, warnings...)
-
-		for _, f := range files {
+		for _, f := range flavorFiles {
 			if err := opts.Sink.WriteFile(ctx, f.Path, f.Content); err != nil {
 				return nil, fmt.Errorf("failed to write %s: %w", f.Path, err)
 			}
@@ -75,6 +98,13 @@ func (g *TypeScriptGenerator) Generate(ctx context.Context, schema *ir.Schema, o
 				Path: f.Path,
 				Size: int64(len(f.Content)),
 			})
+			// Add flavor warnings
+			for _, w := range f.Warnings {
+				result.Warnings = append(result.Warnings, ir.Warning{
+					Code:    "UNSUPPORTED_VALIDATOR",
+					Message: w,
+				})
+			}
 		}
 	}
 
@@ -160,8 +190,9 @@ func (g *TypeScriptGenerator) generateTypes(ctx context.Context, schema *ir.Sche
 
 // generatedFile holds a file path and its content.
 type generatedFile struct {
-	Path    string
-	Content []byte
+	Path     string
+	Content  []byte
+	Warnings []string
 }
 
 // generateMultiFileTypes generates one file per package plus a barrel file.
@@ -584,4 +615,81 @@ func prefixTypeReferences(typeExpr string, prefix string) string {
 		}
 		return prefix + match
 	})
+}
+
+// flavorConfig holds flavor-related configuration.
+type flavorConfig struct {
+	Flavors   []string
+	EmitTypes bool
+}
+
+// getFlavorConfig extracts flavor config from the Custom map.
+func getFlavorConfig(config GeneratorConfig) flavorConfig {
+	cfg := flavorConfig{
+		EmitTypes: true, // default: emit types
+	}
+
+	if config.Custom == nil {
+		return cfg
+	}
+
+	if v, ok := config.Custom["Flavors"].([]string); ok {
+		cfg.Flavors = v
+	}
+
+	if v, ok := config.Custom["EmitTypes"].(*bool); ok && v != nil {
+		cfg.EmitTypes = *v
+	}
+
+	return cfg
+}
+
+// generateFlavors generates output for each enabled flavor.
+func (g *TypeScriptGenerator) generateFlavors(ctx context.Context, schema *ir.Schema, config GeneratorConfig, flavorCfg flavorConfig) ([]generatedFile, error) {
+	var files []generatedFile
+
+	// Sort types for deterministic output
+	sortedTypes := make([]ir.TypeDescriptor, len(schema.Types))
+	copy(sortedTypes, schema.Types)
+	sort.Slice(sortedTypes, func(i, j int) bool {
+		return sortedTypes[i].TypeName().Name < sortedTypes[j].TypeName().Name
+	})
+
+	// Build emit context
+	emitCtx := &flavor.EmitContext{
+		Schema:             schema,
+		IndentStr:          computeIndentStr(config),
+		EmitTypes:          flavorCfg.EmitTypes,
+		TypeMappings:       config.TypeMappings,
+		StripPackagePrefix: config.StripPackagePrefix,
+	}
+
+	for _, name := range flavorCfg.Flavors {
+		f, err := flavor.Get(name)
+		if err != nil {
+			return nil, err
+		}
+
+		content, err := flavor.Generate(f, emitCtx, sortedTypes)
+		if err != nil {
+			return nil, fmt.Errorf("flavor %s: %w", name, err)
+		}
+
+		// Apply line ending and trailing newline
+		if config.TrailingNewline && len(content) > 0 && content[len(content)-1] != '\n' {
+			content = append(content, '\n')
+		}
+		content = applyLineEnding(content, config.LineEnding)
+
+		files = append(files, generatedFile{
+			Path:     "schemas" + f.FileExtension(),
+			Content:  content,
+			Warnings: emitCtx.Warnings,
+		})
+
+		// Reset warnings for next flavor
+		emitCtx.Warnings = nil
+	}
+
+	return files, nil
 }

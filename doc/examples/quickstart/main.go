@@ -38,7 +38,7 @@ func exampleRegistration() {
 func exampleGeneration() {
 	app := tygor.NewApp()
 	// [snippet:generation]
-	if err := tygorgen.Generate(app, &tygorgen.Config{
+	if _, err := tygorgen.Generate(app, &tygorgen.Config{
 		OutDir: "./client/src/rpc",
 	}); err != nil {
 		log.Fatal(err)

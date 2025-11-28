@@ -3,7 +3,6 @@ package tygorgen
 import (
 	"context"
 	"fmt"
-	"os"
 	"reflect"
 	"sort"
 	"strings"
@@ -15,6 +14,28 @@ import (
 	"github.com/broady/tygor/tygorgen/sink"
 	"github.com/broady/tygor/tygorgen/typescript"
 )
+
+// GenerateResult contains the output from code generation.
+type GenerateResult struct {
+	// Files contains generated file contents when OutDir is empty.
+	// When OutDir is set, files are written to disk and this is nil.
+	Files []GeneratedFile
+
+	// Warnings contains non-fatal issues encountered during generation.
+	Warnings []Warning
+}
+
+// GeneratedFile represents a generated output file.
+type GeneratedFile struct {
+	Path    string
+	Content []byte
+}
+
+// Warning represents a non-fatal issue encountered during generation.
+type Warning struct {
+	Code    string
+	Message string
+}
 
 // Config holds the configuration for code generation.
 type Config struct {
@@ -66,14 +87,23 @@ type Config struct {
 	// SingleFile emits all types in a single types.ts file.
 	// Default (false) generates one file per Go package with a barrel types.ts that re-exports all.
 	SingleFile bool
+
+	// Flavors lists which additional output flavors to generate.
+	// Each enabled flavor produces its own output file alongside or instead of types.ts.
+	// Valid names: "zod", "zod-mini" (future: "treeshake", "fat-client")
+	// Example: []string{"zod"} generates schemas.zod.ts with Zod schemas
+	Flavors []string
+
+	// EmitTypes controls whether base types.ts is generated.
+	// Default (nil/true): generate types.ts. Set to false to only emit flavor outputs.
+	// When false with Zod flavor, types are exported via z.infer<typeof Schema>.
+	EmitTypes *bool
 }
 
 // Generate generates the TypeScript types and manifest for the registered services.
-func Generate(app *tygor.App, cfg *Config) error {
+// If OutDir is set, files are written to disk. Otherwise, files are returned in the result.
+func Generate(app *tygor.App, cfg *Config) (*GenerateResult, error) {
 	routes := app.Routes()
-	if cfg.OutDir == "" {
-		return fmt.Errorf("OutDir is required")
-	}
 
 	// Apply defaults
 	cfg = applyConfigDefaults(cfg)
@@ -90,18 +120,17 @@ func Generate(app *tygor.App, cfg *Config) error {
 	case "reflection":
 		schema, err = buildSchemaFromReflection(ctx, routes)
 	default:
-		return fmt.Errorf("unknown provider: %q (expected \"source\" or \"reflection\")", cfg.Provider)
+		return nil, fmt.Errorf("unknown provider: %q (expected \"source\" or \"reflection\")", cfg.Provider)
 	}
 
 	if err != nil {
-		return fmt.Errorf("failed to build schema: %w", err)
+		return nil, fmt.Errorf("failed to build schema: %w", err)
 	}
 
-	// Report schema build warnings
-	if len(schema.Warnings) > 0 {
-		for _, w := range schema.Warnings {
-			fmt.Fprintf(os.Stderr, "Warning (schema): %s: %s\n", w.Code, w.Message)
-		}
+	// Collect warnings
+	var warnings []Warning
+	for _, w := range schema.Warnings {
+		warnings = append(warnings, Warning{Code: w.Code, Message: w.Message})
 	}
 
 	// 2. Build service descriptors from routes
@@ -110,11 +139,7 @@ func Generate(app *tygor.App, cfg *Config) error {
 
 	// 3. Validate schema
 	if errs := schema.Validate(); len(errs) > 0 {
-		// Return first error, but log all
-		for _, e := range errs {
-			fmt.Fprintf(os.Stderr, "Schema validation error: %s\n", e.Error())
-		}
-		return fmt.Errorf("schema validation failed: %w", errs[0])
+		return nil, fmt.Errorf("schema validation failed: %w", errs[0])
 	}
 
 	// 4. Configure TypeScript generator
@@ -140,30 +165,52 @@ func Generate(app *tygor.App, cfg *Config) error {
 			"EnumStyle":         cfg.EnumStyle,
 			"OptionalType":      cfg.OptionalType,
 			"UnknownType":       "unknown",
+			"Flavors":           cfg.Flavors,
+			"EmitTypes":         cfg.EmitTypes,
 		},
 	}
 
-	// 5. Create filesystem sink
-	filesystemSink := sink.NewFilesystemSink(cfg.OutDir)
+	// 5. Create sink (filesystem if OutDir set, memory otherwise)
+	var outputSink sink.OutputSink
+	var memorySink *sink.MemorySink
+	if cfg.OutDir != "" {
+		outputSink = sink.NewFilesystemSink(cfg.OutDir)
+	} else {
+		memorySink = sink.NewMemorySink()
+		outputSink = memorySink
+	}
 
 	// 6. Generate TypeScript
 	gen := &typescript.TypeScriptGenerator{}
-	result, err := gen.Generate(ctx, schema, typescript.GenerateOptions{
-		Sink:   filesystemSink,
+	tsResult, err := gen.Generate(ctx, schema, typescript.GenerateOptions{
+		Sink:   outputSink,
 		Config: tsConfig,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to generate TypeScript: %w", err)
+		return nil, fmt.Errorf("failed to generate TypeScript: %w", err)
 	}
 
-	// Report warnings if any
-	if len(result.Warnings) > 0 {
-		for _, w := range result.Warnings {
-			fmt.Fprintf(os.Stderr, "Warning: %s: %s\n", w.Code, w.Message)
+	// Collect generator warnings
+	for _, w := range tsResult.Warnings {
+		warnings = append(warnings, Warning{Code: w.Code, Message: w.Message})
+	}
+
+	// Build result
+	result := &GenerateResult{
+		Warnings: warnings,
+	}
+
+	// Include files if using memory sink
+	if memorySink != nil {
+		for path, content := range memorySink.Files() {
+			result.Files = append(result.Files, GeneratedFile{
+				Path:    path,
+				Content: content,
+			})
 		}
 	}
 
-	return nil
+	return result, nil
 }
 
 // buildServiceDescriptors converts route metadata to IR service descriptors.
@@ -307,6 +354,10 @@ func applyConfigDefaults(cfg *Config) *Config {
 
 	if result.Packages != nil {
 		result.Packages = append([]string(nil), result.Packages...)
+	}
+
+	if result.Flavors != nil {
+		result.Flavors = append([]string(nil), result.Flavors...)
 	}
 
 	if result.Provider == "" {

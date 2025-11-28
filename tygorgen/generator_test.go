@@ -91,16 +91,42 @@ func TestApplyConfigDefaults(t *testing.T) {
 	}
 }
 
-func TestGenerate_MissingOutDir(t *testing.T) {
+func TestGenerate_NoOutDir_ReturnsFilesInMemory(t *testing.T) {
 	reg := tygor.NewApp()
-	cfg := &Config{} // Missing OutDir
-
-	err := Generate(reg, cfg)
-	if err == nil {
-		t.Error("expected error for missing OutDir")
+	handler := func(ctx context.Context, req *testfixtures.CreateUserRequest) (*testfixtures.User, error) {
+		return nil, nil
 	}
-	if !strings.Contains(err.Error(), "OutDir is required") {
-		t.Errorf("unexpected error message: %v", err)
+	reg.Service("Users").Register("Create", tygor.Exec(handler))
+
+	cfg := &Config{
+		Provider: "reflection",
+	}
+
+	result, err := Generate(reg, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should have files in result since no OutDir
+	if len(result.Files) == 0 {
+		t.Error("expected files in result when OutDir is empty")
+	}
+
+	// Should have types.ts and manifest.ts at minimum
+	var hasTypes, hasManifest bool
+	for _, f := range result.Files {
+		if f.Path == "types.ts" {
+			hasTypes = true
+		}
+		if f.Path == "manifest.ts" {
+			hasManifest = true
+		}
+	}
+	if !hasTypes {
+		t.Error("missing types.ts in result files")
+	}
+	if !hasManifest {
+		t.Error("missing manifest.ts in result files")
 	}
 }
 
@@ -110,7 +136,7 @@ func TestGenerate_EmptyApp(t *testing.T) {
 
 	cfg := &Config{OutDir: outDir, SingleFile: true, Provider: "reflection"}
 
-	err := Generate(reg, cfg)
+	_, err := Generate(reg, cfg)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -146,7 +172,7 @@ func TestGenerate_WithHandlers(t *testing.T) {
 
 	cfg := &Config{OutDir: outDir, SingleFile: true, Provider: "reflection"}
 
-	err := Generate(reg, cfg)
+	_, err := Generate(reg, cfg)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -182,7 +208,7 @@ func TestGenerate_ManifestStructure(t *testing.T) {
 
 	cfg := &Config{OutDir: outDir, SingleFile: true, Provider: "reflection"}
 
-	err := Generate(reg, cfg)
+	_, err := Generate(reg, cfg)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -221,7 +247,7 @@ func TestGenerate_TypesFile(t *testing.T) {
 
 	cfg := &Config{OutDir: outDir, SingleFile: true, Provider: "reflection"}
 
-	err := Generate(reg, cfg)
+	_, err := Generate(reg, cfg)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -260,7 +286,7 @@ func TestGenerate_CustomConfig(t *testing.T) {
 		},
 	}
 
-	err := Generate(reg, cfg)
+	_, err := Generate(reg, cfg)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -294,7 +320,7 @@ func TestGenerate_GETParamsUseLowercaseNames(t *testing.T) {
 
 	cfg := &Config{OutDir: outDir, SingleFile: true, Provider: "reflection"}
 
-	err := Generate(reg, cfg)
+	_, err := Generate(reg, cfg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
