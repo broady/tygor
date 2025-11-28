@@ -202,8 +202,6 @@ func main() {
 	taskService.Register("Update", tygor.Exec(UpdateTask))
 	taskService.Register("List", tygor.Query(ListTasks))
 
-	// [snippet:zod-generation]
-
 	// Generation Mode
 	if *genFlag {
 		fmt.Printf("Generating types and Zod schemas to %s...\n", *outDir)
@@ -211,9 +209,11 @@ func main() {
 			log.Fatal(err)
 		}
 
+		// [snippet:zod-generation]
 		_, err := tygorgen.FromApp(app).
 			WithFlavor(tygorgen.FlavorZod).
 			ToDir(*outDir)
+		// [/snippet:zod-generation]
 
 		if err != nil {
 			log.Fatalf("Generation failed: %v", err)
@@ -221,8 +221,6 @@ func main() {
 		fmt.Println("Done.")
 		return
 	}
-
-	// [/snippet:zod-generation]
 
 	// Start server
 	addr := ":" + *port

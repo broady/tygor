@@ -29,6 +29,31 @@ The generator produces two files:
 - `types.ts` - TypeScript interfaces
 - `schemas.zod.ts` - Zod schemas with validation
 
+## Enabling Zod Generation
+
+<!-- [snippet:zod-generation] -->
+```go title="main.go"
+// Generation Mode
+if *genFlag {
+	fmt.Printf("Generating types and Zod schemas to %s...\n", *outDir)
+	if err := os.MkdirAll(*outDir, 0755); err != nil {
+		log.Fatal(err)
+	}
+
+	_, err := tygorgen.FromApp(app).
+		WithFlavor(tygorgen.FlavorZod).
+		ToDir(*outDir)
+
+	if err != nil {
+		log.Fatalf("Generation failed: %v", err)
+	}
+	fmt.Println("Done.")
+	return
+}
+
+```
+<!-- [/snippet:zod-generation] -->
+
 ## Go Types with Validation
 
 <!-- [snippet:create-user-request] -->
@@ -357,31 +382,6 @@ describe("Type inference", () => {
 
 ```
 <!-- [/snippet:type-inference] -->
-
-## Enabling Zod Generation
-
-<!-- [snippet:zod-generation] -->
-```go title="main.go"
-// Generation Mode
-if *genFlag {
-	fmt.Printf("Generating types and Zod schemas to %s...\n", *outDir)
-	if err := os.MkdirAll(*outDir, 0755); err != nil {
-		log.Fatal(err)
-	}
-
-	_, err := tygorgen.FromApp(app).
-		WithFlavor(tygorgen.FlavorZod).
-		ToDir(*outDir)
-
-	if err != nil {
-		log.Fatalf("Generation failed: %v", err)
-	}
-	fmt.Println("Done.")
-	return
-}
-
-```
-<!-- [/snippet:zod-generation] -->
 
 ## Two-Way Validation
 
