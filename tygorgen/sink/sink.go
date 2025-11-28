@@ -111,29 +111,38 @@ func (s *FilesystemSink) WriteFile(ctx context.Context, path string, content []b
 	_, writeErr := tempFile.Write(content)
 	closeErr := tempFile.Close()
 
+	// cleanupTempFile is a helper that attempts to remove the temp file.
+	// Cleanup errors are intentionally not returned because:
+	// 1. We're already in an error path returning a more important error
+	// 2. Libraries shouldn't log directly
+	// 3. Leftover temp files have a predictable prefix (.tygor-*.tmp) for manual cleanup
+	cleanupTempFile := func() {
+		_ = os.Remove(tempPath) // Best-effort cleanup; error intentionally ignored
+	}
+
 	if writeErr != nil {
-		os.Remove(tempPath) // Clean up temp file
+		cleanupTempFile()
 		return fmt.Errorf("failed to write temp file: %w", writeErr)
 	}
 	if closeErr != nil {
-		os.Remove(tempPath) // Clean up temp file
+		cleanupTempFile()
 		return fmt.Errorf("failed to close temp file: %w", closeErr)
 	}
 
 	// Set correct permissions after writing
 	if err := os.Chmod(tempPath, mode); err != nil {
-		os.Remove(tempPath) // Clean up temp file
+		cleanupTempFile()
 		return fmt.Errorf("failed to set file mode: %w", err)
 	}
 
 	// Check context again before rename
 	if err := ctx.Err(); err != nil {
-		os.Remove(tempPath) // Clean up temp file
+		cleanupTempFile()
 		return err
 	}
 
 	if err := os.Rename(tempPath, fullPath); err != nil {
-		os.Remove(tempPath) // Clean up temp file
+		cleanupTempFile()
 		return fmt.Errorf("failed to rename temp file: %w", err)
 	}
 

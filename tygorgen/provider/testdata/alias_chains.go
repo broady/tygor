@@ -21,11 +21,11 @@ type AliasToAliasStruct = AliasToStruct
 
 // Container using alias types
 type AliasContainer struct {
-	Level1 AliasLevel1      `json:"level1"`
-	Level2 AliasLevel2      `json:"level2"`
-	Level3 AliasLevel3      `json:"level3"`
-	Named  AliasToNamed     `json:"named"`
-	Struct AliasToStruct    `json:"struct"`
+	Level1 AliasLevel1        `json:"level1"`
+	Level2 AliasLevel2        `json:"level2"`
+	Level3 AliasLevel3        `json:"level3"`
+	Named  AliasToNamed       `json:"named"`
+	Struct AliasToStruct      `json:"struct"`
 	Deep   AliasToAliasStruct `json:"deep"`
 }
 

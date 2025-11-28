@@ -177,7 +177,7 @@ func (b *reflectionSchemaBuilder) extractStruct(ctx context.Context, t reflect.T
 
 		// Handle embedding
 		if field.Anonymous {
-			if err := b.handleEmbedded(ctx, field, &fields, &extends, pkg); err != nil {
+			if err := b.handleEmbedded(ctx, field, &fields, &extends, name, pkg); err != nil {
 				return err
 			}
 			continue
@@ -189,7 +189,7 @@ func (b *reflectionSchemaBuilder) extractStruct(ctx context.Context, t reflect.T
 			continue // Skip this field
 		}
 
-		fd, err := b.buildFieldDescriptor(ctx, field, pkg)
+		fd, err := b.buildFieldDescriptor(ctx, field, name, pkg)
 		if err != nil {
 			return fmt.Errorf("field %s.%s: %w", name, field.Name, err)
 		}
@@ -348,7 +348,8 @@ func (b *reflectionSchemaBuilder) typeToDescriptorForAlias(ctx context.Context, 
 }
 
 // handleEmbedded processes an embedded field.
-func (b *reflectionSchemaBuilder) handleEmbedded(ctx context.Context, field reflect.StructField, fields *[]ir.FieldDescriptor, extends *[]ir.GoIdentifier, parentPkg string) error {
+// parentStructName is the name of the containing struct, used for generating synthetic names for anonymous structs.
+func (b *reflectionSchemaBuilder) handleEmbedded(ctx context.Context, field reflect.StructField, fields *[]ir.FieldDescriptor, extends *[]ir.GoIdentifier, parentStructName, parentPkg string) error {
 	jsonTag := field.Tag.Get("json")
 
 	// json:"-" means skip entirely
@@ -376,7 +377,7 @@ func (b *reflectionSchemaBuilder) handleEmbedded(ctx context.Context, field refl
 		parts := strings.Split(jsonTag, ",")
 		jsonName := parts[0]
 
-		fd, err := b.buildFieldDescriptor(ctx, field, parentPkg)
+		fd, err := b.buildFieldDescriptor(ctx, field, parentStructName, parentPkg)
 		if err != nil {
 			return err
 		}
@@ -391,13 +392,15 @@ func (b *reflectionSchemaBuilder) handleEmbedded(ctx context.Context, field refl
 }
 
 // buildFieldDescriptor creates a FieldDescriptor from a reflect.StructField.
+// parentStructName is the name of the containing struct, used for generating synthetic names.
 // parentPkg is the package path of the containing struct type.
-func (b *reflectionSchemaBuilder) buildFieldDescriptor(ctx context.Context, field reflect.StructField, parentPkg string) (ir.FieldDescriptor, error) {
+func (b *reflectionSchemaBuilder) buildFieldDescriptor(ctx context.Context, field reflect.StructField, parentStructName, parentPkg string) (ir.FieldDescriptor, error) {
 	jsonTag := field.Tag.Get("json")
 	jsonName, optional, skip, stringEncoded := parseJSONTag(jsonTag, field.Name)
 
-	// Build type descriptor
-	fieldType, err := b.typeToDescriptor(ctx, field.Type, field.Name, parentPkg)
+	// Build type descriptor - use parentStructName + "_" + field.Name for anonymous struct naming
+	syntheticName := parentStructName + "_" + field.Name
+	fieldType, err := b.typeToDescriptor(ctx, field.Type, syntheticName, parentPkg)
 	if err != nil {
 		return ir.FieldDescriptor{}, err
 	}
@@ -733,7 +736,7 @@ func (b *reflectionSchemaBuilder) extractAnonymousStruct(ctx context.Context, t 
 
 		// Handle embedding
 		if field.Anonymous {
-			if err := b.handleEmbedded(ctx, field, &fields, &extends, pkg); err != nil {
+			if err := b.handleEmbedded(ctx, field, &fields, &extends, syntheticName, pkg); err != nil {
 				return err
 			}
 			continue

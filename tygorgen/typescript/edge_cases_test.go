@@ -228,7 +228,9 @@ func TestTypeScriptGenerator_Generate_AliasWithGenerics(t *testing.T) {
 	content := string(memSink.Get("types.ts"))
 	t.Logf("Generated:\n%s", content)
 
-	want := "export type Maybe<T> = T;"
+	// The underlying type is *T (pointer to type parameter), so it should emit T | null
+	// because pointers can be null in JSON serialization
+	want := "export type Maybe<T> = (T | null);"
 	if !strings.Contains(content, want) {
 		t.Errorf("output should contain %q, got:\n%s", want, content)
 	}

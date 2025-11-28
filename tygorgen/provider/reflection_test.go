@@ -957,8 +957,7 @@ type MapKeyTypes struct {
 // Test types for handleEmbedded
 
 type EmbeddedUnexported struct {
-	unexportedField string // Should be skipped
-	ExportedField   string `json:"exported_field"`
+	ExportedField string `json:"exported_field"`
 }
 
 type EmbeddedPtrType struct {
@@ -966,8 +965,8 @@ type EmbeddedPtrType struct {
 }
 
 type EmbeddingWithPtr struct {
-	*EmbeddedPtrType              // Pointer embedding
-	OwnField         string       `json:"own_field"`
+	*EmbeddedPtrType               // Pointer embedding
+	OwnField         string        `json:"own_field"`
 	Tagged           *SimpleStruct `json:"tagged"` // Pointer embedding with tag
 }
 
@@ -997,20 +996,20 @@ type EmbeddingWithSkip struct {
 // Test types for anonymous structs and edge cases
 
 type CircularAnonymous struct {
-	Name  string `json:"name"`
+	Name   string `json:"name"`
 	Nested struct {
-		Value    string             `json:"value"`
-		BackRef  *CircularAnonymous `json:"back_ref,omitempty"`
+		Value   string             `json:"value"`
+		BackRef *CircularAnonymous `json:"back_ref,omitempty"`
 	} `json:"nested"`
 }
 
 type DeeplyNestedAnonymous struct {
 	Level1 struct {
-		A string `json:"a"`
+		A      string `json:"a"`
 		Level2 struct {
-			B string `json:"b"`
+			B      string `json:"b"`
 			Level3 struct {
-				C string `json:"c"`
+				C      string `json:"c"`
 				Level4 struct {
 					D string `json:"d"`
 				} `json:"level4"`
@@ -1040,17 +1039,11 @@ func TestReflectionProvider_TypeAliases_Primitives(t *testing.T) {
 	provider := &ReflectionProvider{}
 
 	// Test all primitive type aliases
+	// Only declaring types that are used in the test table below
 	type BoolAlias bool
 	type IntAlias int
-	type Int8Alias int8
-	type Int16Alias int16
 	type Int32Alias int32
-	type Int64Alias int64
 	type UintAlias uint
-	type Uint8Alias uint8
-	type Uint16Alias uint16
-	type Uint32Alias uint32
-	type Uint64Alias uint64
 	type UintptrAlias uintptr
 	type Float32Alias float32
 	type Float64Alias float64

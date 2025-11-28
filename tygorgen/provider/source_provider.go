@@ -1044,6 +1044,12 @@ func (b *schemaBuilder) convertTypeParamConstraint(constraint types.Type) ir.Typ
 		if err == nil {
 			return desc
 		}
+		// Conversion failed - add a warning and return nil (unconstrained)
+		b.schema.AddWarning(ir.Warning{
+			Code:     "CONSTRAINT_CONVERSION_FAILED",
+			Message:  fmt.Sprintf("failed to convert type parameter constraint %s: %v", constraint.String(), err),
+			TypeName: constraint.String(),
+		})
 		return nil
 	}
 
@@ -1076,6 +1082,13 @@ func (b *schemaBuilder) convertTypeParamConstraint(constraint types.Type) ir.Typ
 					desc, err := b.convertType(termType)
 					if err == nil && desc != nil {
 						unionTypes = append(unionTypes, desc)
+					} else if err != nil {
+						// Log warning but continue processing other union terms
+						b.schema.AddWarning(ir.Warning{
+							Code:     "UNION_TERM_CONVERSION_FAILED",
+							Message:  fmt.Sprintf("failed to convert union term %s: %v", termType.String(), err),
+							TypeName: termType.String(),
+						})
 					}
 				}
 			} else {
@@ -1083,6 +1096,13 @@ func (b *schemaBuilder) convertTypeParamConstraint(constraint types.Type) ir.Typ
 				desc, err := b.convertType(embedded)
 				if err == nil && desc != nil {
 					unionTypes = append(unionTypes, desc)
+				} else if err != nil {
+					// Log warning but continue processing
+					b.schema.AddWarning(ir.Warning{
+						Code:     "CONSTRAINT_EMBEDDED_CONVERSION_FAILED",
+						Message:  fmt.Sprintf("failed to convert embedded constraint type %s: %v", embedded.String(), err),
+						TypeName: embedded.String(),
+					})
 				}
 			}
 		}

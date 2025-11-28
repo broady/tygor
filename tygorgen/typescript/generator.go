@@ -539,21 +539,21 @@ var typeIdentifierRe = regexp.MustCompile(`\b([A-Z][A-Za-z0-9_]*)\b`)
 func prefixTypeReferences(typeExpr string, prefix string) string {
 	// TypeScript primitives and utility types that should not be prefixed
 	skipTypes := map[string]bool{
-		"Record":   true,
-		"Partial":  true,
-		"Required": true,
-		"Readonly": true,
-		"Pick":     true,
-		"Omit":     true,
-		"Exclude":  true,
-		"Extract":  true,
+		"Record":      true,
+		"Partial":     true,
+		"Required":    true,
+		"Readonly":    true,
+		"Pick":        true,
+		"Omit":        true,
+		"Exclude":     true,
+		"Extract":     true,
 		"NonNullable": true,
 		"ReturnType":  true,
 		"Parameters":  true,
-		"Array":    true,
-		"Promise":  true,
-		"Map":      true,
-		"Set":      true,
+		"Array":       true,
+		"Promise":     true,
+		"Map":         true,
+		"Set":         true,
 	}
 
 	return typeIdentifierRe.ReplaceAllStringFunc(typeExpr, func(match string) string {

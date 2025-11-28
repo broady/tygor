@@ -104,6 +104,20 @@ func (s *Schema) Validate() []error {
 		}
 	}
 
+	// Validate enum member value types (must be string, int64, or float64 per §4.5)
+	for _, t := range s.Types {
+		if ed, ok := t.(*EnumDescriptor); ok {
+			for _, member := range ed.Members {
+				if !isValidEnumValueType(member.Value) {
+					errors = append(errors, &ValidationError{
+						Code:    "invalid_enum_value_type",
+						Message: "enum " + ed.Name.Name + " member " + member.Name + " has invalid value type: only string, int64, and float64 are allowed",
+					})
+				}
+			}
+		}
+	}
+
 	// Check for circular inheritance
 	if circularErrs := s.detectCircularInheritance(typeNames); len(circularErrs) > 0 {
 		errors = append(errors, circularErrs...)
@@ -183,6 +197,20 @@ func isStringEncodableType(td TypeDescriptor) bool {
 	return false
 }
 
+// isValidEnumValueType checks if a value is a valid enum member type.
+// Per §4.5, providers must convert Go constant values to exactly one of:
+// string, int64, or float64.
+func isValidEnumValueType(value any) bool {
+	if value == nil {
+		return false
+	}
+	switch value.(type) {
+	case string, int64, float64:
+		return true
+	}
+	return false
+}
+
 // validateTypeReferences recursively walks a TypeDescriptor and checks that all
 // ReferenceDescriptors point to types that exist in typeNames.
 func validateTypeReferences(td TypeDescriptor, typeNames map[GoIdentifier]bool, context string) []*ValidationError {
@@ -208,6 +236,13 @@ func validateTypeReferences(td TypeDescriptor, typeNames map[GoIdentifier]bool, 
 	case *PtrDescriptor:
 		errors = append(errors, validateTypeReferences(d.Element, typeNames, context)...)
 	case *UnionDescriptor:
+		// Check for empty unions
+		if len(d.Types) == 0 {
+			errors = append(errors, &ValidationError{
+				Code:    "empty_union",
+				Message: context + " contains union with no types",
+			})
+		}
 		for _, t := range d.Types {
 			errors = append(errors, validateTypeReferences(t, typeNames, context)...)
 		}

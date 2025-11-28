@@ -110,26 +110,13 @@ func (e *Emitter) emitStruct(buf *bytes.Buffer, s *ir.StructDescriptor) ([]ir.Wa
 	useInterface := e.tsConfig.UseInterface && len(s.Extends) == 0
 
 	if useInterface {
+		// Note: useInterface is only true when len(s.Extends) == 0,
+		// so we don't need to handle extends here. Structs with extends
+		// use the type alias syntax with intersection types below.
 		buf.WriteString("interface ")
 		buf.WriteString(typeName)
 		buf.WriteString(typeParams)
-		buf.WriteString(" ")
-
-		// Handle extends
-		if len(s.Extends) > 0 {
-			buf.WriteString("extends ")
-			for i, ext := range s.Extends {
-				if i > 0 {
-					buf.WriteString(", ")
-				}
-				extName := e.qualifyTypeName(ext)
-				extName = escapeReservedWord(extName)
-				buf.WriteString(extName)
-			}
-			buf.WriteString(" ")
-		}
-
-		buf.WriteString("{\n")
+		buf.WriteString(" {\n")
 	} else {
 		buf.WriteString("type ")
 		buf.WriteString(typeName)
@@ -193,7 +180,19 @@ func (e *Emitter) emitStruct(buf *bytes.Buffer, s *ir.StructDescriptor) ([]ir.Wa
 		buf.WriteString(": ")
 
 		// Emit type
-		typeExpr, err := e.EmitTypeExpr(field.Type)
+		// For pointer fields, unwrap ALL nested pointers before emitting since
+		// emitPtr adds | null and we handle nullability/optionality separately
+		// at field level. Go's encoding/json flattens multiple pointer levels,
+		// so **string behaves like *string in JSON serialization.
+		fieldType := field.Type
+		for {
+			if ptr, ok := fieldType.(*ir.PtrDescriptor); ok {
+				fieldType = ptr.Element
+			} else {
+				break
+			}
+		}
+		typeExpr, err := e.EmitTypeExpr(fieldType)
 		if err != nil {
 			return nil, fmt.Errorf("failed to emit field %s type: %w", field.Name, err)
 		}
@@ -491,15 +490,27 @@ func (e *Emitter) emitReference(r *ir.ReferenceDescriptor) string {
 
 // emitPtr emits a pointer type.
 // Note: PtrDescriptor nullability is context-dependent (§4.9).
-// This method only handles nested pointers; field-level nullability
-// is handled by determineOptionalNullable.
+// For field-level pointers, determineOptionalNullable handles nullability.
+// For nested contexts (array elements, map values), we add | null here.
+// This method recursively unwraps nested pointers to avoid (T | null) | null.
 func (e *Emitter) emitPtr(p *ir.PtrDescriptor) (string, error) {
-	elemType, err := e.EmitTypeExpr(p.Element)
+	// Unwrap all nested pointers to get to the base type
+	elem := p.Element
+	for {
+		if innerPtr, ok := elem.(*ir.PtrDescriptor); ok {
+			elem = innerPtr.Element
+		} else {
+			break
+		}
+	}
+
+	elemType, err := e.EmitTypeExpr(elem)
 	if err != nil {
 		return "", err
 	}
-	// In nested contexts, pointer always adds null
-	return elemType, nil
+	// Parenthesize to ensure correct precedence in compound types
+	// e.g., []*string → (string | null)[] not string | null[]
+	return "(" + elemType + " | null)", nil
 }
 
 // emitUnion emits a union type.
