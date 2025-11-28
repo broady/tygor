@@ -750,7 +750,9 @@ func (b *schemaBuilder) scanEnumConstants(tn *types.TypeName) {
 		}
 
 		// Check if const has the same type as our named type
-		if types.Identical(cnst.Type(), named) {
+		// Only include exported constants - unexported constants are internal
+		// implementation details and shouldn't appear in generated code
+		if types.Identical(cnst.Type(), named) && cnst.Exported() {
 			b.enumCandidates[named] = append(b.enumCandidates[named], enumConstant{
 				name:  cnst.Name(),
 				value: cnst.Val(),

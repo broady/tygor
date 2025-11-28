@@ -139,6 +139,41 @@ func TestSourceProvider_EnumTypes(t *testing.T) {
 	}
 }
 
+func TestSourceProvider_EnumExcludesUnexportedConstants(t *testing.T) {
+	provider := &SourceProvider{}
+	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
+		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
+		RootTypes: []string{"Status"},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	statusType := findType(schema, "Status")
+	if statusType == nil {
+		t.Fatal("Status type not found")
+	}
+
+	statusEnum, ok := statusType.(*ir.EnumDescriptor)
+	if !ok {
+		t.Fatalf("Status is not an EnumDescriptor, got %T", statusType)
+	}
+
+	// Verify unexported constants are excluded
+	// testdata/basic.go has statusInternal which is unexported
+	for _, member := range statusEnum.Members {
+		if member.Name == "statusInternal" {
+			t.Error("Unexported constant 'statusInternal' should not be included in enum members")
+		}
+	}
+
+	// Verify only exported constants are included
+	if len(statusEnum.Members) != 3 {
+		t.Errorf("Status should have exactly 3 exported members, got %d", len(statusEnum.Members))
+	}
+}
+
 func TestSourceProvider_SliceAndArrayTypes(t *testing.T) {
 	provider := &SourceProvider{}
 	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
