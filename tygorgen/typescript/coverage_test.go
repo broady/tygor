@@ -165,7 +165,7 @@ func TestTypeScriptGenerator_Generate_Union(t *testing.T) {
 	content := string(memSink.Get("types.ts"))
 	t.Logf("Generated:\n%s", content)
 
-	want := "export type StringOrInt = string | number;"
+	want := "export type StringOrInt = string | number /* int */;"
 	if !strings.Contains(content, want) {
 		t.Errorf("output should contain %q, got:\n%s", want, content)
 	}
@@ -215,7 +215,7 @@ func TestTypeScriptGenerator_Generate_GenericConstraint(t *testing.T) {
 	t.Logf("Generated:\n%s", content)
 
 	wants := []string{
-		"export interface Container<T extends string | number> {",
+		"export interface Container<T extends string | number /* int */> {",
 		"  value: T;",
 	}
 
@@ -450,7 +450,8 @@ func TestTypeScriptGenerator_Generate_ReadonlyArrays(t *testing.T) {
 	content := string(memSink.Get("types.ts"))
 	t.Logf("Generated:\n%s", content)
 
-	want := "items?: readonly string[];"
+	// Per §4.9: slices are always nullable, optional is independent
+	want := "items?: readonly string[] | null;"
 	if !strings.Contains(content, want) {
 		t.Errorf("output should contain %q, got:\n%s", want, content)
 	}

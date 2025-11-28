@@ -74,11 +74,13 @@ func TestTypeScriptGenerator_Generate_BasicStruct(t *testing.T) {
 	t.Logf("Generated:\n%s", content)
 
 	// Check for expected output
+	// Note: age is *int with omitempty, so it's both optional (?:) and nullable (| null)
+	// per §4.9 - optional and nullable are independent properties
 	want := []string{
 		"export interface User {",
 		"  id: string;",
 		"  email: string;",
-		"  age?: number;",
+		"  age?: number /* int */ | null;",
 		"}",
 	}
 
@@ -129,6 +131,7 @@ func TestTypeScriptGenerator_Generate_NullableField(t *testing.T) {
 }
 
 func TestTypeScriptGenerator_Generate_SliceField(t *testing.T) {
+	// Per §4.9: slices are always nullable (can be nil), and optional is independent
 	tests := []struct {
 		name     string
 		optional bool
@@ -142,7 +145,7 @@ func TestTypeScriptGenerator_Generate_SliceField(t *testing.T) {
 		{
 			name:     "optional slice",
 			optional: true,
-			want:     "items?: string[];",
+			want:     "items?: string[] | null;", // both optional AND nullable
 		},
 	}
 
@@ -186,6 +189,7 @@ func TestTypeScriptGenerator_Generate_SliceField(t *testing.T) {
 }
 
 func TestTypeScriptGenerator_Generate_MapField(t *testing.T) {
+	// Per §4.9: maps are always nullable (can be nil), and optional is independent
 	tests := []struct {
 		name     string
 		optional bool
@@ -199,7 +203,7 @@ func TestTypeScriptGenerator_Generate_MapField(t *testing.T) {
 		{
 			name:     "optional map",
 			optional: true,
-			want:     "metadata?: Record<string, string>;",
+			want:     "metadata?: Record<string, string> | null;", // both optional AND nullable
 		},
 	}
 
@@ -250,16 +254,16 @@ func TestTypeScriptGenerator_Generate_Primitives(t *testing.T) {
 	}{
 		{"bool", ir.Bool(), "boolean"},
 		{"string", ir.String(), "string"},
-		{"int", ir.Int(0), "number"},
-		{"int8", ir.Int(8), "number"},
-		{"int32", ir.Int(32), "number"},
-		{"int64", ir.Int(64), "number"},
-		{"uint", ir.Uint(0), "number"},
-		{"float32", ir.Float(32), "number"},
-		{"float64", ir.Float(64), "number"},
-		{"bytes", ir.Bytes(), "string"},
-		{"time", ir.Time(), "string"},
-		{"duration", ir.Duration(), "number"},
+		{"int", ir.Int(0), "number /* int */"},
+		{"int8", ir.Int(8), "number /* int8 */"},
+		{"int32", ir.Int(32), "number /* int32 */"},
+		{"int64", ir.Int(64), "number /* int64 */"},
+		{"uint", ir.Uint(0), "number /* uint */"},
+		{"float32", ir.Float(32), "number /* float32 */"},
+		{"float64", ir.Float(64), "number /* float64 */"},
+		{"bytes", ir.Bytes(), "string /* base64 */"},
+		{"time", ir.Time(), "string /* RFC3339 */"},
+		{"duration", ir.Duration(), "number /* nanoseconds */"},
 		{"any", ir.Any(), "unknown"},
 		{"empty", ir.Empty(), "Record<string, never>"},
 	}

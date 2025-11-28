@@ -422,6 +422,7 @@ func getTypeScriptConfig(config GeneratorConfig) TypeScriptConfig {
 		UseReadonlyArrays: false,
 		EnumStyle:         "union",
 		UnknownType:       "unknown",
+		EmitTypeHints:     true, // Show Go types as comments (e.g., /* int64 */, /* RFC3339 */)
 	}
 
 	if config.Custom == nil {
@@ -448,6 +449,9 @@ func getTypeScriptConfig(config GeneratorConfig) TypeScriptConfig {
 	}
 	if v, ok := config.Custom["UnknownType"].(string); ok {
 		tsConfig.UnknownType = v
+	}
+	if v, ok := config.Custom["EmitTypeHints"].(bool); ok {
+		tsConfig.EmitTypeHints = v
 	}
 
 	return tsConfig

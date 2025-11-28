@@ -67,7 +67,7 @@ type User struct {
 export interface User {
     readonly id: string;
     readonly email: string;
-    readonly age?: number;
+    readonly age?: number | null;
 }
 ```
 
@@ -1325,40 +1325,52 @@ This means:
 
 ### 4.9 Nullable and Optional Field Mapping
 
-Go's `encoding/json` produces deterministic JSON output based on field type and struct tags. TypeScript types MUST match this behavior. The mapping is **not configurable**—it follows directly from Go semantics.
+Go's `encoding/json` accepts and produces JSON based on field type and struct tags. TypeScript types MUST represent all valid JSON values for bidirectional contracts (both request bodies and response parsing). The default mapping follows directly from Go semantics. Generators MAY provide configuration options to override this behavior for compatibility with existing codebases.
 
 **Decision Tree:**
 
-1. If `Optional` is true → field is **optional** (`field?: T`)
-2. Else if field type is pointer (`*T`) → field can be **null** (`field: T | null`)
-3. Else if field type is slice or map → field can be **null** (`field: T | null`)
-4. Else → field is **required** (`field: T`)
+For each field, determine two independent boolean properties:
+
+1. **Optional** (`?:`): True if `FieldDescriptor.Optional` is true (i.e., `omitempty` or `omitzero` tag is present)
+2. **Nullable** (`| null`): True if the field's IR type is `*PtrDescriptor`, `*ArrayDescriptor`, or `*MapDescriptor`
+
+Then emit the field according to this table:
+
+| Optional | Nullable | TypeScript Syntax |
+|----------|----------|-------------------|
+| false | false | `field: T` |
+| true | false | `field?: T` |
+| false | true | `field: T \| null` |
+| true | true | `field?: T \| null` |
+
+**Rationale:** While Go's *output* with `omitempty` will never produce `null` (nil values are omitted), Go's *input* accepts `null` for any pointer/slice/map field. Since generated types serve bidirectional contracts (request bodies and responses), types must represent all valid inputs, not just possible outputs.
 
 **Complete Mapping Table:**
 
-| Go Field | Optional | JSON Behavior | TypeScript |
-|----------|----------|---------------|------------|
-| `Field string` | false | Always present | `field: string` |
-| `Field *string` | false | Present, value is `null` or string | `field: string \| null` |
-| `Field string ,omitempty` | true | Omitted if empty string | `field?: string` |
-| `Field *string ,omitempty` | true | Omitted if nil | `field?: string` |
-| `Field []T` | false | Present, value is `null` or array | `field: T[] \| null` |
-| `Field []T ,omitempty` | true | Omitted if nil or empty | `field?: T[]` |
-| `Field *[]T` | false | Present, value is `null` or array | `field: T[] \| null` |
-| `Field *[]T ,omitempty` | true | Omitted if pointer is nil | `field?: T[] \| null` |
-| `Field map[K]V` | false | Present, value is `null` or object | `field: Record<K,V> \| null` |
-| `Field map[K]V ,omitempty` | true | Omitted if nil or empty | `field?: Record<K,V>` |
-| `Field *map[K]V` | false | Present, value is `null` or object | `field: Record<K,V> \| null` |
-| `Field *map[K]V ,omitempty` | true | Omitted if pointer is nil | `field?: Record<K,V> \| null` |
-| `Field Struct` | false | Always present | `field: Struct` |
-| `Field *Struct` | false | Present, value is `null` or object | `field: Struct \| null` |
-| `Field *Struct ,omitempty` | true | Omitted if nil | `field?: Struct` |
+| Go Field | Optional | Nullable | TypeScript |
+|----------|----------|----------|------------|
+| `Field string` | false | false | `field: string` |
+| `Field *string` | false | true | `field: string \| null` |
+| `Field string ,omitempty` | true | false | `field?: string` |
+| `Field *string ,omitempty` | true | true | `field?: string \| null` |
+| `Field []T` | false | true | `field: T[] \| null` |
+| `Field []T ,omitempty` | true | true | `field?: T[] \| null` |
+| `Field *[]T` | false | true | `field: T[] \| null` |
+| `Field *[]T ,omitempty` | true | true | `field?: T[] \| null` |
+| `Field map[K]V` | false | true | `field: Record<K,V> \| null` |
+| `Field map[K]V ,omitempty` | true | true | `field?: Record<K,V> \| null` |
+| `Field *map[K]V` | false | true | `field: Record<K,V> \| null` |
+| `Field *map[K]V ,omitempty` | true | true | `field?: Record<K,V> \| null` |
+| `Field Struct` | false | false | `field: Struct` |
+| `Field Struct ,omitempty` | true | false | `field?: Struct` |
+| `Field *Struct` | false | true | `field: Struct \| null` |
+| `Field *Struct ,omitempty` | true | true | `field?: Struct \| null` |
 
-**Key Insight:** Go almost never produces `field?: T | null`. A field is typically either:
-- Always present (possibly null): `field: T | null`
-- Optional (never null when present): `field?: T`
+**Key Insight:** Any Go type that can hold `nil` (pointers, slices, maps) produces `| null` in TypeScript. The `omitempty`/`omitzero` tag independently controls whether the field can be absent (`?:`). These are orthogonal concerns:
+- `| null` = "Go accepts/produces `null` for this field"
+- `?:` = "Go accepts/produces absence for this field"
 
-**Exception: Pointer to collection (`*[]T`, `*map[K]V`):** With `Optional=true`, the field is omitted only when the *pointer* is nil. If the pointer is non-nil but points to a nil or empty collection, the field is present with value `null` or `[]`/`{}`. This creates the rare case of `field?: T | null`.
+**Nested Pointers:** Go allows nested pointers (`**T`, `***T`, etc.), but `encoding/json` marshals all nil pointer indirections identically—they all serialize to `null`. A non-nil outer pointer to a nil inner pointer also serializes to `null`. Generators MUST flatten nested pointers to a single `| null` in the output type (i.e., `**string` becomes `string | null`, not `string | null | null`).
 
 **Note on `omitempty` vs `omitzero` runtime behavior:**
 

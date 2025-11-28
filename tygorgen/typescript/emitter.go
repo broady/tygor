@@ -406,34 +406,64 @@ func (e *Emitter) EmitTypeExpr(typ ir.TypeDescriptor) (string, error) {
 
 // emitPrimitive emits a primitive type.
 func (e *Emitter) emitPrimitive(p *ir.PrimitiveDescriptor) string {
+	tsType, hint := e.primitiveTypeAndHint(p)
+	if e.tsConfig.EmitTypeHints && hint != "" {
+		return tsType + " /* " + hint + " */"
+	}
+	return tsType
+}
+
+// primitiveTypeAndHint returns the TypeScript type and optional hint for a primitive.
+func (e *Emitter) primitiveTypeAndHint(p *ir.PrimitiveDescriptor) (tsType, hint string) {
 	switch p.PrimitiveKind {
 	case ir.PrimitiveBool:
-		return "boolean"
-	case ir.PrimitiveInt, ir.PrimitiveUint, ir.PrimitiveFloat:
-		return "number"
+		return "boolean", ""
+	case ir.PrimitiveInt:
+		hint = e.intHint(p.BitSize, true)
+		return "number", hint
+	case ir.PrimitiveUint:
+		hint = e.intHint(p.BitSize, false)
+		return "number", hint
+	case ir.PrimitiveFloat:
+		if p.BitSize == 32 {
+			return "number", "float32"
+		}
+		return "number", "float64"
 	case ir.PrimitiveString:
-		return "string"
+		return "string", ""
 	case ir.PrimitiveBytes:
-		return "string" // base64
+		return "string", "base64"
 	case ir.PrimitiveTime:
 		// Check for custom type mapping
 		if mapped, ok := e.config.TypeMappings["time.Time"]; ok {
-			return mapped
+			return mapped, ""
 		}
-		return "string" // RFC 3339
+		return "string", "RFC3339"
 	case ir.PrimitiveDuration:
 		// Check for custom type mapping
 		if mapped, ok := e.config.TypeMappings["time.Duration"]; ok {
-			return mapped
+			return mapped, ""
 		}
-		return "number" // nanoseconds
+		return "number", "nanoseconds"
 	case ir.PrimitiveAny:
-		return e.tsConfig.UnknownType
+		return e.tsConfig.UnknownType, ""
 	case ir.PrimitiveEmpty:
-		return "Record<string, never>"
+		return "Record<string, never>", ""
 	default:
-		return e.tsConfig.UnknownType
+		return e.tsConfig.UnknownType, ""
 	}
+}
+
+// intHint returns a type hint for integer types.
+func (e *Emitter) intHint(bitSize int, signed bool) string {
+	prefix := "int"
+	if !signed {
+		prefix = "uint"
+	}
+	if bitSize == 0 {
+		return prefix // platform-dependent
+	}
+	return fmt.Sprintf("%s%d", prefix, bitSize)
 }
 
 // emitArray emits an array type.
@@ -556,55 +586,41 @@ func (e *Emitter) emitTypeParameters(params []ir.TypeParameterDescriptor) (strin
 }
 
 // determineOptionalNullable determines if a field should be optional and/or nullable.
-// Implements the decision tree from §4.9, with OptionalType override.
+// Implements the decision tree from §4.9. Optional and nullable are independent:
+// - Optional (`?:`) is true when omitempty/omitzero is set
+// - Nullable (`| null`) is true when the underlying type can be nil (pointer, slice, map)
 func (e *Emitter) determineOptionalNullable(field ir.FieldDescriptor) (optional, nullable bool, err error) {
-	// First, determine if the field can be absent based on Go semantics
-	canBeAbsent := false
-	reason := "" // "optional", "pointer", "slice", "map"
+	// Optional is determined by the omitempty/omitzero tag
+	optional = field.Optional
 
-	if field.Optional {
-		canBeAbsent = true
-		reason = "optional"
-		// Check for the rare case of pointer to collection (always nullable too)
-		if ptr, ok := field.Type.(*ir.PtrDescriptor); ok {
-			if _, isArray := ptr.Element.(*ir.ArrayDescriptor); isArray {
-				// Optional pointer to slice: field?: T | null
-				return true, true, nil
-			} else if _, isMap := ptr.Element.(*ir.MapDescriptor); isMap {
-				// Optional pointer to map: field?: T | null
-				return true, true, nil
-			}
-		}
-	} else if _, ok := field.Type.(*ir.PtrDescriptor); ok {
-		canBeAbsent = true
-		reason = "pointer"
-	} else if _, ok := field.Type.(*ir.ArrayDescriptor); ok {
-		canBeAbsent = true
-		reason = "slice"
-	} else if _, ok := field.Type.(*ir.MapDescriptor); ok {
-		canBeAbsent = true
-		reason = "map"
+	// Nullable is determined by whether the type can hold nil
+	// Check for pointer, slice, or map (unwrapping pointers to get to the base)
+	fieldType := field.Type
+	switch fieldType.(type) {
+	case *ir.PtrDescriptor:
+		nullable = true
+	case *ir.ArrayDescriptor:
+		nullable = true
+	case *ir.MapDescriptor:
+		nullable = true
 	}
 
-	if !canBeAbsent {
-		return false, false, nil
-	}
-
-	// Apply OptionalType setting
+	// Apply OptionalType override if configured
 	switch e.tsConfig.OptionalType {
 	case "null":
-		// All absent fields use | null
-		return false, true, nil
+		// Force all optional/nullable fields to use | null only (no ?:)
+		if optional || nullable {
+			return false, true, nil
+		}
 	case "undefined":
-		// All absent fields use ?:
-		return true, false, nil
-	default: // "default" or ""
-		// §4.9 spec behavior: omitempty→optional, pointers/slices/maps→nullable
-		if reason == "optional" {
+		// Force all optional/nullable fields to use ?: only (no | null)
+		if optional || nullable {
 			return true, false, nil
 		}
-		return false, true, nil
 	}
+	// default: use the independent optional/nullable values as computed
+
+	return optional, nullable, nil
 }
 
 // getPropertyName returns the property name for a field.
