@@ -45,6 +45,7 @@ func NewFilesystemSink(root string) *FilesystemSink {
 
 // WriteFile writes content to path within the root directory.
 // It creates parent directories as needed and performs atomic writes via temp file + rename.
+// This method is safe for concurrent use.
 func (s *FilesystemSink) WriteFile(ctx context.Context, path string, content []byte) error {
 	// Validate path
 	if err := ValidatePath(path); err != nil {
@@ -72,13 +73,6 @@ func (s *FilesystemSink) WriteFile(ctx context.Context, path string, content []b
 		return fmt.Errorf("path escapes root directory: %q", path)
 	}
 
-	// Check if file exists and Overwrite is false
-	if !s.Overwrite {
-		if _, err := os.Stat(fullPath); err == nil {
-			return fmt.Errorf("file already exists: %q", path)
-		}
-	}
-
 	// Create parent directories
 	dir := filepath.Dir(fullPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -103,29 +97,47 @@ func (s *FilesystemSink) WriteFile(ctx context.Context, path string, content []b
 	_, writeErr := tempFile.Write(content)
 	closeErr := tempFile.Close()
 
+	// cleanupTempFile is a helper that attempts to remove the temp file.
+	// Cleanup errors are intentionally not returned because:
+	// 1. We're already in an error path returning a more important error
+	// 2. Libraries shouldn't log directly
+	// 3. Leftover temp files have a predictable prefix (.tygor-*.tmp) for manual cleanup
+	cleanupTempFile := func() {
+		_ = os.Remove(tempPath) // Best-effort cleanup; error intentionally ignored
+	}
+
 	if writeErr != nil {
-		os.Remove(tempPath) // Clean up temp file
+		cleanupTempFile()
 		return fmt.Errorf("failed to write temp file: %w", writeErr)
 	}
 	if closeErr != nil {
-		os.Remove(tempPath) // Clean up temp file
+		cleanupTempFile()
 		return fmt.Errorf("failed to close temp file: %w", closeErr)
 	}
 
 	// Set correct permissions after writing
 	if err := os.Chmod(tempPath, mode); err != nil {
-		os.Remove(tempPath) // Clean up temp file
+		cleanupTempFile()
 		return fmt.Errorf("failed to set file mode: %w", err)
 	}
 
 	// Check context again before rename
 	if err := ctx.Err(); err != nil {
-		os.Remove(tempPath) // Clean up temp file
+		cleanupTempFile()
 		return err
 	}
 
+	// Check if file exists when Overwrite is false
+	if !s.Overwrite {
+		if _, err := os.Stat(fullPath); err == nil {
+			cleanupTempFile()
+			return fmt.Errorf("file already exists: %q", path)
+		}
+	}
+
+	// Rename temp file to final destination
 	if err := os.Rename(tempPath, fullPath); err != nil {
-		os.Remove(tempPath) // Clean up temp file
+		cleanupTempFile()
 		return fmt.Errorf("failed to rename temp file: %w", err)
 	}
 
