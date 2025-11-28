@@ -81,7 +81,8 @@ func main() {
 	// [snippet:app-setup]
 
 	app := tygor.NewApp().
-		WithMiddleware(middleware.CORS(middleware.CORSAllowAll))
+		WithMiddleware(middleware.CORS(middleware.CORSAllowAll)).
+		WithUnaryInterceptor(middleware.LoggingInterceptor(nil))
 
 	tasks := app.Service("Tasks")
 	tasks.Register("List", tygor.Query(ListTasks))
