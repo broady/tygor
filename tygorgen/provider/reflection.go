@@ -5,6 +5,7 @@ package provider
 
 import (
 	"context"
+	"encoding"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -12,6 +13,12 @@ import (
 	"time"
 
 	"github.com/broady/tygor/tygorgen/ir"
+)
+
+// marshalerInterfaces holds reflect.Type values for interface checks.
+var (
+	jsonMarshalerType = reflect.TypeOf((*json.Marshaler)(nil)).Elem()
+	textMarshalerType = reflect.TypeOf((*encoding.TextMarshaler)(nil)).Elem()
 )
 
 // ReflectionProvider extracts types using runtime reflection.
@@ -114,7 +121,14 @@ func (b *reflectionSchemaBuilder) extractType(ctx context.Context, t reflect.Typ
 	var err error
 	switch t.Kind() {
 	case reflect.Struct:
-		err = b.extractStruct(ctx, t)
+		// §3.3.6: Check for custom marshalers on named struct types.
+		// These are emitted as AliasDescriptor with Underlying = PrimitiveAny.
+		// Exception: well-known types (time.Time, etc.) are handled in checkSpecialType.
+		if t.Name() != "" && t.PkgPath() != "" && b.checkSpecialType(t) == nil && b.hasCustomMarshaler(t) {
+			err = b.extractCustomMarshalerAlias(t)
+		} else {
+			err = b.extractStruct(ctx, t)
+		}
 	case reflect.Slice, reflect.Array:
 		// For named slice/array types (e.g., type MySlice []int), extract as alias
 		if t.Name() != "" && t.PkgPath() != "" {
@@ -225,6 +239,34 @@ func (b *reflectionSchemaBuilder) extractStruct(ctx context.Context, t reflect.T
 		Fields:  fields,
 		Extends: extends,
 		// Documentation and Source are zero values for reflection provider
+	}
+
+	b.schema.AddType(desc)
+	return nil
+}
+
+// extractCustomMarshalerAlias creates an alias for a type implementing json.Marshaler or encoding.TextMarshaler.
+// Per §3.3.6, these types are emitted as AliasDescriptor with Underlying = PrimitiveAny.
+func (b *reflectionSchemaBuilder) extractCustomMarshalerAlias(t reflect.Type) error {
+	name := t.Name()
+	pkg := t.PkgPath()
+
+	// Check for name collision
+	fullName := pkg + "." + name
+	if b.typeNames[fullName] {
+		return nil
+	}
+	b.typeNames[fullName] = true
+
+	// Add warning
+	typeName := t.String()
+	b.addWarning("CUSTOM_MARSHALER", fmt.Sprintf(
+		"Type %s implements json.Marshaler or encoding.TextMarshaler, mapped to 'any'", typeName), typeName)
+
+	// Create alias with PrimitiveAny as underlying type
+	desc := &ir.AliasDescriptor{
+		Name:       ir.GoIdentifier{Name: name, Package: pkg},
+		Underlying: ir.Any(),
 	}
 
 	b.schema.AddType(desc)
@@ -672,7 +714,42 @@ func (b *reflectionSchemaBuilder) checkSpecialType(t reflect.Type) ir.TypeDescri
 		return ir.Empty()
 	}
 
+	// §3.3.6 Custom Marshaler Handling: Check for types implementing json.Marshaler
+	// or encoding.TextMarshaler. These types emit PrimitiveAny since the provider
+	// cannot statically determine the JSON output of custom marshal methods.
+	// Note: This check comes AFTER well-known types (time.Time, etc.) which have
+	// dedicated primitive kinds despite implementing these interfaces.
+	if b.hasCustomMarshaler(t) {
+		typeName := t.String()
+		b.addWarning("CUSTOM_MARSHALER", fmt.Sprintf(
+			"Type %s implements json.Marshaler or encoding.TextMarshaler, mapped to 'any'", typeName), typeName)
+		return ir.Any()
+	}
+
 	return nil
+}
+
+// hasCustomMarshaler checks if a type implements json.Marshaler or encoding.TextMarshaler.
+// Both the type and pointer-to-type are checked since marshaler methods may have
+// either value or pointer receivers.
+func (b *reflectionSchemaBuilder) hasCustomMarshaler(t reflect.Type) bool {
+	// Check if the type or *type implements json.Marshaler
+	if t.Implements(jsonMarshalerType) {
+		return true
+	}
+	if t.Kind() != reflect.Ptr && reflect.PointerTo(t).Implements(jsonMarshalerType) {
+		return true
+	}
+
+	// Check if the type or *type implements encoding.TextMarshaler
+	if t.Implements(textMarshalerType) {
+		return true
+	}
+	if t.Kind() != reflect.Ptr && reflect.PointerTo(t).Implements(textMarshalerType) {
+		return true
+	}
+
+	return false
 }
 
 // checkUnsupportedType returns an error if the type is unsupported.

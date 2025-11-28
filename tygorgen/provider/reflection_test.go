@@ -1784,6 +1784,212 @@ func TestReflectionProvider_MapWithNamedKeyType(t *testing.T) {
 	}
 }
 
+// Test types for custom marshaler detection
+
+// JSONMarshalerType implements json.Marshaler
+type JSONMarshalerType struct {
+	internal string
+}
+
+func (j JSONMarshalerType) MarshalJSON() ([]byte, error) {
+	return []byte(`"custom"`), nil
+}
+
+// TextMarshalerType implements encoding.TextMarshaler
+type TextMarshalerType struct {
+	internal string
+}
+
+func (t TextMarshalerType) MarshalText() ([]byte, error) {
+	return []byte("custom"), nil
+}
+
+// PtrJSONMarshalerType has MarshalJSON on pointer receiver
+type PtrJSONMarshalerType struct {
+	internal string
+}
+
+func (p *PtrJSONMarshalerType) MarshalJSON() ([]byte, error) {
+	return []byte(`"custom"`), nil
+}
+
+// ContainsCustomMarshalers has fields with custom marshaler types
+type ContainsCustomMarshalers struct {
+	JSON JSONMarshalerType     `json:"json"`
+	Text TextMarshalerType     `json:"text"`
+	Ptr  *PtrJSONMarshalerType `json:"ptr"`
+}
+
+func TestReflectionProvider_CustomMarshaler(t *testing.T) {
+	provider := &ReflectionProvider{}
+
+	schema, err := provider.BuildSchema(context.Background(), ReflectionInputOptions{
+		RootTypes: []reflect.Type{
+			reflect.TypeOf(JSONMarshalerType{}),
+			reflect.TypeOf(TextMarshalerType{}),
+		},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	// Both types should generate CUSTOM_MARSHALER warnings
+	foundWarnings := make(map[string]bool)
+	for _, w := range schema.Warnings {
+		if w.Code == "CUSTOM_MARSHALER" {
+			foundWarnings[w.TypeName] = true
+		}
+	}
+
+	for _, typeName := range []string{
+		"provider.JSONMarshalerType",
+		"provider.TextMarshalerType",
+	} {
+		if !foundWarnings[typeName] {
+			t.Errorf("expected CUSTOM_MARSHALER warning for %s", typeName)
+		}
+	}
+}
+
+func TestReflectionProvider_CustomMarshalerAsField(t *testing.T) {
+	provider := &ReflectionProvider{}
+
+	schema, err := provider.BuildSchema(context.Background(), ReflectionInputOptions{
+		RootTypes: []reflect.Type{reflect.TypeOf(ContainsCustomMarshalers{})},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	// Find ContainsCustomMarshalers struct
+	var structDesc *ir.StructDescriptor
+	for _, typ := range schema.Types {
+		if sd, ok := typ.(*ir.StructDescriptor); ok && sd.Name.Name == "ContainsCustomMarshalers" {
+			structDesc = sd
+			break
+		}
+	}
+
+	if structDesc == nil {
+		t.Fatal("ContainsCustomMarshalers not found")
+	}
+
+	// All three fields should be PrimitiveAny
+	for _, fieldName := range []string{"JSON", "Text", "Ptr"} {
+		field := findField(structDesc.Fields, fieldName)
+		if field == nil {
+			t.Errorf("field %s not found", fieldName)
+			continue
+		}
+
+		// Dereference PtrDescriptor for Ptr field
+		fieldType := field.Type
+		if ptr, ok := fieldType.(*ir.PtrDescriptor); ok {
+			fieldType = ptr.Element
+		}
+
+		primDesc, ok := fieldType.(*ir.PrimitiveDescriptor)
+		if !ok {
+			t.Errorf("field %s: expected PrimitiveDescriptor, got %T", fieldName, fieldType)
+			continue
+		}
+		if primDesc.PrimitiveKind != ir.PrimitiveAny {
+			t.Errorf("field %s: expected PrimitiveAny, got %v", fieldName, primDesc.PrimitiveKind)
+		}
+	}
+
+	// Should have warnings for the custom marshaler types
+	hasWarning := false
+	for _, w := range schema.Warnings {
+		if w.Code == "CUSTOM_MARSHALER" {
+			hasWarning = true
+			break
+		}
+	}
+	if !hasWarning {
+		t.Error("expected CUSTOM_MARSHALER warning")
+	}
+}
+
+func TestReflectionProvider_CustomMarshalerPtrReceiver(t *testing.T) {
+	provider := &ReflectionProvider{}
+
+	schema, err := provider.BuildSchema(context.Background(), ReflectionInputOptions{
+		RootTypes: []reflect.Type{reflect.TypeOf(PtrJSONMarshalerType{})},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	// Should detect that *PtrJSONMarshalerType implements json.Marshaler
+	hasWarning := false
+	for _, w := range schema.Warnings {
+		if w.Code == "CUSTOM_MARSHALER" && strings.Contains(w.TypeName, "PtrJSONMarshalerType") {
+			hasWarning = true
+			break
+		}
+	}
+	if !hasWarning {
+		t.Error("expected CUSTOM_MARSHALER warning for PtrJSONMarshalerType (pointer receiver)")
+	}
+}
+
+func TestReflectionProvider_TimeNotCustomMarshaler(t *testing.T) {
+	// time.Time implements json.Marshaler but should be handled specially,
+	// not as a generic custom marshaler
+
+	provider := &ReflectionProvider{}
+
+	type WithTime struct {
+		T time.Time `json:"t"`
+	}
+
+	schema, err := provider.BuildSchema(context.Background(), ReflectionInputOptions{
+		RootTypes: []reflect.Type{reflect.TypeOf(WithTime{})},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	// Should NOT have a CUSTOM_MARSHALER warning for time.Time
+	for _, w := range schema.Warnings {
+		if w.Code == "CUSTOM_MARSHALER" && strings.Contains(w.TypeName, "time.Time") {
+			t.Errorf("time.Time should not generate CUSTOM_MARSHALER warning: %v", w)
+		}
+	}
+
+	// Find WithTime struct
+	var structDesc *ir.StructDescriptor
+	for _, typ := range schema.Types {
+		if sd, ok := typ.(*ir.StructDescriptor); ok && sd.Name.Name == "WithTime" {
+			structDesc = sd
+			break
+		}
+	}
+
+	if structDesc == nil {
+		t.Fatal("WithTime not found")
+	}
+
+	// The T field should be PrimitiveTime, not PrimitiveAny
+	tField := findField(structDesc.Fields, "T")
+	if tField == nil {
+		t.Fatal("T field not found")
+	}
+
+	primDesc, ok := tField.Type.(*ir.PrimitiveDescriptor)
+	if !ok {
+		t.Fatalf("T field: expected PrimitiveDescriptor, got %T", tField.Type)
+	}
+	if primDesc.PrimitiveKind != ir.PrimitiveTime {
+		t.Errorf("T field: expected PrimitiveTime, got %v", primDesc.PrimitiveKind)
+	}
+}
+
 // Helper function to find a field by name
 func findField(fields []ir.FieldDescriptor, name string) *ir.FieldDescriptor {
 	for i := range fields {
