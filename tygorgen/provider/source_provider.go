@@ -42,6 +42,7 @@ func (p *SourceProvider) BuildSchema(ctx context.Context, opts SourceInputOption
 			packages.NeedFiles |
 			packages.NeedCompiledGoFiles |
 			packages.NeedImports |
+			packages.NeedDeps |
 			packages.NeedTypes |
 			packages.NeedSyntax |
 			packages.NeedTypesInfo,
@@ -990,10 +991,16 @@ func (b *schemaBuilder) convertTypeParamConstraint(constraint types.Type) ir.Typ
 	if named, ok := constraint.(*types.Named); ok {
 		underlying := named.Underlying()
 		if iface, ok := underlying.(*types.Interface); ok {
-			// Recursively process the underlying interface
+			// Recursively process the underlying interface to extract union type sets
 			result := b.convertTypeParamConstraint(iface)
 			if result != nil {
 				return result
+			}
+			// If the interface has methods but no union type set, return a reference
+			// to the named constraint type (e.g., [T Stringer] -> Ref("Stringer"))
+			if iface.NumMethods() > 0 {
+				obj := named.Obj()
+				return ir.Ref(obj.Name(), obj.Pkg().Path())
 			}
 		}
 		// Fall through to convertType for other named types
