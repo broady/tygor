@@ -93,6 +93,28 @@ func (b *reflectionSchemaBuilder) extractType(ctx context.Context, t reflect.Typ
 	switch t.Kind() {
 	case reflect.Struct:
 		err = b.extractStruct(ctx, t)
+	case reflect.Slice, reflect.Array:
+		// For named slice/array types (e.g., type MySlice []int), extract as alias
+		if t.Name() != "" && t.PkgPath() != "" {
+			err = b.extractAlias(ctx, t)
+		}
+		// Also recursively extract element type (needed for anonymous slice/array root types)
+		if err == nil {
+			err = b.extractType(ctx, t.Elem())
+		}
+	case reflect.Map:
+		// For named map types (e.g., type StringMap map[string]string), extract as alias
+		if t.Name() != "" && t.PkgPath() != "" {
+			err = b.extractAlias(ctx, t)
+		}
+		// Recursively extract key and value types
+		if err == nil {
+			if keyErr := b.extractType(ctx, t.Key()); keyErr != nil {
+				err = keyErr
+			} else {
+				err = b.extractType(ctx, t.Elem())
+			}
+		}
 	default:
 		// For named types (including type aliases), create an alias descriptor
 		if t.Name() != "" && t.PkgPath() != "" {
@@ -497,6 +519,13 @@ func (b *reflectionSchemaBuilder) typeToDescriptor(ctx context.Context, t reflec
 		return ir.String(), nil
 
 	case reflect.Slice:
+		// Check if this is a named slice type first (e.g., type MySlice []int)
+		if t.Name() != "" && t.PkgPath() != "" {
+			if err := b.extractType(ctx, t); err != nil {
+				return nil, err
+			}
+			return ir.Ref(b.getTypeName(t), t.PkgPath()), nil
+		}
 		// Special case: []byte
 		if t.Elem().Kind() == reflect.Uint8 {
 			return ir.Bytes(), nil
@@ -508,6 +537,13 @@ func (b *reflectionSchemaBuilder) typeToDescriptor(ctx context.Context, t reflec
 		return ir.Slice(elem), nil
 
 	case reflect.Array:
+		// Check if this is a named array type first (e.g., type Hash [32]byte)
+		if t.Name() != "" && t.PkgPath() != "" {
+			if err := b.extractType(ctx, t); err != nil {
+				return nil, err
+			}
+			return ir.Ref(b.getTypeName(t), t.PkgPath()), nil
+		}
 		elem, err := b.typeToDescriptor(ctx, t.Elem(), "", "")
 		if err != nil {
 			return nil, err
@@ -515,6 +551,13 @@ func (b *reflectionSchemaBuilder) typeToDescriptor(ctx context.Context, t reflec
 		return ir.Array(elem, t.Len()), nil
 
 	case reflect.Map:
+		// Check if this is a named map type first (e.g., type StringMap map[string]string)
+		if t.Name() != "" && t.PkgPath() != "" {
+			if err := b.extractType(ctx, t); err != nil {
+				return nil, err
+			}
+			return ir.Ref(b.getTypeName(t), t.PkgPath()), nil
+		}
 		// Validate key type
 		if err := b.validateMapKeyType(t.Key()); err != nil {
 			return nil, err

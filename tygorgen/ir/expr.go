@@ -1,5 +1,7 @@
 package ir
 
+import "fmt"
+
 // ArrayDescriptor represents an ordered collection (slice or fixed-length array).
 //
 // Nullability: Go slices (Length == 0) can be nil, which serializes to JSON null.
@@ -26,12 +28,23 @@ type ArrayDescriptor struct {
 func (d *ArrayDescriptor) Kind() DescriptorKind { return KindArray }
 
 // Slice returns an ArrayDescriptor for a slice type.
+// Panics if element is nil.
 func Slice(element TypeDescriptor) *ArrayDescriptor {
+	if element == nil {
+		panic("ir.Slice: element cannot be nil")
+	}
 	return &ArrayDescriptor{Element: element, Length: 0}
 }
 
 // Array returns an ArrayDescriptor for a fixed-length array.
+// Panics if element is nil or length is negative.
 func Array(element TypeDescriptor, length int) *ArrayDescriptor {
+	if element == nil {
+		panic("ir.Array: element cannot be nil")
+	}
+	if length < 0 {
+		panic("ir.Array: length cannot be negative")
+	}
 	return &ArrayDescriptor{Element: element, Length: length}
 }
 
@@ -57,7 +70,14 @@ type MapDescriptor struct {
 func (d *MapDescriptor) Kind() DescriptorKind { return KindMap }
 
 // Map returns a MapDescriptor for a map type.
+// Panics if key or value is nil.
 func Map(key, value TypeDescriptor) *MapDescriptor {
+	if key == nil {
+		panic("ir.Map: key cannot be nil")
+	}
+	if value == nil {
+		panic("ir.Map: value cannot be nil")
+	}
 	return &MapDescriptor{Key: key, Value: value}
 }
 
@@ -92,7 +112,11 @@ type PtrDescriptor struct {
 func (d *PtrDescriptor) Kind() DescriptorKind { return KindPtr }
 
 // Ptr returns a PtrDescriptor for a pointer type.
+// Panics if element is nil.
 func Ptr(element TypeDescriptor) *PtrDescriptor {
+	if element == nil {
+		panic("ir.Ptr: element cannot be nil")
+	}
 	return &PtrDescriptor{Element: element}
 }
 
@@ -117,7 +141,16 @@ type UnionDescriptor struct {
 func (d *UnionDescriptor) Kind() DescriptorKind { return KindUnion }
 
 // Union returns a UnionDescriptor for a union of types.
+// Panics if types is empty or contains nil elements.
 func Union(types ...TypeDescriptor) *UnionDescriptor {
+	if len(types) == 0 {
+		panic("ir.Union: must have at least 1 type")
+	}
+	for i, t := range types {
+		if t == nil {
+			panic(fmt.Sprintf("ir.Union: type at index %d is nil", i))
+		}
+	}
 	return &UnionDescriptor{Types: types}
 }
 

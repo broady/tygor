@@ -81,7 +81,7 @@ func (s *Schema) Validate() []error {
 		}
 	}
 
-	// Validate struct fields
+	// Validate struct fields and Extends references
 	for _, t := range s.Types {
 		if sd, ok := t.(*StructDescriptor); ok {
 			for _, field := range sd.Fields {
@@ -92,7 +92,21 @@ func (s *Schema) Validate() []error {
 					})
 				}
 			}
+			// Validate Extends references exist
+			for _, ext := range sd.Extends {
+				if !typeNames[ext] {
+					errors = append(errors, &ValidationError{
+						Code:    "missing_extends_reference",
+						Message: "struct " + sd.Name.Name + " extends unknown type: " + ext.Name,
+					})
+				}
+			}
 		}
+	}
+
+	// Check for circular inheritance
+	if circularErrs := s.detectCircularInheritance(typeNames); len(circularErrs) > 0 {
+		errors = append(errors, circularErrs...)
 	}
 
 	// Walk all Services and Endpoints
@@ -218,4 +232,67 @@ type ValidationError struct {
 
 func (e *ValidationError) Error() string {
 	return e.Message
+}
+
+// detectCircularInheritance checks for cycles in struct inheritance (Extends).
+func (s *Schema) detectCircularInheritance(typeNames map[GoIdentifier]bool) []*ValidationError {
+	var errors []*ValidationError
+
+	// Build a map of struct name -> struct descriptor
+	structs := make(map[GoIdentifier]*StructDescriptor)
+	for _, t := range s.Types {
+		if sd, ok := t.(*StructDescriptor); ok {
+			structs[sd.Name] = sd
+		}
+	}
+
+	// DFS cycle detection
+	visited := make(map[GoIdentifier]bool)
+	inStack := make(map[GoIdentifier]bool)
+
+	var detectCycle func(name GoIdentifier, path []string) bool
+	detectCycle = func(name GoIdentifier, path []string) bool {
+		if inStack[name] {
+			// Cycle detected
+			cyclePath := append(path, name.Name)
+			errors = append(errors, &ValidationError{
+				Code:    "circular_inheritance",
+				Message: "circular inheritance detected: " + joinPath(cyclePath),
+			})
+			return true
+		}
+		if visited[name] {
+			return false
+		}
+
+		visited[name] = true
+		inStack[name] = true
+
+		if sd, ok := structs[name]; ok {
+			for _, ext := range sd.Extends {
+				detectCycle(ext, append(path, name.Name))
+			}
+		}
+
+		inStack[name] = false
+		return false
+	}
+
+	for name := range structs {
+		detectCycle(name, nil)
+	}
+
+	return errors
+}
+
+// joinPath joins path elements with " -> ".
+func joinPath(path []string) string {
+	if len(path) == 0 {
+		return ""
+	}
+	result := path[0]
+	for i := 1; i < len(path); i++ {
+		result += " -> " + path[i]
+	}
+	return result
 }

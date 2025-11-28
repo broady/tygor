@@ -97,11 +97,27 @@ func Generate(app *tygor.App, cfg *Config) error {
 		return fmt.Errorf("failed to build schema: %w", err)
 	}
 
+	// Report schema build warnings
+	if len(schema.Warnings) > 0 {
+		for _, w := range schema.Warnings {
+			fmt.Fprintf(os.Stderr, "Warning (schema): %s: %s\n", w.Code, w.Message)
+		}
+	}
+
 	// 2. Build service descriptors from routes
 	services := buildServiceDescriptors(routes)
 	schema.Services = services
 
-	// 3. Configure TypeScript generator
+	// 3. Validate schema
+	if errs := schema.Validate(); len(errs) > 0 {
+		// Return first error, but log all
+		for _, e := range errs {
+			fmt.Fprintf(os.Stderr, "Schema validation error: %s\n", e.Error())
+		}
+		return fmt.Errorf("schema validation failed: %w", errs[0])
+	}
+
+	// 4. Configure TypeScript generator
 	tsConfig := typescript.GeneratorConfig{
 		TypePrefix:         "",
 		TypeSuffix:         "",
@@ -127,10 +143,10 @@ func Generate(app *tygor.App, cfg *Config) error {
 		},
 	}
 
-	// 4. Create filesystem sink
+	// 5. Create filesystem sink
 	filesystemSink := sink.NewFilesystemSink(cfg.OutDir)
 
-	// 5. Generate TypeScript
+	// 6. Generate TypeScript
 	gen := &typescript.TypeScriptGenerator{}
 	result, err := gen.Generate(ctx, schema, typescript.GenerateOptions{
 		Sink:   filesystemSink,
@@ -326,13 +342,23 @@ func collectPackagesFromRoutes(routes internal.RouteMap) []string {
 
 	for _, route := range routes {
 		if route.Request != nil {
-			if pkg := route.Request.PkgPath(); pkg != "" && !seen[pkg] {
+			// Unwrap pointers - pointer types return empty PkgPath()
+			t := route.Request
+			for t.Kind() == reflect.Pointer {
+				t = t.Elem()
+			}
+			if pkg := t.PkgPath(); pkg != "" && !seen[pkg] {
 				seen[pkg] = true
 				pkgs = append(pkgs, pkg)
 			}
 		}
 		if route.Response != nil {
-			if pkg := route.Response.PkgPath(); pkg != "" && !seen[pkg] {
+			// Unwrap pointers - pointer types return empty PkgPath()
+			t := route.Response
+			for t.Kind() == reflect.Pointer {
+				t = t.Elem()
+			}
+			if pkg := t.PkgPath(); pkg != "" && !seen[pkg] {
 				seen[pkg] = true
 				pkgs = append(pkgs, pkg)
 			}
@@ -378,14 +404,24 @@ func collectRootTypeNames(routes internal.RouteMap) []string {
 
 	for _, route := range routes {
 		if route.Request != nil {
-			name := route.Request.Name()
+			// Unwrap pointers - pointer types return empty Name()
+			t := route.Request
+			for t.Kind() == reflect.Pointer {
+				t = t.Elem()
+			}
+			name := t.Name()
 			if name != "" && !seen[name] {
 				seen[name] = true
 				names = append(names, name)
 			}
 		}
 		if route.Response != nil {
-			name := route.Response.Name()
+			// Unwrap pointers - pointer types return empty Name()
+			t := route.Response
+			for t.Kind() == reflect.Pointer {
+				t = t.Elem()
+			}
+			name := t.Name()
 			if name != "" && !seen[name] {
 				seen[name] = true
 				names = append(names, name)

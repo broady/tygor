@@ -32,6 +32,9 @@ type FilesystemSink struct {
 	// Overwrite controls behavior for existing files.
 	// If false, returns an error when a file exists.
 	Overwrite bool
+
+	// mu protects concurrent writes when Overwrite is false
+	mu sync.Mutex
 }
 
 // NewFilesystemSink creates a new FilesystemSink writing to the specified root directory.
@@ -45,6 +48,7 @@ func NewFilesystemSink(root string) *FilesystemSink {
 
 // WriteFile writes content to path within the root directory.
 // It creates parent directories as needed and performs atomic writes via temp file + rename.
+// This method is safe for concurrent use.
 func (s *FilesystemSink) WriteFile(ctx context.Context, path string, content []byte) error {
 	// Validate path
 	if err := ValidatePath(path); err != nil {
@@ -71,6 +75,10 @@ func (s *FilesystemSink) WriteFile(ctx context.Context, path string, content []b
 	if !strings.HasPrefix(absPath, absRoot+string(filepath.Separator)) && absPath != absRoot {
 		return fmt.Errorf("path escapes root directory: %q", path)
 	}
+
+	// Lock to make the stat+write sequence atomic when Overwrite is false
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	// Check if file exists and Overwrite is false
 	if !s.Overwrite {

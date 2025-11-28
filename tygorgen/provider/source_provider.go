@@ -9,6 +9,7 @@ import (
 	"go/constant"
 	"go/token"
 	"go/types"
+	"path/filepath"
 	"strings"
 
 	"github.com/broady/tygor/tygorgen/ir"
@@ -83,10 +84,15 @@ func (p *SourceProvider) BuildSchema(ctx context.Context, opts SourceInputOption
 			break
 		}
 	}
+	// Get the actual directory from the package's files
+	pkgDir := mainPkg.PkgPath // fallback to package path
+	if len(mainPkg.GoFiles) > 0 {
+		pkgDir = filepath.Dir(mainPkg.GoFiles[0])
+	}
 	builder.schema.Package = ir.PackageInfo{
 		Path: mainPkg.PkgPath,
 		Name: mainPkg.Name,
-		Dir:  mainPkg.PkgPath,
+		Dir:  pkgDir,
 	}
 
 	// Find and process root types
@@ -202,7 +208,11 @@ func (b *schemaBuilder) extractNamedType(tn *types.TypeName) error {
 
 	// Check if this is an enum type
 	if consts, isEnum := b.enumCandidates[named]; isEnum && len(consts) > 0 {
-		enumDesc := b.buildEnumDescriptor(tn.Name(), named.Obj().Pkg().Path(), consts, doc, src)
+		pkgPath := ""
+		if named.Obj() != nil && named.Obj().Pkg() != nil {
+			pkgPath = named.Obj().Pkg().Path()
+		}
+		enumDesc := b.buildEnumDescriptor(tn.Name(), pkgPath, consts, doc, src)
 		b.namedTypes[key] = enumDesc
 		b.schema.AddType(enumDesc)
 		return nil
@@ -210,6 +220,10 @@ func (b *schemaBuilder) extractNamedType(tn *types.TypeName) error {
 
 	// Check for custom marshalers on the named type itself
 	if b.hasCustomMarshaler(named) {
+		pkgPath := ""
+		if named.Obj() != nil && named.Obj().Pkg() != nil {
+			pkgPath = named.Obj().Pkg().Path()
+		}
 		b.schema.AddWarning(ir.Warning{
 			Code:     "CUSTOM_MARSHALER",
 			Message:  fmt.Sprintf("type %s implements custom marshaler, mapped to 'unknown'", tn.Name()),
@@ -217,7 +231,7 @@ func (b *schemaBuilder) extractNamedType(tn *types.TypeName) error {
 		})
 		// Create an alias to PrimitiveAny
 		aliasDesc := &ir.AliasDescriptor{
-			Name:          ir.GoIdentifier{Name: tn.Name(), Package: named.Obj().Pkg().Path()},
+			Name:          ir.GoIdentifier{Name: tn.Name(), Package: pkgPath},
 			Underlying:    ir.Any(),
 			Documentation: doc,
 			Source:        src,
@@ -239,6 +253,10 @@ func (b *schemaBuilder) extractNamedType(tn *types.TypeName) error {
 
 	case *types.Interface:
 		// Interfaces are emitted as PrimitiveAny with a warning
+		pkgPath := ""
+		if named.Obj() != nil && named.Obj().Pkg() != nil {
+			pkgPath = named.Obj().Pkg().Path()
+		}
 		b.schema.AddWarning(ir.Warning{
 			Code:     "INTERFACE_TYPE",
 			Message:  fmt.Sprintf("interface type %s mapped to 'unknown'", tn.Name()),
@@ -246,7 +264,7 @@ func (b *schemaBuilder) extractNamedType(tn *types.TypeName) error {
 		})
 		// Create an alias to PrimitiveAny
 		aliasDesc := &ir.AliasDescriptor{
-			Name:          ir.GoIdentifier{Name: tn.Name(), Package: named.Obj().Pkg().Path()},
+			Name:          ir.GoIdentifier{Name: tn.Name(), Package: pkgPath},
 			Underlying:    ir.Any(),
 			Documentation: doc,
 			Source:        src,
@@ -260,8 +278,12 @@ func (b *schemaBuilder) extractNamedType(tn *types.TypeName) error {
 		if err != nil {
 			return err
 		}
+		pkgPath := ""
+		if named.Obj() != nil && named.Obj().Pkg() != nil {
+			pkgPath = named.Obj().Pkg().Path()
+		}
 		aliasDesc := &ir.AliasDescriptor{
-			Name:          ir.GoIdentifier{Name: tn.Name(), Package: named.Obj().Pkg().Path()},
+			Name:          ir.GoIdentifier{Name: tn.Name(), Package: pkgPath},
 			Underlying:    underlying,
 			Documentation: doc,
 			Source:        src,
@@ -871,9 +893,13 @@ func (b *schemaBuilder) buildStructDescriptor(named *types.Named, name string, d
 				}
 				if named, ok := fieldType.(*types.Named); ok {
 					obj := named.Obj()
+					embeddedPkgPath := ""
+					if obj != nil && obj.Pkg() != nil {
+						embeddedPkgPath = obj.Pkg().Path()
+					}
 					descriptor.Extends = append(descriptor.Extends, ir.GoIdentifier{
 						Name:    obj.Name(),
-						Package: obj.Pkg().Path(),
+						Package: embeddedPkgPath,
 					})
 				}
 				continue
@@ -1000,7 +1026,11 @@ func (b *schemaBuilder) convertTypeParamConstraint(constraint types.Type) ir.Typ
 			// to the named constraint type (e.g., [T Stringer] -> Ref("Stringer"))
 			if iface.NumMethods() > 0 {
 				obj := named.Obj()
-				return ir.Ref(obj.Name(), obj.Pkg().Path())
+				pkgPath := ""
+				if obj != nil && obj.Pkg() != nil {
+					pkgPath = obj.Pkg().Path()
+				}
+				return ir.Ref(obj.Name(), pkgPath)
 			}
 		}
 		// Fall through to convertType for other named types
@@ -1141,9 +1171,13 @@ func (b *schemaBuilder) handleAnonymousStruct(structType *types.Struct, parentNa
 				}
 				if named, ok := fieldType.(*types.Named); ok {
 					obj := named.Obj()
+					pkgPath := ""
+					if obj != nil && obj.Pkg() != nil {
+						pkgPath = obj.Pkg().Path()
+					}
 					descriptor.Extends = append(descriptor.Extends, ir.GoIdentifier{
 						Name:    obj.Name(),
-						Package: obj.Pkg().Path(),
+						Package: pkgPath,
 					})
 				}
 				continue

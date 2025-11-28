@@ -905,6 +905,892 @@ func TestGenerateSyntheticName(t *testing.T) {
 	}
 }
 
+// Test types for comprehensive coverage of typeToDescriptorForAlias
+
+type SliceAlias []int
+type ArrayAlias [5]string
+type MapAlias map[string]int
+type StructAlias SimpleStruct
+type PtrAlias *SimpleStruct
+type ByteSliceAlias []byte
+
+type AliasCollection struct {
+	SliceField     SliceAlias     `json:"slice_field"`
+	ArrayField     ArrayAlias     `json:"array_field"`
+	MapField       MapAlias       `json:"map_field"`
+	StructField    StructAlias    `json:"struct_field"`
+	PtrField       PtrAlias       `json:"ptr_field"`
+	ByteSliceField ByteSliceAlias `json:"byte_slice_field"`
+}
+
+// Test types for validateMapKeyType
+
+// TextMarshalerKey is a struct that implements encoding.TextMarshaler
+type TextMarshalerKey struct {
+	Value string
+}
+
+func (t TextMarshalerKey) MarshalText() ([]byte, error) {
+	return []byte(t.Value), nil
+}
+
+type NamedStringKey string
+type NamedIntKey int
+
+type MapKeyTypes struct {
+	TextMarshalerMap map[TextMarshalerKey]string `json:"text_marshaler_map"`
+	StringMap        map[string]int              `json:"string_map"`
+	IntMap           map[int]string              `json:"int_map"`
+	Int8Map          map[int8]string             `json:"int8_map"`
+	Int16Map         map[int16]string            `json:"int16_map"`
+	Int32Map         map[int32]string            `json:"int32_map"`
+	Int64Map         map[int64]string            `json:"int64_map"`
+	UintMap          map[uint]string             `json:"uint_map"`
+	Uint8Map         map[uint8]string            `json:"uint8_map"`
+	Uint16Map        map[uint16]string           `json:"uint16_map"`
+	Uint32Map        map[uint32]string           `json:"uint32_map"`
+	Uint64Map        map[uint64]string           `json:"uint64_map"`
+	NamedStringMap   map[NamedStringKey]int      `json:"named_string_map"`
+	NamedIntMap      map[NamedIntKey]string      `json:"named_int_map"`
+}
+
+// Test types for handleEmbedded
+
+type EmbeddedUnexported struct {
+	unexportedField string // Should be skipped
+	ExportedField   string `json:"exported_field"`
+}
+
+type EmbeddedPtrType struct {
+	PtrField string `json:"ptr_field"`
+}
+
+type EmbeddingWithPtr struct {
+	*EmbeddedPtrType              // Pointer embedding
+	OwnField         string       `json:"own_field"`
+	Tagged           *SimpleStruct `json:"tagged"` // Pointer embedding with tag
+}
+
+type Level3Embed struct {
+	L3Field string `json:"l3_field"`
+}
+
+type Level2Embed struct {
+	Level3Embed
+	L2Field string `json:"l2_field"`
+}
+
+type Level1Embed struct {
+	Level2Embed
+	L1Field string `json:"l1_field"`
+}
+
+type EmbeddedWithSkipTag struct {
+	SkippedField string `json:"skipped_field"`
+}
+
+type EmbeddingWithSkip struct {
+	EmbeddedWithSkipTag `json:"-"` // Should skip entirely
+	OwnField            string     `json:"own_field"`
+}
+
+// Test types for anonymous structs and edge cases
+
+type CircularAnonymous struct {
+	Name  string `json:"name"`
+	Nested struct {
+		Value    string             `json:"value"`
+		BackRef  *CircularAnonymous `json:"back_ref,omitempty"`
+	} `json:"nested"`
+}
+
+type DeeplyNestedAnonymous struct {
+	Level1 struct {
+		A string `json:"a"`
+		Level2 struct {
+			B string `json:"b"`
+			Level3 struct {
+				C string `json:"c"`
+				Level4 struct {
+					D string `json:"d"`
+				} `json:"level4"`
+			} `json:"level3"`
+		} `json:"level2"`
+	} `json:"level1"`
+}
+
+type NamedWithMethods struct {
+	Value string `json:"value"`
+}
+
+func (n NamedWithMethods) String() string {
+	return n.Value
+}
+
+type WithNamedMethods struct {
+	Field NamedWithMethods `json:"field"`
+}
+
+// Test: typeToDescriptorForAlias comprehensive coverage
+// Note: The reflection provider currently inlines composite type aliases (slices, arrays, maps)
+// rather than extracting them as separate types. These tests verify that when such aliases
+// are used as root types, typeToDescriptorForAlias handles them correctly.
+
+func TestReflectionProvider_TypeAliases_Primitives(t *testing.T) {
+	provider := &ReflectionProvider{}
+
+	// Test all primitive type aliases
+	type BoolAlias bool
+	type IntAlias int
+	type Int8Alias int8
+	type Int16Alias int16
+	type Int32Alias int32
+	type Int64Alias int64
+	type UintAlias uint
+	type Uint8Alias uint8
+	type Uint16Alias uint16
+	type Uint32Alias uint32
+	type Uint64Alias uint64
+	type UintptrAlias uintptr
+	type Float32Alias float32
+	type Float64Alias float64
+	type StringAlias string
+
+	tests := []struct {
+		name     string
+		typ      reflect.Type
+		wantKind ir.DescriptorKind
+		checkFn  func(*testing.T, ir.TypeDescriptor)
+	}{
+		{
+			name:     "BoolAlias",
+			typ:      reflect.TypeOf((*BoolAlias)(nil)).Elem(),
+			wantKind: ir.KindPrimitive,
+			checkFn: func(t *testing.T, desc ir.TypeDescriptor) {
+				prim := desc.(*ir.PrimitiveDescriptor)
+				if prim.PrimitiveKind != ir.PrimitiveBool {
+					t.Errorf("expected PrimitiveBool, got %v", prim.PrimitiveKind)
+				}
+			},
+		},
+		{
+			name:     "IntAlias",
+			typ:      reflect.TypeOf((*IntAlias)(nil)).Elem(),
+			wantKind: ir.KindPrimitive,
+			checkFn: func(t *testing.T, desc ir.TypeDescriptor) {
+				prim := desc.(*ir.PrimitiveDescriptor)
+				if prim.PrimitiveKind != ir.PrimitiveInt || prim.BitSize != 0 {
+					t.Errorf("expected PrimitiveInt with BitSize 0, got kind=%v bitsize=%d", prim.PrimitiveKind, prim.BitSize)
+				}
+			},
+		},
+		{
+			name:     "Int32Alias",
+			typ:      reflect.TypeOf((*Int32Alias)(nil)).Elem(),
+			wantKind: ir.KindPrimitive,
+			checkFn: func(t *testing.T, desc ir.TypeDescriptor) {
+				prim := desc.(*ir.PrimitiveDescriptor)
+				if prim.PrimitiveKind != ir.PrimitiveInt || prim.BitSize != 32 {
+					t.Errorf("expected PrimitiveInt with BitSize 32, got kind=%v bitsize=%d", prim.PrimitiveKind, prim.BitSize)
+				}
+			},
+		},
+		{
+			name:     "UintAlias",
+			typ:      reflect.TypeOf((*UintAlias)(nil)).Elem(),
+			wantKind: ir.KindPrimitive,
+			checkFn: func(t *testing.T, desc ir.TypeDescriptor) {
+				prim := desc.(*ir.PrimitiveDescriptor)
+				if prim.PrimitiveKind != ir.PrimitiveUint || prim.BitSize != 0 {
+					t.Errorf("expected PrimitiveUint with BitSize 0, got kind=%v bitsize=%d", prim.PrimitiveKind, prim.BitSize)
+				}
+			},
+		},
+		{
+			name:     "UintptrAlias",
+			typ:      reflect.TypeOf((*UintptrAlias)(nil)).Elem(),
+			wantKind: ir.KindPrimitive,
+			checkFn: func(t *testing.T, desc ir.TypeDescriptor) {
+				prim := desc.(*ir.PrimitiveDescriptor)
+				if prim.PrimitiveKind != ir.PrimitiveUint || prim.BitSize != 0 {
+					t.Errorf("expected PrimitiveUint with BitSize 0 (uintptr), got kind=%v bitsize=%d", prim.PrimitiveKind, prim.BitSize)
+				}
+			},
+		},
+		{
+			name:     "Float32Alias",
+			typ:      reflect.TypeOf((*Float32Alias)(nil)).Elem(),
+			wantKind: ir.KindPrimitive,
+			checkFn: func(t *testing.T, desc ir.TypeDescriptor) {
+				prim := desc.(*ir.PrimitiveDescriptor)
+				if prim.PrimitiveKind != ir.PrimitiveFloat || prim.BitSize != 32 {
+					t.Errorf("expected PrimitiveFloat with BitSize 32, got kind=%v bitsize=%d", prim.PrimitiveKind, prim.BitSize)
+				}
+			},
+		},
+		{
+			name:     "Float64Alias",
+			typ:      reflect.TypeOf((*Float64Alias)(nil)).Elem(),
+			wantKind: ir.KindPrimitive,
+			checkFn: func(t *testing.T, desc ir.TypeDescriptor) {
+				prim := desc.(*ir.PrimitiveDescriptor)
+				if prim.PrimitiveKind != ir.PrimitiveFloat || prim.BitSize != 64 {
+					t.Errorf("expected PrimitiveFloat with BitSize 64, got kind=%v bitsize=%d", prim.PrimitiveKind, prim.BitSize)
+				}
+			},
+		},
+		{
+			name:     "StringAlias",
+			typ:      reflect.TypeOf((*StringAlias)(nil)).Elem(),
+			wantKind: ir.KindPrimitive,
+			checkFn: func(t *testing.T, desc ir.TypeDescriptor) {
+				prim := desc.(*ir.PrimitiveDescriptor)
+				if prim.PrimitiveKind != ir.PrimitiveString {
+					t.Errorf("expected PrimitiveString, got %v", prim.PrimitiveKind)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			schema, err := provider.BuildSchema(context.Background(), ReflectionInputOptions{
+				RootTypes: []reflect.Type{tt.typ},
+			})
+
+			if err != nil {
+				t.Fatalf("BuildSchema failed: %v", err)
+			}
+
+			if len(schema.Types) != 1 {
+				t.Fatalf("expected 1 type, got %d", len(schema.Types))
+			}
+
+			alias, ok := schema.Types[0].(*ir.AliasDescriptor)
+			if !ok {
+				t.Fatalf("expected AliasDescriptor, got %T", schema.Types[0])
+			}
+
+			if alias.Underlying.Kind() != tt.wantKind {
+				t.Errorf("underlying kind should be %v, got %v", tt.wantKind, alias.Underlying.Kind())
+			}
+
+			if tt.checkFn != nil {
+				tt.checkFn(t, alias.Underlying)
+			}
+		})
+	}
+}
+
+func TestReflectionProvider_TypeAliases_SliceAlias(t *testing.T) {
+	provider := &ReflectionProvider{}
+	schema, err := provider.BuildSchema(context.Background(), ReflectionInputOptions{
+		RootTypes: []reflect.Type{reflect.TypeOf((*SliceAlias)(nil)).Elem()},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	// SliceAlias should create an AliasDescriptor with slice underlying type
+	if len(schema.Types) != 1 {
+		t.Fatalf("expected 1 type, got %d", len(schema.Types))
+	}
+
+	alias, ok := schema.Types[0].(*ir.AliasDescriptor)
+	if !ok {
+		t.Fatalf("expected AliasDescriptor, got %T", schema.Types[0])
+	}
+
+	if alias.Name.Name != "SliceAlias" {
+		t.Errorf("expected name 'SliceAlias', got %q", alias.Name.Name)
+	}
+
+	if alias.Underlying.Kind() != ir.KindArray {
+		t.Errorf("underlying should be KindArray, got %v", alias.Underlying.Kind())
+	}
+
+	arrayDesc := alias.Underlying.(*ir.ArrayDescriptor)
+	if arrayDesc.Length != 0 {
+		t.Errorf("slice should have length 0, got %d", arrayDesc.Length)
+	}
+}
+
+func TestReflectionProvider_TypeAliases_ArrayAlias(t *testing.T) {
+	provider := &ReflectionProvider{}
+	schema, err := provider.BuildSchema(context.Background(), ReflectionInputOptions{
+		RootTypes: []reflect.Type{reflect.TypeOf((*ArrayAlias)(nil)).Elem()},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	alias, ok := schema.Types[0].(*ir.AliasDescriptor)
+	if !ok {
+		t.Fatalf("expected AliasDescriptor, got %T", schema.Types[0])
+	}
+
+	if alias.Underlying.Kind() != ir.KindArray {
+		t.Errorf("underlying should be KindArray, got %v", alias.Underlying.Kind())
+	}
+
+	arrayDesc := alias.Underlying.(*ir.ArrayDescriptor)
+	if arrayDesc.Length != 5 {
+		t.Errorf("array should have length 5, got %d", arrayDesc.Length)
+	}
+}
+
+func TestReflectionProvider_TypeAliases_MapAlias(t *testing.T) {
+	provider := &ReflectionProvider{}
+	schema, err := provider.BuildSchema(context.Background(), ReflectionInputOptions{
+		RootTypes: []reflect.Type{reflect.TypeOf((*MapAlias)(nil)).Elem()},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	alias, ok := schema.Types[0].(*ir.AliasDescriptor)
+	if !ok {
+		t.Fatalf("expected AliasDescriptor, got %T", schema.Types[0])
+	}
+
+	if alias.Underlying.Kind() != ir.KindMap {
+		t.Errorf("underlying should be KindMap, got %v", alias.Underlying.Kind())
+	}
+}
+
+func TestReflectionProvider_TypeAliases_ByteSliceAlias(t *testing.T) {
+	provider := &ReflectionProvider{}
+	schema, err := provider.BuildSchema(context.Background(), ReflectionInputOptions{
+		RootTypes: []reflect.Type{reflect.TypeOf((*ByteSliceAlias)(nil)).Elem()},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	alias, ok := schema.Types[0].(*ir.AliasDescriptor)
+	if !ok {
+		t.Fatalf("expected AliasDescriptor, got %T", schema.Types[0])
+	}
+
+	// []byte should be PrimitiveBytes
+	if alias.Underlying.Kind() != ir.KindPrimitive {
+		t.Errorf("underlying should be KindPrimitive, got %v", alias.Underlying.Kind())
+	}
+
+	primDesc := alias.Underlying.(*ir.PrimitiveDescriptor)
+	if primDesc.PrimitiveKind != ir.PrimitiveBytes {
+		t.Errorf("should be PrimitiveBytes, got %v", primDesc.PrimitiveKind)
+	}
+}
+
+func TestReflectionProvider_TypeAliases_StructAlias(t *testing.T) {
+	provider := &ReflectionProvider{}
+
+	// Test struct alias - StructAlias is an alias to SimpleStruct
+	schema, err := provider.BuildSchema(context.Background(), ReflectionInputOptions{
+		RootTypes: []reflect.Type{reflect.TypeOf((*StructAlias)(nil)).Elem()},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	// When a struct alias is used as root type, it extracts the struct itself
+	// This tests that typeToDescriptorForAlias handles struct types correctly
+	if len(schema.Types) < 1 {
+		t.Fatalf("expected at least 1 type, got %d", len(schema.Types))
+	}
+
+	// Should have StructAlias (the struct keeps its alias name)
+	var structAlias *ir.StructDescriptor
+	for _, typ := range schema.Types {
+		if s, ok := typ.(*ir.StructDescriptor); ok && s.Name.Name == "StructAlias" {
+			structAlias = s
+			break
+		}
+	}
+
+	if structAlias == nil {
+		t.Error("StructAlias not found")
+	}
+}
+
+// Test: validateMapKeyType comprehensive coverage
+
+func TestReflectionProvider_MapKeyTypes_AllIntegers(t *testing.T) {
+	provider := &ReflectionProvider{}
+	schema, err := provider.BuildSchema(context.Background(), ReflectionInputOptions{
+		RootTypes: []reflect.Type{reflect.TypeOf(MapKeyTypes{})},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	// Find MapKeyTypes struct
+	var structDesc *ir.StructDescriptor
+	for _, typ := range schema.Types {
+		if s, ok := typ.(*ir.StructDescriptor); ok && s.Name.Name == "MapKeyTypes" {
+			structDesc = s
+			break
+		}
+	}
+
+	if structDesc == nil {
+		t.Fatalf("MapKeyTypes struct not found")
+	}
+
+	// Verify all integer key types are accepted
+	integerMaps := []string{"IntMap", "Int8Map", "Int16Map", "Int32Map", "Int64Map",
+		"UintMap", "Uint8Map", "Uint16Map", "Uint32Map", "Uint64Map"}
+
+	for _, mapName := range integerMaps {
+		field := findField(structDesc.Fields, mapName)
+		if field == nil {
+			t.Errorf("%s field not found", mapName)
+			continue
+		}
+		if field.Type.Kind() != ir.KindMap {
+			t.Errorf("%s should be KindMap, got %v", mapName, field.Type.Kind())
+		}
+	}
+
+	// Verify named string key
+	namedStringField := findField(structDesc.Fields, "NamedStringMap")
+	if namedStringField == nil {
+		t.Error("NamedStringMap field not found")
+	}
+
+	// Verify named int key
+	namedIntField := findField(structDesc.Fields, "NamedIntMap")
+	if namedIntField == nil {
+		t.Error("NamedIntMap field not found")
+	}
+}
+
+func TestReflectionProvider_MapKeyTypes_TextMarshaler(t *testing.T) {
+	provider := &ReflectionProvider{}
+	schema, err := provider.BuildSchema(context.Background(), ReflectionInputOptions{
+		RootTypes: []reflect.Type{reflect.TypeOf(MapKeyTypes{})},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	// Find MapKeyTypes struct
+	var structDesc *ir.StructDescriptor
+	for _, typ := range schema.Types {
+		if s, ok := typ.(*ir.StructDescriptor); ok && s.Name.Name == "MapKeyTypes" {
+			structDesc = s
+			break
+		}
+	}
+
+	if structDesc == nil {
+		t.Fatalf("MapKeyTypes struct not found")
+	}
+
+	// TextMarshaler as map key should be accepted
+	tmField := findField(structDesc.Fields, "TextMarshalerMap")
+	if tmField == nil {
+		t.Fatal("TextMarshalerMap field not found")
+	}
+	if tmField.Type.Kind() != ir.KindMap {
+		t.Errorf("TextMarshalerMap should be KindMap, got %v", tmField.Type.Kind())
+	}
+}
+
+func TestReflectionProvider_MapKeyTypes_BoolKey_ShouldFail(t *testing.T) {
+	provider := &ReflectionProvider{}
+
+	// Create a struct with bool key map
+	mapType := reflect.MapOf(reflect.TypeOf(true), reflect.TypeOf(""))
+	structType := reflect.StructOf([]reflect.StructField{
+		{
+			Name: "BoolMap",
+			Type: mapType,
+			Tag:  `json:"bool_map"`,
+		},
+	})
+
+	_, err := provider.BuildSchema(context.Background(), ReflectionInputOptions{
+		RootTypes: []reflect.Type{structType},
+	})
+
+	if err == nil {
+		t.Error("expected error for bool map key")
+	} else if !strings.Contains(err.Error(), "unsupported map key type: bool") {
+		t.Errorf("expected 'unsupported map key type: bool', got %q", err.Error())
+	}
+}
+
+func TestReflectionProvider_MapKeyTypes_StructWithoutTextMarshaler_ShouldFail(t *testing.T) {
+	provider := &ReflectionProvider{}
+
+	// Create a struct key type without TextMarshaler
+	type PlainStructKey struct {
+		Field string
+	}
+
+	mapType := reflect.MapOf(reflect.TypeOf(PlainStructKey{}), reflect.TypeOf(""))
+	structType := reflect.StructOf([]reflect.StructField{
+		{
+			Name: "StructMap",
+			Type: mapType,
+			Tag:  `json:"struct_map"`,
+		},
+	})
+
+	_, err := provider.BuildSchema(context.Background(), ReflectionInputOptions{
+		RootTypes: []reflect.Type{structType},
+	})
+
+	if err == nil {
+		t.Error("expected error for struct map key without TextMarshaler")
+	} else if !strings.Contains(err.Error(), "unsupported map key type: struct without TextMarshaler") {
+		t.Errorf("expected 'unsupported map key type: struct without TextMarshaler', got %q", err.Error())
+	}
+}
+
+// Test: handleEmbedded comprehensive coverage
+
+func TestReflectionProvider_EmbeddedPointer(t *testing.T) {
+	provider := &ReflectionProvider{}
+	schema, err := provider.BuildSchema(context.Background(), ReflectionInputOptions{
+		RootTypes: []reflect.Type{reflect.TypeOf(EmbeddingWithPtr{})},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	// Find EmbeddingWithPtr struct
+	var embeddingStruct *ir.StructDescriptor
+	for _, typ := range schema.Types {
+		if s, ok := typ.(*ir.StructDescriptor); ok && s.Name.Name == "EmbeddingWithPtr" {
+			embeddingStruct = s
+			break
+		}
+	}
+
+	if embeddingStruct == nil {
+		t.Fatal("EmbeddingWithPtr not found")
+	}
+
+	// Pointer embedding without tag should be in Extends
+	found := false
+	for _, ext := range embeddingStruct.Extends {
+		if ext.Name == "EmbeddedPtrType" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("EmbeddedPtrType should be in Extends")
+	}
+
+	// Pointer embedding with tag should be in Fields
+	taggedField := findField(embeddingStruct.Fields, "Tagged")
+	if taggedField == nil {
+		t.Fatal("Tagged field not found")
+	}
+	if taggedField.JSONName != "tagged" {
+		t.Errorf("expected JSONName 'tagged', got %q", taggedField.JSONName)
+	}
+}
+
+func TestReflectionProvider_EmbeddedUnexported(t *testing.T) {
+	provider := &ReflectionProvider{}
+
+	// Test with unexported embedded type
+	type unexportedEmbed struct {
+		Field string `json:"field"`
+	}
+
+	type WithUnexportedEmbed struct {
+		unexportedEmbed
+		OwnField string `json:"own_field"`
+	}
+
+	schema, err := provider.BuildSchema(context.Background(), ReflectionInputOptions{
+		RootTypes: []reflect.Type{reflect.TypeOf(WithUnexportedEmbed{})},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	// The unexported embedded type should still be processed
+	// Check that it's extracted
+	if len(schema.Types) < 1 {
+		t.Error("expected at least 1 type")
+	}
+}
+
+func TestReflectionProvider_MultipleLevelEmbedding(t *testing.T) {
+	provider := &ReflectionProvider{}
+	schema, err := provider.BuildSchema(context.Background(), ReflectionInputOptions{
+		RootTypes: []reflect.Type{reflect.TypeOf(Level1Embed{})},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	// Should extract all levels: Level1Embed, Level2Embed, Level3Embed
+	if len(schema.Types) < 3 {
+		t.Errorf("expected at least 3 types, got %d", len(schema.Types))
+	}
+
+	// Find Level1Embed
+	var level1 *ir.StructDescriptor
+	for _, typ := range schema.Types {
+		if s, ok := typ.(*ir.StructDescriptor); ok && s.Name.Name == "Level1Embed" {
+			level1 = s
+			break
+		}
+	}
+
+	if level1 == nil {
+		t.Fatal("Level1Embed not found")
+	}
+
+	// Should have Level2Embed in Extends
+	found := false
+	for _, ext := range level1.Extends {
+		if ext.Name == "Level2Embed" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("Level2Embed should be in Level1Embed.Extends")
+	}
+}
+
+func TestReflectionProvider_EmbeddedWithSkipTag(t *testing.T) {
+	provider := &ReflectionProvider{}
+	schema, err := provider.BuildSchema(context.Background(), ReflectionInputOptions{
+		RootTypes: []reflect.Type{reflect.TypeOf(EmbeddingWithSkip{})},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	// Find EmbeddingWithSkip
+	var embeddingStruct *ir.StructDescriptor
+	for _, typ := range schema.Types {
+		if s, ok := typ.(*ir.StructDescriptor); ok && s.Name.Name == "EmbeddingWithSkip" {
+			embeddingStruct = s
+			break
+		}
+	}
+
+	if embeddingStruct == nil {
+		t.Fatal("EmbeddingWithSkip not found")
+	}
+
+	// Embedded field with json:"-" should not appear in Extends or Fields
+	for _, ext := range embeddingStruct.Extends {
+		if ext.Name == "EmbeddedWithSkipTag" {
+			t.Error("EmbeddedWithSkipTag should not be in Extends (json:\"-\")")
+		}
+	}
+
+	// Should only have OwnField
+	if len(embeddingStruct.Fields) != 1 {
+		t.Errorf("expected 1 field, got %d", len(embeddingStruct.Fields))
+	}
+	if embeddingStruct.Fields[0].Name != "OwnField" {
+		t.Errorf("expected OwnField, got %s", embeddingStruct.Fields[0].Name)
+	}
+}
+
+// Test: Edge cases
+
+func TestReflectionProvider_CircularAnonymousStruct(t *testing.T) {
+	provider := &ReflectionProvider{}
+	schema, err := provider.BuildSchema(context.Background(), ReflectionInputOptions{
+		RootTypes: []reflect.Type{reflect.TypeOf(CircularAnonymous{})},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	// Should handle circular reference through anonymous struct
+	// Check that CircularAnonymous and synthetic type for Nested are created
+	if len(schema.Types) < 2 {
+		t.Errorf("expected at least 2 types, got %d", len(schema.Types))
+	}
+
+	// Find the main struct
+	var mainStruct *ir.StructDescriptor
+	for _, typ := range schema.Types {
+		if s, ok := typ.(*ir.StructDescriptor); ok && s.Name.Name == "CircularAnonymous" {
+			mainStruct = s
+			break
+		}
+	}
+
+	if mainStruct == nil {
+		t.Fatal("CircularAnonymous not found")
+	}
+
+	// Nested field should reference the synthetic type
+	nestedField := findField(mainStruct.Fields, "Nested")
+	if nestedField == nil {
+		t.Fatal("Nested field not found")
+	}
+	if nestedField.Type.Kind() != ir.KindReference {
+		t.Errorf("Nested should be KindReference, got %v", nestedField.Type.Kind())
+	}
+}
+
+func TestReflectionProvider_DeeplyNestedAnonymous(t *testing.T) {
+	provider := &ReflectionProvider{}
+	schema, err := provider.BuildSchema(context.Background(), ReflectionInputOptions{
+		RootTypes: []reflect.Type{reflect.TypeOf(DeeplyNestedAnonymous{})},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	// Should create synthetic types for all nested levels
+	// DeeplyNestedAnonymous + Level1 + Level2 + Level3 + Level4 = 5 types
+	if len(schema.Types) < 5 {
+		t.Errorf("expected at least 5 types for deeply nested anonymous structs, got %d", len(schema.Types))
+	}
+}
+
+func TestReflectionProvider_NamedTypeWithMethods(t *testing.T) {
+	provider := &ReflectionProvider{}
+	schema, err := provider.BuildSchema(context.Background(), ReflectionInputOptions{
+		RootTypes: []reflect.Type{reflect.TypeOf(WithNamedMethods{})},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	// Should extract both types
+	if len(schema.Types) < 2 {
+		t.Errorf("expected at least 2 types, got %d", len(schema.Types))
+	}
+
+	// Find NamedWithMethods
+	var namedType *ir.StructDescriptor
+	for _, typ := range schema.Types {
+		if s, ok := typ.(*ir.StructDescriptor); ok && s.Name.Name == "NamedWithMethods" {
+			namedType = s
+			break
+		}
+	}
+
+	if namedType == nil {
+		t.Fatal("NamedWithMethods not found")
+	}
+
+	// Should have the Value field
+	if len(namedType.Fields) != 1 {
+		t.Errorf("expected 1 field, got %d", len(namedType.Fields))
+	}
+}
+
+func TestReflectionProvider_EmbeddedInterface(t *testing.T) {
+	provider := &ReflectionProvider{}
+
+	type Reader interface {
+		Read() string
+	}
+
+	type WithEmbeddedInterface struct {
+		Reader `json:"reader"`
+		Value  string `json:"value"`
+	}
+
+	schema, err := provider.BuildSchema(context.Background(), ReflectionInputOptions{
+		RootTypes: []reflect.Type{reflect.TypeOf(WithEmbeddedInterface{})},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	// Find the struct
+	var mainStruct *ir.StructDescriptor
+	for _, typ := range schema.Types {
+		if s, ok := typ.(*ir.StructDescriptor); ok && s.Name.Name == "WithEmbeddedInterface" {
+			mainStruct = s
+			break
+		}
+	}
+
+	if mainStruct == nil {
+		t.Fatal("WithEmbeddedInterface not found")
+	}
+
+	// Reader field with json tag should be in Fields as PrimitiveAny
+	readerField := findField(mainStruct.Fields, "Reader")
+	if readerField == nil {
+		t.Fatal("Reader field not found")
+	}
+	if readerField.Type.Kind() != ir.KindPrimitive {
+		t.Errorf("Reader should be KindPrimitive (any), got %v", readerField.Type.Kind())
+	}
+	primDesc := readerField.Type.(*ir.PrimitiveDescriptor)
+	if primDesc.PrimitiveKind != ir.PrimitiveAny {
+		t.Errorf("Reader should be PrimitiveAny, got %v", primDesc.PrimitiveKind)
+	}
+
+	// Should have a warning about interface type
+	if len(schema.Warnings) == 0 {
+		t.Error("expected warning about interface type")
+	}
+}
+
+func TestReflectionProvider_MapWithNamedKeyType(t *testing.T) {
+	provider := &ReflectionProvider{}
+
+	type UserID string
+	type UserMap struct {
+		Users map[UserID]string `json:"users"`
+	}
+
+	schema, err := provider.BuildSchema(context.Background(), ReflectionInputOptions{
+		RootTypes: []reflect.Type{reflect.TypeOf(UserMap{})},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	// Should extract UserMap, UserID alias
+	if len(schema.Types) < 2 {
+		t.Errorf("expected at least 2 types, got %d", len(schema.Types))
+	}
+
+	// Find UserID alias
+	var userIDAlias *ir.AliasDescriptor
+	for _, typ := range schema.Types {
+		if alias, ok := typ.(*ir.AliasDescriptor); ok && alias.Name.Name == "UserID" {
+			userIDAlias = alias
+			break
+		}
+	}
+
+	if userIDAlias == nil {
+		t.Error("UserID alias not found")
+	}
+}
+
 // Helper function to find a field by name
 func findField(fields []ir.FieldDescriptor, name string) *ir.FieldDescriptor {
 	for i := range fields {
