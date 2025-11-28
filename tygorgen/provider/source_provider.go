@@ -316,7 +316,7 @@ func (b *schemaBuilder) convertType(t types.Type) (ir.TypeDescriptor, error) {
 
 	switch typ := t.(type) {
 	case *types.Basic:
-		return b.convertBasicType(typ), nil
+		return b.convertBasicType(typ)
 
 	case *types.Named:
 		// Reference to a named type
@@ -554,41 +554,42 @@ func (b *schemaBuilder) hasTextMarshaler(named *types.Named) bool {
 }
 
 // convertBasicType converts a Go basic type to an IR primitive.
-func (b *schemaBuilder) convertBasicType(basic *types.Basic) ir.TypeDescriptor {
+func (b *schemaBuilder) convertBasicType(basic *types.Basic) (ir.TypeDescriptor, error) {
 	switch basic.Kind() {
 	case types.Bool:
-		return ir.Bool()
+		return ir.Bool(), nil
 	case types.String:
-		return ir.String()
+		return ir.String(), nil
 	case types.Int:
-		return ir.Int(0)
+		return ir.Int(0), nil
 	case types.Int8:
-		return ir.Int(8)
+		return ir.Int(8), nil
 	case types.Int16:
-		return ir.Int(16)
+		return ir.Int(16), nil
 	case types.Int32:
-		return ir.Int(32)
+		return ir.Int(32), nil
 	case types.Int64:
-		return ir.Int(64)
+		return ir.Int(64), nil
 	case types.Uint, types.Uintptr:
-		return ir.Uint(0)
+		return ir.Uint(0), nil
 	case types.Uint8: // types.Byte is an alias for Uint8
-		return ir.Uint(8)
+		return ir.Uint(8), nil
 	case types.Uint16:
-		return ir.Uint(16)
+		return ir.Uint(16), nil
 	case types.Uint32:
-		return ir.Uint(32)
+		return ir.Uint(32), nil
 	case types.Uint64:
-		return ir.Uint(64)
+		return ir.Uint(64), nil
 	case types.Float32:
-		return ir.Float(32)
+		return ir.Float(32), nil
 	case types.Float64:
-		return ir.Float(64)
+		return ir.Float(64), nil
 	case types.UntypedNil:
-		return ir.Any()
+		return ir.Any(), nil
+	case types.Complex64, types.Complex128, types.UnsafePointer:
+		return nil, fmt.Errorf("unsupported basic type: %s", basic.String())
 	default:
-		// Unsupported basic types
-		return ir.Any()
+		return nil, fmt.Errorf("unsupported basic type: %s", basic.String())
 	}
 }
 
