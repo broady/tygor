@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"runtime"
 	"sync"
 
 	"github.com/broady/tygor"
@@ -21,6 +22,22 @@ var (
 	tasksMu sync.Mutex
 	nextID  int32 = 1
 )
+
+func GetRuntimeInfo(ctx context.Context, req *api.Empty) (*api.RuntimeInfo, error) {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	return &api.RuntimeInfo{
+		Version:       runtime.Version(),
+		NumGoroutines: runtime.NumGoroutine(),
+		NumCPU:        runtime.NumCPU(),
+		Memory: api.MemoryStats{
+			Alloc:      m.Alloc,
+			TotalAlloc: m.TotalAlloc,
+			Sys:        m.Sys,
+			NumGC:      m.NumGC,
+		},
+	}, nil
+}
 
 // [snippet:handlers collapse]
 
@@ -83,6 +100,9 @@ func main() {
 	app := tygor.NewApp().
 		WithMiddleware(middleware.CORS(middleware.CORSAllowAll)).
 		WithUnaryInterceptor(middleware.LoggingInterceptor(nil))
+
+	system := app.Service("System")
+	system.Register("Info", tygor.Query(GetRuntimeInfo))
 
 	tasks := app.Service("Tasks")
 	tasks.Register("List", tygor.Query(ListTasks))

@@ -24,6 +24,9 @@ app := tygor.NewApp().
 	WithMiddleware(middleware.CORS(middleware.CORSAllowAll)).
 	WithUnaryInterceptor(middleware.LoggingInterceptor(nil))
 
+system := app.Service("System")
+system.Register("Info", tygor.Query(GetRuntimeInfo))
+
 tasks := app.Service("Tasks")
 tasks.Register("List", tygor.Query(ListTasks))
 tasks.Register("Create", tygor.Exec(CreateTask))
@@ -39,7 +42,7 @@ tasks.Register("Toggle", tygor.Exec(ToggleTask))
 import { useState, useEffect, FormEvent } from "react";
 import { createClient } from "@tygor/client";
 import { registry } from "./rpc/manifest";
-import type { Task } from "./rpc/types";
+import type { Task, RuntimeInfo } from "./rpc/types";
 
 const client = createClient(registry, {
   baseUrl: "http://localhost:8080",
@@ -55,6 +58,7 @@ const client = createClient(registry, {
 export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [newTask, setNewTask] = useState("");
+  const [info, setInfo] = useState<RuntimeInfo | null>(null);
 
   const fetchTasks = async () => {
     setTasks(await client.Tasks.List({}));
@@ -62,6 +66,15 @@ export default function App() {
 
   useEffect(() => {
     fetchTasks();
+  }, []);
+
+  useEffect(() => {
+    const fetchInfo = async () => {
+      setInfo(await client.System.Info({}));
+    };
+    fetchInfo();
+    const interval = setInterval(fetchInfo, 1000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleCreate = async (e: FormEvent) => {
@@ -77,8 +90,21 @@ export default function App() {
     fetchTasks();
   };
 
+  const formatBytes = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  };
+
   return (
     <div>
+      {info && (
+        <div className="info">
+          <strong>{info.version}</strong> | {info.num_goroutines} goroutines |{" "}
+          {formatBytes(info.memory.alloc)} alloc | {info.memory.num_gc} GC
+        </div>
+      )}
+
       <h1>Tasks</h1>
       <form onSubmit={handleCreate}>
         <input

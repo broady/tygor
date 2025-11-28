@@ -317,4 +317,16 @@ func TestSourceProvider_NestedStructRef(t *testing.T) {
 	if refDesc.Target.Name != "User" {
 		t.Errorf("User field should reference User type, got %s", refDesc.Target.Name)
 	}
+
+	// Verify that the referenced types are actually in the schema
+	// This tests the fix for nested type extraction
+	userType := findType(schema, "User")
+	if userType == nil {
+		t.Error("User type should be extracted into schema when referenced by NestedStruct")
+	}
+
+	simpleType := findType(schema, "SimpleStruct")
+	if simpleType == nil {
+		t.Error("SimpleStruct should be extracted into schema when referenced by NestedStruct")
+	}
 }

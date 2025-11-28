@@ -319,11 +319,23 @@ func (b *schemaBuilder) convertType(t types.Type) (ir.TypeDescriptor, error) {
 		return b.convertBasicType(typ)
 
 	case *types.Named:
-		// Reference to a named type
+		// Reference to a named type - ensure it's extracted first
 		obj := typ.Obj()
 		pkgPath := ""
 		if obj.Pkg() != nil {
 			pkgPath = obj.Pkg().Path()
+		}
+		// Extract the named type if not already processed or being processed
+		// (handles recursive types like type Node struct { Next *Node })
+		key := b.typeKey(typ)
+		if _, exists := b.namedTypes[key]; !exists {
+			// Also check typeNames to handle currently-being-processed types
+			fullName := pkgPath + "." + obj.Name()
+			if !b.typeNames[fullName] {
+				if err := b.extractNamedType(obj); err != nil {
+					return nil, err
+				}
+			}
 		}
 		return ir.Ref(obj.Name(), pkgPath), nil
 

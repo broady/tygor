@@ -4,10 +4,27 @@
 export interface CreateTaskParams {
   title: string;
 }
+/** Empty is used for endpoints with no parameters. */
+export interface Empty {
+}
 /** ListTasksParams contains parameters for listing tasks. */
 export interface ListTasksParams {
   /** ShowDone filters to show completed tasks. */
   show_done?: boolean;
+}
+/** MemoryStats contains memory allocation statistics. */
+export interface MemoryStats {
+  alloc: number /* uint64 */;
+  total_alloc: number /* uint64 */;
+  sys: number /* uint64 */;
+  num_gc: number /* uint32 */;
+}
+/** RuntimeInfo contains Go runtime statistics. */
+export interface RuntimeInfo {
+  version: string;
+  num_goroutines: number /* int */;
+  num_cpu: number /* int */;
+  memory: MemoryStats;
 }
 /** Task represents a todo item. */
 export interface Task {

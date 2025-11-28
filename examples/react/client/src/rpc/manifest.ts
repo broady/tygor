@@ -3,6 +3,10 @@
 import * as types from './types';
 
 export interface Manifest {
+  "System.Info": {
+    req: types.Empty;
+    res: types.RuntimeInfo;
+  };
   "Tasks.Create": {
     req: types.CreateTaskParams;
     res: types.Task;
@@ -18,6 +22,7 @@ export interface Manifest {
 }
 
 const metadata = {
+  "System.Info": { method: "GET", path: "/System/Info" },
   "Tasks.Create": { method: "POST", path: "/Tasks/Create" },
   "Tasks.List": { method: "GET", path: "/Tasks/List" },
   "Tasks.Toggle": { method: "POST", path: "/Tasks/Toggle" },

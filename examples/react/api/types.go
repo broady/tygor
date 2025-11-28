@@ -2,6 +2,25 @@ package api
 
 //go:generate go run ../ -gen -out ../client/src/rpc
 
+// RuntimeInfo contains Go runtime statistics.
+type RuntimeInfo struct {
+	Version       string      `json:"version"`
+	NumGoroutines int         `json:"num_goroutines"`
+	NumCPU        int         `json:"num_cpu"`
+	Memory        MemoryStats `json:"memory"`
+}
+
+// MemoryStats contains memory allocation statistics.
+type MemoryStats struct {
+	Alloc      uint64 `json:"alloc"`
+	TotalAlloc uint64 `json:"total_alloc"`
+	Sys        uint64 `json:"sys"`
+	NumGC      uint32 `json:"num_gc"`
+}
+
+// Empty is used for endpoints with no parameters.
+type Empty struct{}
+
 // Task represents a todo item.
 type Task struct {
 	// ID is the unique identifier.
