@@ -175,3 +175,519 @@ func TestSchema_Full(t *testing.T) {
 		t.Errorf("expected 1 enum, got %d", kinds[KindEnum])
 	}
 }
+
+func TestSchema_Validate_ValidSchema(t *testing.T) {
+	s := &Schema{
+		Package: PackageInfo{
+			Path: "github.com/example/api",
+			Name: "api",
+		},
+	}
+
+	// Add types
+	s.AddType(&StructDescriptor{
+		Name: GoIdentifier{Name: "User", Package: "api"},
+		Fields: []FieldDescriptor{
+			{Name: "ID", JSONName: "id", Type: Int(64)},
+			{Name: "Name", JSONName: "name", Type: String()},
+		},
+	})
+	s.AddType(&StructDescriptor{
+		Name: GoIdentifier{Name: "CreateUserRequest", Package: "api"},
+		Fields: []FieldDescriptor{
+			{Name: "Name", JSONName: "name", Type: String()},
+		},
+	})
+
+	// Add service with valid endpoints
+	s.AddService(ServiceDescriptor{
+		Name: "Users",
+		Endpoints: []EndpointDescriptor{
+			{
+				Name:       "Create",
+				FullName:   "Users.Create",
+				HTTPMethod: "POST",
+				Path:       "/Users/Create",
+				Request:    Ref("CreateUserRequest", "api"),
+				Response:   Ref("User", "api"),
+			},
+			{
+				Name:       "List",
+				FullName:   "Users.List",
+				HTTPMethod: "GET",
+				Path:       "/Users/List",
+				Request:    nil, // nil request is valid
+				Response:   Slice(Ref("User", "api")),
+			},
+		},
+	})
+
+	errors := s.Validate()
+	if len(errors) != 0 {
+		t.Errorf("Valid schema should have no errors, got %d: %v", len(errors), errors)
+	}
+}
+
+func TestSchema_Validate_MissingTypeReference(t *testing.T) {
+	s := &Schema{
+		Package: PackageInfo{
+			Path: "github.com/example/api",
+			Name: "api",
+		},
+	}
+
+	// Add a service that references a type that doesn't exist
+	s.AddService(ServiceDescriptor{
+		Name: "Users",
+		Endpoints: []EndpointDescriptor{
+			{
+				Name:       "Create",
+				FullName:   "Users.Create",
+				HTTPMethod: "POST",
+				Path:       "/Users/Create",
+				Request:    Ref("CreateUserRequest", "api"), // Missing type
+				Response:   Ref("User", "api"),              // Missing type
+			},
+		},
+	})
+
+	errors := s.Validate()
+	if len(errors) != 2 {
+		t.Errorf("Expected 2 errors for missing types, got %d: %v", len(errors), errors)
+	}
+
+	// Check that both errors are about missing type references
+	for _, err := range errors {
+		if ve, ok := err.(*ValidationError); ok {
+			if ve.Code != "missing_type_reference" {
+				t.Errorf("Expected error code 'missing_type_reference', got %q", ve.Code)
+			}
+		} else {
+			t.Errorf("Expected ValidationError, got %T", err)
+		}
+	}
+}
+
+func TestSchema_Validate_DuplicateEndpointName(t *testing.T) {
+	s := &Schema{
+		Package: PackageInfo{
+			Path: "github.com/example/api",
+			Name: "api",
+		},
+	}
+
+	// Add a service with duplicate endpoint names
+	s.AddService(ServiceDescriptor{
+		Name: "Users",
+		Endpoints: []EndpointDescriptor{
+			{
+				Name:       "Create",
+				FullName:   "Users.Create",
+				HTTPMethod: "POST",
+				Path:       "/Users/Create",
+				Request:    String(),
+				Response:   String(),
+			},
+			{
+				Name:       "Create", // Duplicate name in same service
+				FullName:   "Users.Create",
+				HTTPMethod: "PUT",
+				Path:       "/Users/Create",
+				Request:    String(),
+				Response:   String(),
+			},
+		},
+	})
+
+	errors := s.Validate()
+	if len(errors) != 1 {
+		t.Errorf("Expected 1 error for duplicate endpoint, got %d: %v", len(errors), errors)
+	}
+
+	if ve, ok := errors[0].(*ValidationError); ok {
+		if ve.Code != "duplicate_endpoint" {
+			t.Errorf("Expected error code 'duplicate_endpoint', got %q", ve.Code)
+		}
+		if ve.Message != "duplicate endpoint name in service Users: Create" {
+			t.Errorf("Unexpected error message: %s", ve.Message)
+		}
+	} else {
+		t.Errorf("Expected ValidationError, got %T", errors[0])
+	}
+}
+
+func TestSchema_Validate_DuplicateEndpointAcrossServices(t *testing.T) {
+	// Duplicate endpoint names across different services should be allowed
+	s := &Schema{
+		Package: PackageInfo{
+			Path: "github.com/example/api",
+			Name: "api",
+		},
+	}
+
+	s.AddService(ServiceDescriptor{
+		Name: "Users",
+		Endpoints: []EndpointDescriptor{
+			{
+				Name:       "Create",
+				FullName:   "Users.Create",
+				HTTPMethod: "POST",
+				Path:       "/Users/Create",
+				Response:   String(),
+			},
+		},
+	})
+
+	s.AddService(ServiceDescriptor{
+		Name: "Posts",
+		Endpoints: []EndpointDescriptor{
+			{
+				Name:       "Create", // Same name, different service - should be OK
+				FullName:   "Posts.Create",
+				HTTPMethod: "POST",
+				Path:       "/Posts/Create",
+				Response:   String(),
+			},
+		},
+	})
+
+	errors := s.Validate()
+	if len(errors) != 0 {
+		t.Errorf("Duplicate endpoint names across services should be allowed, got %d errors: %v", len(errors), errors)
+	}
+}
+
+func TestSchema_Validate_InvalidFullName(t *testing.T) {
+	s := &Schema{
+		Package: PackageInfo{
+			Path: "github.com/example/api",
+			Name: "api",
+		},
+	}
+
+	s.AddService(ServiceDescriptor{
+		Name: "Users",
+		Endpoints: []EndpointDescriptor{
+			{
+				Name:       "Create",
+				FullName:   "Wrong.Name", // Should be "Users.Create"
+				HTTPMethod: "POST",
+				Path:       "/Users/Create",
+				Response:   String(),
+			},
+		},
+	})
+
+	errors := s.Validate()
+	if len(errors) != 1 {
+		t.Errorf("Expected 1 error for invalid FullName, got %d: %v", len(errors), errors)
+	}
+
+	if ve, ok := errors[0].(*ValidationError); ok {
+		if ve.Code != "invalid_fullname" {
+			t.Errorf("Expected error code 'invalid_fullname', got %q", ve.Code)
+		}
+	} else {
+		t.Errorf("Expected ValidationError, got %T", errors[0])
+	}
+}
+
+func TestSchema_Validate_InvalidPath(t *testing.T) {
+	s := &Schema{
+		Package: PackageInfo{
+			Path: "github.com/example/api",
+			Name: "api",
+		},
+	}
+
+	s.AddService(ServiceDescriptor{
+		Name: "Users",
+		Endpoints: []EndpointDescriptor{
+			{
+				Name:       "Create",
+				FullName:   "Users.Create",
+				HTTPMethod: "POST",
+				Path:       "/api/users/create", // Should be "/Users/Create"
+				Response:   String(),
+			},
+		},
+	})
+
+	errors := s.Validate()
+	if len(errors) != 1 {
+		t.Errorf("Expected 1 error for invalid Path, got %d: %v", len(errors), errors)
+	}
+
+	if ve, ok := errors[0].(*ValidationError); ok {
+		if ve.Code != "invalid_path" {
+			t.Errorf("Expected error code 'invalid_path', got %q", ve.Code)
+		}
+	} else {
+		t.Errorf("Expected ValidationError, got %T", errors[0])
+	}
+}
+
+func TestSchema_Validate_MultipleErrors(t *testing.T) {
+	s := &Schema{
+		Package: PackageInfo{
+			Path: "github.com/example/api",
+			Name: "api",
+		},
+	}
+
+	// Schema with multiple validation errors
+	s.AddService(ServiceDescriptor{
+		Name: "Users",
+		Endpoints: []EndpointDescriptor{
+			{
+				Name:       "Create",
+				FullName:   "Wrong.Create",      // Invalid FullName
+				HTTPMethod: "POST",
+				Path:       "/wrong/path",       // Invalid Path
+				Request:    Ref("Missing", "api"), // Missing type
+				Response:   Ref("User", "api"),    // Missing type
+			},
+			{
+				Name:       "Create",           // Duplicate name
+				FullName:   "Users.Create",
+				HTTPMethod: "PUT",
+				Path:       "/Users/Create",
+				Response:   String(),
+			},
+		},
+	})
+
+	errors := s.Validate()
+	// Should have: 2 missing types + 1 invalid fullname + 1 invalid path + 1 duplicate = 5 errors
+	if len(errors) != 5 {
+		t.Errorf("Expected 5 errors, got %d: %v", len(errors), errors)
+	}
+}
+
+func TestSchema_Validate_NestedTypeReferences(t *testing.T) {
+	s := &Schema{
+		Package: PackageInfo{
+			Path: "github.com/example/api",
+			Name: "api",
+		},
+	}
+
+	// Add one type
+	s.AddType(&StructDescriptor{
+		Name: GoIdentifier{Name: "User", Package: "api"},
+	})
+
+	// Test nested references in arrays, maps, pointers
+	s.AddService(ServiceDescriptor{
+		Name: "Users",
+		Endpoints: []EndpointDescriptor{
+			{
+				Name:       "GetArray",
+				FullName:   "Users.GetArray",
+				HTTPMethod: "GET",
+				Path:       "/Users/GetArray",
+				Response:   Slice(Ref("Missing", "api")), // Missing type in array
+			},
+			{
+				Name:       "GetMap",
+				FullName:   "Users.GetMap",
+				HTTPMethod: "GET",
+				Path:       "/Users/GetMap",
+				Response:   Map(String(), Ref("Missing", "api")), // Missing type in map value
+			},
+			{
+				Name:       "GetPtr",
+				FullName:   "Users.GetPtr",
+				HTTPMethod: "GET",
+				Path:       "/Users/GetPtr",
+				Response:   Ptr(Ref("Missing", "api")), // Missing type in pointer
+			},
+			{
+				Name:       "GetValid",
+				FullName:   "Users.GetValid",
+				HTTPMethod: "GET",
+				Path:       "/Users/GetValid",
+				Response:   Slice(Ref("User", "api")), // Valid reference
+			},
+		},
+	})
+
+	errors := s.Validate()
+	// Should have 3 errors (one for each missing type reference)
+	if len(errors) != 3 {
+		t.Errorf("Expected 3 errors for nested missing types, got %d: %v", len(errors), errors)
+	}
+
+	for _, err := range errors {
+		if ve, ok := err.(*ValidationError); ok {
+			if ve.Code != "missing_type_reference" {
+				t.Errorf("Expected error code 'missing_type_reference', got %q", ve.Code)
+			}
+		} else {
+			t.Errorf("Expected ValidationError, got %T", err)
+		}
+	}
+}
+
+func TestSchema_Validate_EmptySchema(t *testing.T) {
+	s := &Schema{}
+
+	errors := s.Validate()
+	if len(errors) != 0 {
+		t.Errorf("Empty schema should have no errors, got %d: %v", len(errors), errors)
+	}
+}
+
+func TestSchema_Validate_NoServices(t *testing.T) {
+	s := &Schema{
+		Package: PackageInfo{
+			Path: "github.com/example/api",
+			Name: "api",
+		},
+	}
+
+	// Add types but no services
+	s.AddType(&StructDescriptor{
+		Name: GoIdentifier{Name: "User", Package: "api"},
+	})
+
+	errors := s.Validate()
+	if len(errors) != 0 {
+		t.Errorf("Schema with only types should have no errors, got %d: %v", len(errors), errors)
+	}
+}
+
+func TestSchema_Validate_PrimitiveResponse(t *testing.T) {
+	s := &Schema{}
+
+	// Endpoint with primitive response (no type reference)
+	s.AddService(ServiceDescriptor{
+		Name: "Math",
+		Endpoints: []EndpointDescriptor{
+			{
+				Name:       "Add",
+				FullName:   "Math.Add",
+				HTTPMethod: "POST",
+				Path:       "/Math/Add",
+				Request:    Slice(Int(64)),
+				Response:   Int(64),
+			},
+		},
+	})
+
+	errors := s.Validate()
+	if len(errors) != 0 {
+		t.Errorf("Endpoints with primitive types should have no errors, got %d: %v", len(errors), errors)
+	}
+}
+
+func TestValidationError_Error(t *testing.T) {
+	ve := &ValidationError{
+		Code:    "test_code",
+		Message: "test message",
+	}
+
+	if ve.Error() != "test message" {
+		t.Errorf("ValidationError.Error() = %q, want %q", ve.Error(), "test message")
+	}
+}
+
+func TestSchema_Validate_UnionTypeReferences(t *testing.T) {
+	s := &Schema{
+		Package: PackageInfo{
+			Path: "github.com/example/api",
+			Name: "api",
+		},
+	}
+
+	// Add one valid type
+	s.AddType(&StructDescriptor{
+		Name: GoIdentifier{Name: "User", Package: "api"},
+	})
+
+	// Test union with missing type reference
+	s.AddService(ServiceDescriptor{
+		Name: "Users",
+		Endpoints: []EndpointDescriptor{
+			{
+				Name:       "Get",
+				FullName:   "Users.Get",
+				HTTPMethod: "GET",
+				Path:       "/Users/Get",
+				Response:   Union(Ref("User", "api"), Ref("Missing", "api")),
+			},
+		},
+	})
+
+	errors := s.Validate()
+	if len(errors) != 1 {
+		t.Errorf("Expected 1 error for missing type in union, got %d: %v", len(errors), errors)
+	}
+
+	if ve, ok := errors[0].(*ValidationError); ok {
+		if ve.Code != "missing_type_reference" {
+			t.Errorf("Expected error code 'missing_type_reference', got %q", ve.Code)
+		}
+	} else {
+		t.Errorf("Expected ValidationError, got %T", errors[0])
+	}
+}
+
+func TestSchema_Validate_TypeParameterConstraint(t *testing.T) {
+	s := &Schema{
+		Package: PackageInfo{
+			Path: "github.com/example/api",
+			Name: "api",
+		},
+	}
+
+	// Test type parameter with constraint that references missing type
+	s.AddService(ServiceDescriptor{
+		Name: "Generic",
+		Endpoints: []EndpointDescriptor{
+			{
+				Name:       "Process",
+				FullName:   "Generic.Process",
+				HTTPMethod: "POST",
+				Path:       "/Generic/Process",
+				Response:   TypeParam("T", Ref("MissingConstraint", "api")),
+			},
+		},
+	})
+
+	errors := s.Validate()
+	if len(errors) != 1 {
+		t.Errorf("Expected 1 error for missing type in constraint, got %d: %v", len(errors), errors)
+	}
+
+	if ve, ok := errors[0].(*ValidationError); ok {
+		if ve.Code != "missing_type_reference" {
+			t.Errorf("Expected error code 'missing_type_reference', got %q", ve.Code)
+		}
+	} else {
+		t.Errorf("Expected ValidationError, got %T", errors[0])
+	}
+}
+
+func TestSchema_Validate_TypeParameterNoConstraint(t *testing.T) {
+	s := &Schema{}
+
+	// Test type parameter with nil constraint (unconstrained)
+	s.AddService(ServiceDescriptor{
+		Name: "Generic",
+		Endpoints: []EndpointDescriptor{
+			{
+				Name:       "Process",
+				FullName:   "Generic.Process",
+				HTTPMethod: "POST",
+				Path:       "/Generic/Process",
+				Response:   TypeParam("T", nil), // nil constraint is valid
+			},
+		},
+	})
+
+	errors := s.Validate()
+	if len(errors) != 0 {
+		t.Errorf("Type parameter with nil constraint should have no errors, got %d: %v", len(errors), errors)
+	}
+}

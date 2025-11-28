@@ -151,6 +151,11 @@ func (e *Emitter) emitStruct(buf *bytes.Buffer, s *ir.StructDescriptor) ([]ir.Wa
 			continue
 		}
 
+		// Check for large integer warning (Appendix A.2)
+		if w := e.checkLargeIntegerWarning(field, s.Name.Name); w != nil {
+			warnings = append(warnings, *w)
+		}
+
 		// Field documentation
 		if e.config.EmitComments && !field.Documentation.IsZero() {
 			buf.WriteString(e.indent)
@@ -640,5 +645,51 @@ func formatEnumValue(value any) string {
 		return fmt.Sprintf("%g", v)
 	default:
 		return fmt.Sprintf("%v", v)
+	}
+}
+
+// checkLargeIntegerWarning checks if a field uses int64/uint64 without ,string tag
+// and returns a warning per Appendix A.2 of the spec.
+func (e *Emitter) checkLargeIntegerWarning(field ir.FieldDescriptor, typeName string) *ir.Warning {
+	// If the field uses json:",string", no warning needed
+	if field.StringEncoded {
+		return nil
+	}
+
+	// Extract the base type, unwrapping pointers
+	baseType := field.Type
+	for {
+		if ptr, ok := baseType.(*ir.PtrDescriptor); ok {
+			baseType = ptr.Element
+		} else {
+			break
+		}
+	}
+
+	// Check if it's a primitive int64 or uint64
+	prim, ok := baseType.(*ir.PrimitiveDescriptor)
+	if !ok {
+		return nil
+	}
+
+	// Only warn for 64-bit integers
+	if prim.BitSize != 64 {
+		return nil
+	}
+
+	if prim.PrimitiveKind != ir.PrimitiveInt && prim.PrimitiveKind != ir.PrimitiveUint {
+		return nil
+	}
+
+	// Construct warning
+	kindName := "int64"
+	if prim.PrimitiveKind == ir.PrimitiveUint {
+		kindName = "uint64"
+	}
+
+	return &ir.Warning{
+		Code:     "LARGE_INT_PRECISION",
+		Message:  fmt.Sprintf("%s field %q in type %q may lose precision in JavaScript (max safe integer: 2^53-1). Consider using json:\",string\" tag.", kindName, field.Name, typeName),
+		TypeName: typeName,
 	}
 }

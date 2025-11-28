@@ -783,3 +783,87 @@ func TestSourceProvider_CustomMarshalerWarning(t *testing.T) {
 		t.Errorf("CustomJSONType should be mapped to PrimitiveAny")
 	}
 }
+
+func TestSourceProvider_JSONSpecialTypes(t *testing.T) {
+	provider := &SourceProvider{}
+	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
+		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
+		RootTypes: []string{"JSONSpecialTypes"},
+	})
+
+	if err != nil {
+		t.Fatalf("BuildSchema failed: %v", err)
+	}
+
+	jsonSpecialType := findType(schema, "JSONSpecialTypes")
+	if jsonSpecialType == nil {
+		t.Fatal("JSONSpecialTypes not found")
+	}
+
+	structDesc, ok := jsonSpecialType.(*ir.StructDescriptor)
+	if !ok {
+		t.Fatalf("JSONSpecialTypes should be a StructDescriptor, got %T", jsonSpecialType)
+	}
+
+	// Test cases for each field
+	testCases := []struct {
+		fieldName     string
+		jsonName      string
+		optional      bool
+		expectedKind  ir.PrimitiveKind
+		expectedIsPtr bool
+	}{
+		// json.Number should map to PrimitiveString
+		{"Number", "number", false, ir.PrimitiveString, false},
+		{"OptionalNumber", "optional_number", true, ir.PrimitiveString, false},
+
+		// json.RawMessage should map to PrimitiveAny
+		{"RawMessage", "raw_message", false, ir.PrimitiveAny, false},
+		{"OptionalRaw", "optional_raw", true, ir.PrimitiveAny, false},
+
+		// Pointers to json.Number should be Ptr(PrimitiveString)
+		{"NumberPtr", "number_ptr", false, ir.PrimitiveString, true},
+
+		// Pointers to json.RawMessage should be Ptr(PrimitiveAny)
+		{"RawPtr", "raw_ptr", true, ir.PrimitiveAny, true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.fieldName, func(t *testing.T) {
+			field := findFieldByName(structDesc.Fields, tc.fieldName)
+			if field == nil {
+				t.Fatalf("Field %s not found", tc.fieldName)
+			}
+
+			// Verify JSON name
+			if field.JSONName != tc.jsonName {
+				t.Errorf("Field %s: expected JSON name %q, got %q", tc.fieldName, tc.jsonName, field.JSONName)
+			}
+
+			// Verify optional flag
+			if field.Optional != tc.optional {
+				t.Errorf("Field %s: expected Optional=%v, got %v", tc.fieldName, tc.optional, field.Optional)
+			}
+
+			// Check if it's a pointer type
+			fieldType := field.Type
+			if tc.expectedIsPtr {
+				ptrDesc, ok := fieldType.(*ir.PtrDescriptor)
+				if !ok {
+					t.Fatalf("Field %s: expected pointer type, got %T", tc.fieldName, fieldType)
+				}
+				fieldType = ptrDesc.Element
+			}
+
+			// Verify the underlying type is the correct primitive
+			primDesc, ok := fieldType.(*ir.PrimitiveDescriptor)
+			if !ok {
+				t.Fatalf("Field %s: expected PrimitiveDescriptor, got %T", tc.fieldName, fieldType)
+			}
+
+			if primDesc.PrimitiveKind != tc.expectedKind {
+				t.Errorf("Field %s: expected PrimitiveKind %v, got %v", tc.fieldName, tc.expectedKind, primDesc.PrimitiveKind)
+			}
+		})
+	}
+}

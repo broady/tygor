@@ -70,6 +70,7 @@ func (p *SourceProvider) BuildSchema(ctx context.Context, opts SourceInputOption
 		seen:           make(map[types.Type]bool),
 		namedTypes:     make(map[string]ir.TypeDescriptor),
 		enumCandidates: make(map[*types.Named][]enumConstant),
+		typeNames:      make(map[string]bool),
 	}
 
 	// Populate package info from first INPUT package (not first loaded package)
@@ -112,6 +113,7 @@ type schemaBuilder struct {
 	seen           map[types.Type]bool
 	namedTypes     map[string]ir.TypeDescriptor // key: pkgPath.Name
 	enumCandidates map[*types.Named][]enumConstant
+	typeNames      map[string]bool // track used type names for collision detection (§3.5)
 }
 
 // enumConstant represents a const declaration that might be an enum member.
@@ -177,6 +179,18 @@ func (b *schemaBuilder) extractNamedType(tn *types.TypeName) error {
 	if _, exists := b.namedTypes[key]; exists {
 		return nil
 	}
+
+	// Check for name collision (§3.5)
+	name := tn.Name()
+	pkg := ""
+	if named.Obj() != nil && named.Obj().Pkg() != nil {
+		pkg = named.Obj().Pkg().Path()
+	}
+	fullName := pkg + "." + name
+	if b.typeNames[fullName] {
+		return fmt.Errorf("name collision: type %s already exists", name)
+	}
+	b.typeNames[fullName] = true
 
 	// First, scan for enum constants before processing the type
 	b.scanEnumConstants(tn)
@@ -337,7 +351,10 @@ func (b *schemaBuilder) convertType(t types.Type) (ir.TypeDescriptor, error) {
 
 	case *types.Struct:
 		// Anonymous struct - need to generate a synthetic name
-		return nil, fmt.Errorf("anonymous structs should be handled by caller")
+		// This is called when processing struct fields, so we don't have
+		// context about the parent. Return error - caller should use
+		// convertFieldType which has parent context
+		return nil, fmt.Errorf("anonymous structs need parent context for synthetic naming")
 
 	case *types.TypeParam:
 		// Generic type parameter
@@ -383,6 +400,16 @@ func (b *schemaBuilder) handleSpecialType(t types.Type) ir.TypeDescriptor {
 		// time.Duration
 		if pkgPath == "time" && name == "Duration" {
 			return ir.Duration()
+		}
+
+		// json.Number
+		if pkgPath == "encoding/json" && name == "Number" {
+			return ir.String()
+		}
+
+		// json.RawMessage
+		if pkgPath == "encoding/json" && name == "RawMessage" {
+			return ir.Any()
 		}
 
 		// Check for custom marshalers
@@ -851,8 +878,8 @@ func (b *schemaBuilder) buildStructDescriptor(named *types.Named, name string, d
 			// Has JSON tag - treat as regular field
 		}
 
-		// Convert field type
-		fieldTypeDesc, err := b.convertType(field.Type())
+		// Convert field type - use convertFieldType to handle anonymous structs
+		fieldTypeDesc, err := b.convertFieldType(field.Type(), name, field.Name())
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert field %s: %w", field.Name(), err)
 		}
@@ -1029,6 +1056,144 @@ func (b *schemaBuilder) convertTypeParamConstraint(constraint types.Type) ir.Typ
 	}
 
 	return nil
+}
+
+// convertFieldType converts a field type, handling anonymous structs with parent context.
+// For anonymous structs, it generates a synthetic name and adds the struct to Schema.Types.
+func (b *schemaBuilder) convertFieldType(t types.Type, parentName, fieldName string) (ir.TypeDescriptor, error) {
+	// Check if this is an anonymous struct
+	if structType, ok := t.(*types.Struct); ok {
+		return b.handleAnonymousStruct(structType, parentName, fieldName)
+	}
+
+	// For non-struct types, use regular conversion
+	return b.convertType(t)
+}
+
+// handleAnonymousStruct generates a synthetic name for an anonymous struct and adds it to Schema.Types.
+func (b *schemaBuilder) handleAnonymousStruct(structType *types.Struct, parentName, fieldName string) (ir.TypeDescriptor, error) {
+	// Generate synthetic name: ParentType_FieldName (§3.5)
+	syntheticName := parentName + "_" + fieldName
+
+	// Get package path from the parent type
+	pkgPath := ""
+	for fullKey := range b.namedTypes {
+		// fullKey is pkgPath.Name
+		if strings.HasSuffix(fullKey, "."+parentName) {
+			pkgPath = strings.TrimSuffix(fullKey, "."+parentName)
+			break
+		}
+	}
+
+	// Check for name collision (§3.5)
+	fullKey := pkgPath + "." + syntheticName
+	if b.typeNames[fullKey] {
+		return nil, fmt.Errorf("name collision: synthetic name %s already exists", syntheticName)
+	}
+
+	// Mark this synthetic name as used
+	b.typeNames[fullKey] = true
+
+	// Build the struct descriptor for the anonymous struct
+	descriptor := &ir.StructDescriptor{
+		Name:    ir.GoIdentifier{Name: syntheticName, Package: pkgPath},
+		Fields:  []ir.FieldDescriptor{},
+		Extends: []ir.GoIdentifier{},
+	}
+
+	// Process fields of the anonymous struct
+	for i := 0; i < structType.NumFields(); i++ {
+		field := structType.Field(i)
+		tag := structType.Tag(i)
+
+		// Skip unexported fields
+		if !field.Exported() {
+			continue
+		}
+
+		// Parse struct tags
+		jsonTag, jsonOpts := b.parseJSONTag(tag)
+
+		// Skip fields with json:"-"
+		if jsonTag == "-" {
+			continue
+		}
+
+		// Handle embedded fields
+		if field.Embedded() {
+			if jsonTag == "" {
+				// No JSON tag - this is inheritance (Extends)
+				fieldType := field.Type()
+				// Dereference pointer
+				if ptr, ok := fieldType.(*types.Pointer); ok {
+					fieldType = ptr.Elem()
+				}
+				if named, ok := fieldType.(*types.Named); ok {
+					obj := named.Obj()
+					descriptor.Extends = append(descriptor.Extends, ir.GoIdentifier{
+						Name:    obj.Name(),
+						Package: obj.Pkg().Path(),
+					})
+				}
+				continue
+			}
+			// Has JSON tag - treat as regular field
+		}
+
+		// Convert field type - use recursive call for nested anonymous structs
+		fieldTypeDesc, err := b.convertFieldType(field.Type(), syntheticName, field.Name())
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert field %s.%s: %w", syntheticName, field.Name(), err)
+		}
+
+		// Determine JSON name
+		jsonName := jsonTag
+		if jsonName == "" {
+			jsonName = field.Name()
+		}
+
+		// Check for omitempty/omitzero
+		optional := false
+		for _, opt := range jsonOpts {
+			if opt == "omitempty" || opt == "omitzero" {
+				optional = true
+				break
+			}
+		}
+
+		// Check for string encoding
+		stringEncoded := false
+		for _, opt := range jsonOpts {
+			if opt == "string" {
+				stringEncoded = true
+				break
+			}
+		}
+
+		// Extract validate tag
+		validateTag := b.extractTag(tag, "validate")
+
+		fieldDesc := ir.FieldDescriptor{
+			Name:          field.Name(),
+			Type:          fieldTypeDesc,
+			JSONName:      jsonName,
+			Optional:      optional,
+			StringEncoded: stringEncoded,
+			Skip:          false,
+			ValidateTag:   validateTag,
+			RawTags:       b.parseAllTags(tag),
+			Documentation: ir.Documentation{}, // Anonymous struct fields don't have documentation positions
+		}
+
+		descriptor.Fields = append(descriptor.Fields, fieldDesc)
+	}
+
+	// Add the synthetic struct to Schema.Types
+	b.namedTypes[fullKey] = descriptor
+	b.schema.AddType(descriptor)
+
+	// Return a reference to the synthetic type
+	return ir.Ref(syntheticName, pkgPath), nil
 }
 
 // parseStructTag parses a struct tag string into a map.
