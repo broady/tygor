@@ -10,5 +10,8 @@
   "devDependencies": {
     "@types/bun": "latest",
     "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@tygor/client": "^0.7.1"
   }
 }
