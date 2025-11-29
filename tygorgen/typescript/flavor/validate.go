@@ -219,6 +219,160 @@ func HasRequired(rules []ValidateRule) bool {
 	return false
 }
 
+// ZodMiniTypeKind indicates the type category for validation.
+type ZodMiniTypeKind int
+
+const (
+	ZodMiniTypeNumber ZodMiniTypeKind = iota
+	ZodMiniTypeString
+	ZodMiniTypeArray
+)
+
+// ZodMiniCheck converts a ValidateRule to a zod-mini check function.
+// Returns empty string for rules that don't need checks.
+// typeKind indicates the field type category (affects min/max semantics).
+func (r ValidateRule) ZodMiniCheck(typeKind ZodMiniTypeKind) (string, ZodSupport) {
+	switch r.Name {
+	case "required":
+		if typeKind == ZodMiniTypeString {
+			return "z.minLength(1)", ZodSupported
+		}
+		return "", ZodSupported // Non-string required is handled by not adding optional
+
+	case "email":
+		return "z.email()", ZodSupported
+	case "url":
+		return "z.url()", ZodSupported
+	case "uuid":
+		return "z.uuid()", ZodSupported
+	case "uri":
+		return "z.url()", ZodSupported
+
+	case "min":
+		if r.Param != "" {
+			if typeKind == ZodMiniTypeString || typeKind == ZodMiniTypeArray {
+				return fmt.Sprintf("z.minLength(%s)", r.Param), ZodSupported
+			}
+			return fmt.Sprintf("z.gte(%s)", r.Param), ZodSupported
+		}
+	case "max":
+		if r.Param != "" {
+			if typeKind == ZodMiniTypeString || typeKind == ZodMiniTypeArray {
+				return fmt.Sprintf("z.maxLength(%s)", r.Param), ZodSupported
+			}
+			return fmt.Sprintf("z.lte(%s)", r.Param), ZodSupported
+		}
+	case "len":
+		if r.Param != "" {
+			return fmt.Sprintf("z.length(%s)", r.Param), ZodSupported
+		}
+	case "gt":
+		if r.Param != "" {
+			return fmt.Sprintf("z.gt(%s)", r.Param), ZodSupported
+		}
+	case "gte":
+		if r.Param != "" {
+			return fmt.Sprintf("z.gte(%s)", r.Param), ZodSupported
+		}
+	case "lt":
+		if r.Param != "" {
+			return fmt.Sprintf("z.lt(%s)", r.Param), ZodSupported
+		}
+	case "lte":
+		if r.Param != "" {
+			return fmt.Sprintf("z.lte(%s)", r.Param), ZodSupported
+		}
+	case "eq":
+		if typeKind == ZodMiniTypeString && r.Param != "" {
+			return fmt.Sprintf("z.refine(v => v === %q)", r.Param), ZodSupported
+		}
+		if r.Param != "" {
+			return fmt.Sprintf("z.refine(v => v === %s)", r.Param), ZodSupported
+		}
+	case "ne":
+		if typeKind == ZodMiniTypeString && r.Param != "" {
+			return fmt.Sprintf("z.refine(v => v !== %q)", r.Param), ZodSupported
+		}
+		if r.Param != "" {
+			return fmt.Sprintf("z.refine(v => v !== %s)", r.Param), ZodSupported
+		}
+	case "oneof":
+		if r.Param != "" {
+			values := strings.Fields(r.Param)
+			if len(values) > 0 {
+				quoted := make([]string, len(values))
+				for i, v := range values {
+					quoted[i] = fmt.Sprintf("%q", v)
+				}
+				return fmt.Sprintf("__ENUM__[%s]", strings.Join(quoted, ", ")), ZodSupported
+			}
+		}
+
+	case "alphanum":
+		return "z.regex(/^[a-zA-Z0-9]+$/)", ZodSupported
+	case "alpha":
+		return "z.regex(/^[a-zA-Z]+$/)", ZodSupported
+	case "numeric":
+		return "z.regex(/^[0-9]+$/)", ZodSupported
+	case "lowercase":
+		return "z.regex(/^[a-z]+$/)", ZodSupported
+	case "uppercase":
+		return "z.regex(/^[A-Z]+$/)", ZodSupported
+
+	case "contains":
+		if r.Param != "" {
+			return fmt.Sprintf("z.includes(%q)", r.Param), ZodSupported
+		}
+	case "startswith":
+		if r.Param != "" {
+			return fmt.Sprintf("z.startsWith(%q)", r.Param), ZodSupported
+		}
+	case "endswith":
+		if r.Param != "" {
+			return fmt.Sprintf("z.endsWith(%q)", r.Param), ZodSupported
+		}
+
+	case "datetime":
+		return "z.iso.datetime()", ZodSupported
+	case "ip":
+		return "z.ip()", ZodSupported
+	case "ip4", "ipv4":
+		return "z.ipv4()", ZodSupported
+	case "ip6", "ipv6":
+		return "z.ipv6()", ZodSupported
+	case "base64":
+		return "z.regex(/^[A-Za-z0-9+/]*={0,2}$/)", ZodSupported
+	case "base64url":
+		return "z.regex(/^[A-Za-z0-9_-]*={0,2}$/)", ZodSupported
+	case "json":
+		return "z.refine((v) => { try { JSON.parse(v); return true; } catch { return false; } })", ZodSupported
+	case "hostname", "fqdn":
+		return "z.regex(/^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\\.)*[a-zA-Z]{2,}$/)", ZodSupported
+	case "mac":
+		return "z.regex(/^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/)", ZodSupported
+	case "semver":
+		return "z.regex(/^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9.]+)?(\\+[a-zA-Z0-9.]+)?$/)", ZodSupported
+	case "uuid4":
+		return "z.uuid()", ZodSupported
+	case "e164":
+		return "z.regex(/^\\+[1-9]\\d{1,14}$/)", ZodSupported
+	case "isbn", "isbn10":
+		return "z.regex(/^(?:\\d[- ]*){9}[\\dXx]$/)", ZodSupported
+	case "isbn13":
+		return "z.regex(/^(?:\\d[- ]*){13}$/)", ZodSupported
+
+	// Skipped - handled structurally or not applicable to client-side validation
+	case "omitempty", "omitzero", "omitnil", "dive", "keys", "endkeys", "unique",
+		"required_with", "required_without", "required_if", "excluded_if", "excluded_unless",
+		"eqfield", "nefield", "gtfield", "gtefield", "ltfield", "ltefield",
+		"eqcsfield", "necsfield", "gtcsfield", "gtecsfield", "ltcsfield", "ltecsfield",
+		"boolean", "latitude", "longitude":
+		return "", ZodSkipped
+	}
+
+	return "", ZodUnsupported
+}
+
 // HasOneOf returns the oneof values if present, nil otherwise.
 func HasOneOf(rules []ValidateRule) []string {
 	for _, r := range rules {

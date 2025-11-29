@@ -7,6 +7,19 @@ This example demonstrates **automatic client-side validation** using generated Z
 
 Both sides enforce identical validation rules - catch errors early on the client, with server as safety net.
 
+## Zod vs Zod-Mini
+
+This example generates **both** flavors:
+
+| Flavor | Import | Bundle Size | API Style |
+|--------|--------|-------------|-----------|
+| `zod` | `import { z } from 'zod'` | ~17kb gzipped | Method chaining |
+| `zod-mini` | `import * as z from 'zod/mini'` | ~6kb gzipped | Functional composition |
+
+Choose based on your needs:
+- **Backend/SSR**: Use regular `zod` (better DX, negligible size impact)
+- **Frontend bundles**: Consider `zod-mini` for smaller bundles
+
 ## Quick Start
 
 ```bash
@@ -22,7 +35,8 @@ The generator produces:
 | File | Purpose |
 |------|---------|
 | `types.ts` | TypeScript interfaces |
-| `schemas.zod.ts` | Zod schemas with validation rules |
+| `schemas.zod.ts` | Zod schemas (method chaining) |
+| `schemas.zod-mini.ts` | Zod-mini schemas (functional API) |
 | `schemas.map.ts` | Maps endpoints to their request/response schemas |
 | `manifest.ts` | Service registry and metadata |
 
@@ -32,9 +46,12 @@ The generator produces:
 ```go title="main.go"
 _, err := tygorgen.FromApp(app).
 	WithFlavor(tygorgen.FlavorZod).
+	WithFlavor(tygorgen.FlavorZodMini).
 	ToDir(*outDir)
 ```
 <!-- [/snippet:zod-generation] -->
+
+Generate just one flavor by removing the other `WithFlavor()` call.
 
 ## Client-Side Validation
 
@@ -145,19 +162,35 @@ type CreateUserRequest struct {
 
 ## Supported Validators
 
-| Go Validator | Zod Method |
-|--------------|------------|
-| `required` | `.min(1)` (strings) |
-| `email` | `.email()` |
-| `url` | `.url()` |
-| `uuid` | `.uuid()` |
-| `min=N` | `.min(N)` |
-| `max=N` | `.max(N)` |
-| `gte=N` | `.gte(N)` |
-| `lte=N` | `.lte(N)` |
-| `gt=N` | `.gt(N)` |
-| `lt=N` | `.lt(N)` |
-| `oneof=a b c` | `z.enum(["a", "b", "c"])` |
-| `alphanum` | `.regex(/^[a-zA-Z0-9]+$/)` |
+| Go Validator | Zod | Zod-Mini |
+|--------------|-----|----------|
+| `required` | `.min(1)` | `.check(z.minLength(1))` |
+| `email` | `.email()` | `.check(z.email())` |
+| `url` | `.url()` | `.check(z.url())` |
+| `min=N` (string) | `.min(N)` | `.check(z.minLength(N))` |
+| `min=N` (number) | `.min(N)` | `.check(z.gte(N))` |
+| `max=N` (string) | `.max(N)` | `.check(z.maxLength(N))` |
+| `max=N` (number) | `.max(N)` | `.check(z.lte(N))` |
+| `gte=N` | `.gte(N)` | `.check(z.gte(N))` |
+| `oneof=a b c` | `z.enum([...])` | `z.enum([...])` |
+| optional | `.optional()` | `z.optional(...)` |
+| nullable | `.nullable()` | `z.nullable(...)` |
 
 See [validate.go](../../tygorgen/typescript/flavor/validate.go) for the complete mapping.
+
+## Output Comparison
+
+**Regular Zod** (method chaining):
+```ts
+age: z.number().int().min(-2147483648).max(2147483647).gte(13).lte(150).nullable().optional()
+```
+
+**Zod-Mini** (functional composition):
+```ts
+age: z.optional(z.nullable(z.number().check(z.int(), z.gte(-2147483648), z.lte(2147483647)).check(z.gte(13), z.lte(150))))
+```
+
+Both include a trailing comment with the Go type and validation tag for debugging:
+```ts
+// int32 validate:"omitempty,gte=13,lte=150"
+```

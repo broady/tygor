@@ -530,3 +530,269 @@ func TestZodFlavor_EmptyEnum(t *testing.T) {
 		t.Errorf("expected z.never() for empty enum: %s", got)
 	}
 }
+
+func TestZodFlavor_StringEncoded(t *testing.T) {
+	f := &ZodFlavor{}
+	ctx := &EmitContext{IndentStr: "  ", EmitTypes: true}
+
+	s := &ir.StructDescriptor{
+		Name: ir.GoIdentifier{Name: "Test"},
+		Fields: []ir.FieldDescriptor{
+			{Name: "BigID", JSONName: "big_id", Type: ir.Int(64), StringEncoded: true},
+			{Name: "Count", JSONName: "count", Type: ir.Int(32), StringEncoded: false},
+			{Name: "Flag", JSONName: "flag", Type: ir.Bool(), StringEncoded: true},
+		},
+	}
+
+	got, err := f.EmitType(ctx, s)
+	if err != nil {
+		t.Fatalf("EmitType error: %v", err)
+	}
+
+	output := string(got)
+	t.Log(output)
+
+	// BigID should use z.coerce.number() with json:",string" comment
+	if !strings.Contains(output, "z.coerce.number()") {
+		t.Errorf("expected z.coerce.number() for StringEncoded int64, got: %s", output)
+	}
+	if !strings.Contains(output, `json:",string"`) {
+		t.Errorf("expected json:\",string\" in comment, got: %s", output)
+	}
+
+	// Count should use regular z.number()
+	if !strings.Contains(output, "count: z.number().int()") {
+		t.Errorf("expected regular z.number().int() for non-StringEncoded, got: %s", output)
+	}
+
+	// Flag should use z.coerce.boolean()
+	if !strings.Contains(output, "z.coerce.boolean()") {
+		t.Errorf("expected z.coerce.boolean() for StringEncoded bool, got: %s", output)
+	}
+}
+
+// ============================================================================
+// Zod-Mini Tests
+// ============================================================================
+
+func TestZodMiniFlavor_EmitStruct(t *testing.T) {
+	f := &ZodFlavor{mini: true}
+	ctx := &EmitContext{IndentStr: "  ", EmitTypes: true}
+
+	s := &ir.StructDescriptor{
+		Name: ir.GoIdentifier{Name: "User"},
+		Fields: []ir.FieldDescriptor{
+			{Name: "ID", JSONName: "id", Type: ir.Int(64)},
+			{Name: "Email", JSONName: "email", Type: ir.String(), ValidateTag: "required,email"},
+			{Name: "Name", JSONName: "name", Type: ir.String(), Optional: true},
+		},
+	}
+
+	got, err := f.EmitType(ctx, s)
+	if err != nil {
+		t.Fatalf("EmitType error: %v", err)
+	}
+
+	output := string(got)
+	t.Log(output)
+
+	// Should use z.number() with .check() for int constraints
+	if !strings.Contains(output, "z.number().check(") {
+		t.Errorf("expected z.number().check() for int64, got: %s", output)
+	}
+
+	// Should use z.optional() wrapper for optional fields
+	if !strings.Contains(output, "z.optional(z.string())") {
+		t.Errorf("expected z.optional(z.string()) for optional field, got: %s", output)
+	}
+
+	// Should use .check() for validations
+	if !strings.Contains(output, ".check(z.minLength(1), z.email())") {
+		t.Errorf("expected .check(z.minLength(1), z.email()) for email validation, got: %s", output)
+	}
+}
+
+func TestZodMiniFlavor_NullableField(t *testing.T) {
+	f := &ZodFlavor{mini: true}
+	ctx := &EmitContext{IndentStr: "  ", EmitTypes: true}
+
+	s := &ir.StructDescriptor{
+		Name: ir.GoIdentifier{Name: "Test"},
+		Fields: []ir.FieldDescriptor{
+			{Name: "Ptr", JSONName: "ptr", Type: ir.Ptr(ir.String())},
+			{Name: "OptPtr", JSONName: "opt_ptr", Type: ir.Ptr(ir.Int(32)), Optional: true},
+		},
+	}
+
+	got, err := f.EmitType(ctx, s)
+	if err != nil {
+		t.Fatalf("EmitType error: %v", err)
+	}
+
+	output := string(got)
+	t.Log(output)
+
+	// Should use z.nullable() wrapper
+	if !strings.Contains(output, "z.nullable(z.string())") {
+		t.Errorf("expected z.nullable(z.string()) for pointer, got: %s", output)
+	}
+
+	// Should wrap nullable in optional: z.optional(z.nullable(...))
+	if !strings.Contains(output, "z.optional(z.nullable(") {
+		t.Errorf("expected z.optional(z.nullable(...)) for optional pointer, got: %s", output)
+	}
+}
+
+func TestZodMiniFlavor_Primitives(t *testing.T) {
+	f := &ZodFlavor{mini: true}
+	ctx := &EmitContext{IndentStr: "  ", EmitTypes: true}
+
+	s := &ir.StructDescriptor{
+		Name: ir.GoIdentifier{Name: "Primitives"},
+		Fields: []ir.FieldDescriptor{
+			{Name: "Bool", JSONName: "bool", Type: ir.Bool()},
+			{Name: "String", JSONName: "string", Type: ir.String()},
+			{Name: "Int32", JSONName: "int32", Type: ir.Int(32)},
+			{Name: "Uint8", JSONName: "uint8", Type: ir.Uint(8)},
+			{Name: "Float64", JSONName: "float64", Type: ir.Float(64)},
+			{Name: "Time", JSONName: "time", Type: ir.Time()},
+			{Name: "Duration", JSONName: "duration", Type: ir.Duration()},
+		},
+	}
+
+	got, err := f.EmitType(ctx, s)
+	if err != nil {
+		t.Fatalf("EmitType error: %v", err)
+	}
+
+	output := string(got)
+	t.Log(output)
+
+	// Check primitives use correct zod-mini syntax
+	checks := []struct {
+		field    string
+		expected string
+	}{
+		{"bool", "z.boolean()"},
+		{"string", "z.string()"},
+		{"int32", "z.number().check(z.int(), z.gte(-2147483648), z.lte(2147483647))"},
+		{"uint8", "z.number().check(z.int(), z.gte(0), z.lte(255))"},
+		{"float64", "z.number()"},
+		{"time", "z.string().check(z.iso.datetime())"},
+		{"duration", "z.number().check(z.int())"},
+	}
+
+	for _, c := range checks {
+		if !strings.Contains(output, c.field+": "+c.expected) {
+			t.Errorf("expected %s: %s, got: %s", c.field, c.expected, output)
+		}
+	}
+}
+
+func TestZodMiniFlavor_Validations(t *testing.T) {
+	f := &ZodFlavor{mini: true}
+	ctx := &EmitContext{IndentStr: "  ", EmitTypes: true}
+
+	s := &ir.StructDescriptor{
+		Name: ir.GoIdentifier{Name: "Validated"},
+		Fields: []ir.FieldDescriptor{
+			{Name: "Username", JSONName: "username", Type: ir.String(), ValidateTag: "required,min=3,max=20"},
+			{Name: "Age", JSONName: "age", Type: ir.Int(32), ValidateTag: "gte=0,lte=150"},
+			{Name: "URL", JSONName: "url", Type: ir.String(), ValidateTag: "url"},
+		},
+	}
+
+	got, err := f.EmitType(ctx, s)
+	if err != nil {
+		t.Fatalf("EmitType error: %v", err)
+	}
+
+	output := string(got)
+	t.Log(output)
+
+	// String validations should use z.minLength, z.maxLength
+	if !strings.Contains(output, "z.minLength(1)") {
+		t.Errorf("expected z.minLength(1) for required, got: %s", output)
+	}
+	if !strings.Contains(output, "z.minLength(3)") {
+		t.Errorf("expected z.minLength(3) for min=3, got: %s", output)
+	}
+	if !strings.Contains(output, "z.maxLength(20)") {
+		t.Errorf("expected z.maxLength(20) for max=20, got: %s", output)
+	}
+
+	// Numeric validations should use z.gte, z.lte
+	if !strings.Contains(output, "z.gte(0)") {
+		t.Errorf("expected z.gte(0), got: %s", output)
+	}
+	if !strings.Contains(output, "z.lte(150)") {
+		t.Errorf("expected z.lte(150), got: %s", output)
+	}
+
+	// URL should use z.url()
+	if !strings.Contains(output, "z.url()") {
+		t.Errorf("expected z.url() for url validation, got: %s", output)
+	}
+}
+
+func TestZodMiniFlavor_OneOf(t *testing.T) {
+	f := &ZodFlavor{mini: true}
+	ctx := &EmitContext{IndentStr: "  ", EmitTypes: true}
+
+	s := &ir.StructDescriptor{
+		Name: ir.GoIdentifier{Name: "Priority"},
+		Fields: []ir.FieldDescriptor{
+			{Name: "Level", JSONName: "level", Type: ir.String(), ValidateTag: "oneof=low medium high"},
+			{Name: "OptLevel", JSONName: "opt_level", Type: ir.String(), ValidateTag: "oneof=a b c", Optional: true},
+		},
+	}
+
+	got, err := f.EmitType(ctx, s)
+	if err != nil {
+		t.Fatalf("EmitType error: %v", err)
+	}
+
+	output := string(got)
+	t.Log(output)
+
+	// Should use z.enum for oneof
+	if !strings.Contains(output, `z.enum(["low", "medium", "high"])`) {
+		t.Errorf("expected z.enum for oneof, got: %s", output)
+	}
+
+	// Optional oneof should wrap with z.optional()
+	if !strings.Contains(output, `z.optional(z.enum(["a", "b", "c"]))`) {
+		t.Errorf("expected z.optional(z.enum(...)) for optional oneof, got: %s", output)
+	}
+}
+
+func TestZodMiniFlavor_Arrays(t *testing.T) {
+	f := &ZodFlavor{mini: true}
+	ctx := &EmitContext{IndentStr: "  ", EmitTypes: true}
+
+	s := &ir.StructDescriptor{
+		Name: ir.GoIdentifier{Name: "Lists"},
+		Fields: []ir.FieldDescriptor{
+			{Name: "Tags", JSONName: "tags", Type: ir.Array(ir.String(), 0)},
+			{Name: "Numbers", JSONName: "numbers", Type: ir.Array(ir.Int(32), 0), ValidateTag: "max=10"},
+		},
+	}
+
+	got, err := f.EmitType(ctx, s)
+	if err != nil {
+		t.Fatalf("EmitType error: %v", err)
+	}
+
+	output := string(got)
+	t.Log(output)
+
+	// Should use z.array()
+	if !strings.Contains(output, "z.array(z.string())") {
+		t.Errorf("expected z.array(z.string()), got: %s", output)
+	}
+
+	// Array with validation
+	if !strings.Contains(output, "z.array(") && strings.Contains(output, ".check(z.maxLength(10))") {
+		t.Errorf("expected array with maxLength check, got: %s", output)
+	}
+}

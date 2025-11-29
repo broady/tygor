@@ -3,56 +3,56 @@
 import { z } from 'zod';
 
 export const CreateTaskRequestSchema = z.object({
-  title: z.string().min(1).min(1).max(200),
-  description: z.string().max(2000).nullable().optional(),
+  title: z.string().min(1).min(1).max(200), // validate:"required,min=1,max=200"
+  description: z.string().max(2000).nullable().optional(), // validate:"omitempty,max=2000"
   priority: z.enum(["low", "medium", "high", "critical"]),
-  assignee_id: z.number().int().min(-9007199254740991).max(9007199254740991).gt(0).nullable().optional(),
-  tags: z.array(z.string()).max(10),
+  assignee_id: z.number().int().min(-9007199254740991).max(9007199254740991).gt(0).nullable().optional(), // int64 validate:"omitempty,gt=0"
+  tags: z.array(z.string()).max(10), // validate:"max=10"
 });
 
 export const CreateUserRequestSchema = z.object({
-  username: z.string().min(1).min(3).max(20).regex(/^[a-zA-Z0-9]+$/),
-  email: z.string().min(1).email(),
-  password: z.string().min(1).min(8).max(72),
-  website: z.string().url().nullable().optional(),
-  age: z.number().int().min(-2147483648).max(2147483647).gte(13).lte(150).nullable().optional(),
+  username: z.string().min(1).min(3).max(20).regex(/^[a-zA-Z0-9]+$/), // validate:"required,min=3,max=20,alphanum"
+  email: z.string().min(1).email(), // validate:"required,email"
+  password: z.string().min(1).min(8).max(72), // validate:"required,min=8,max=72"
+  website: z.string().url().nullable().optional(), // validate:"omitempty,url"
+  age: z.number().int().min(-2147483648).max(2147483647).gte(13).lte(150).nullable().optional(), // int32 validate:"omitempty,gte=13,lte=150"
 });
 
 export const GetTaskParamsSchema = z.object({
-  task_id: z.number().int().min(-9007199254740991).max(9007199254740991).gt(0),
+  task_id: z.number().int().min(-9007199254740991).max(9007199254740991).gt(0), // int64 validate:"required,gt=0"
 });
 
 export const ListParamsSchema = z.object({
-  limit: z.number().int().min(-2147483648).max(2147483647).gte(1).lte(100),
-  offset: z.number().int().min(-2147483648).max(2147483647).gte(0),
+  limit: z.number().int().min(-2147483648).max(2147483647).gte(1).lte(100), // int32 validate:"gte=1,lte=100"
+  offset: z.number().int().min(-2147483648).max(2147483647).gte(0), // int32 validate:"gte=0"
 });
 
 export const TaskSchema = z.object({
-  id: z.number().int().min(-9007199254740991).max(9007199254740991),
-  title: z.string().min(1).min(1).max(200),
-  description: z.string().max(2000).nullable().optional(),
+  id: z.number().int().min(-9007199254740991).max(9007199254740991), // int64
+  title: z.string().min(1).min(1).max(200), // validate:"required,min=1,max=200"
+  description: z.string().max(2000).nullable().optional(), // validate:"omitempty,max=2000"
   priority: z.enum(["low", "medium", "high", "critical"]),
-  assignee_id: z.number().int().min(-9007199254740991).max(9007199254740991).gt(0).nullable().optional(),
-  tags: z.array(z.string()).max(10),
+  assignee_id: z.number().int().min(-9007199254740991).max(9007199254740991).gt(0).nullable().optional(), // int64 validate:"omitempty,gt=0"
+  tags: z.array(z.string()).max(10), // validate:"max=10"
   due_date: z.string().datetime().nullable().optional(),
   completed: z.boolean(),
 });
 
 export const UpdateTaskRequestSchema = z.object({
-  task_id: z.number().int().min(-9007199254740991).max(9007199254740991).gt(0),
-  title: z.string().min(1).max(200).nullable().optional(),
-  description: z.string().max(2000).nullable().optional(),
+  task_id: z.number().int().min(-9007199254740991).max(9007199254740991).gt(0), // int64 validate:"required,gt=0"
+  title: z.string().min(1).max(200).nullable().optional(), // validate:"omitempty,min=1,max=200"
+  description: z.string().max(2000).nullable().optional(), // validate:"omitempty,max=2000"
   priority: z.enum(["low", "medium", "high", "critical"]).optional(),
-  assignee_id: z.number().int().min(-9007199254740991).max(9007199254740991).gt(0).nullable().optional(),
+  assignee_id: z.number().int().min(-9007199254740991).max(9007199254740991).gt(0).nullable().optional(), // int64 validate:"omitempty,gt=0"
   completed: z.boolean().nullable().optional(),
 });
 
 export const UserSchema = z.object({
-  id: z.number().int().min(-9007199254740991).max(9007199254740991),
-  username: z.string().min(1).min(3).max(20).regex(/^[a-zA-Z0-9]+$/),
-  email: z.string().min(1).email(),
-  website: z.string().url().nullable().optional(),
-  age: z.number().int().min(-2147483648).max(2147483647).gte(0).lte(150).nullable().optional(),
+  id: z.number().int().min(-9007199254740991).max(9007199254740991), // int64
+  username: z.string().min(1).min(3).max(20).regex(/^[a-zA-Z0-9]+$/), // validate:"required,min=3,max=20,alphanum"
+  email: z.string().min(1).email(), // validate:"required,email"
+  website: z.string().url().nullable().optional(), // validate:"omitempty,url"
+  age: z.number().int().min(-2147483648).max(2147483647).gte(0).lte(150).nullable().optional(), // int32 validate:"omitempty,gte=0,lte=150"
   created_at: z.string().datetime(),
 });
 

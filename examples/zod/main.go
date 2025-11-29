@@ -212,6 +212,7 @@ func main() {
 		// [snippet:zod-generation]
 		_, err := tygorgen.FromApp(app).
 			WithFlavor(tygorgen.FlavorZod).
+			WithFlavor(tygorgen.FlavorZodMini).
 			ToDir(*outDir)
 		// [/snippet:zod-generation]
 

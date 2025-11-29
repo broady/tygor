@@ -66,7 +66,7 @@ func (f *ZodFlavor) emitStruct(ctx *EmitContext, s *ir.StructDescriptor) ([]byte
 			continue
 		}
 
-		fieldSchema, err := f.emitFieldSchema(ctx, field, s.Name.Name)
+		result, err := f.emitFieldSchema(ctx, field, s.Name.Name)
 		if err != nil {
 			return nil, fmt.Errorf("field %s: %w", field.Name, err)
 		}
@@ -74,8 +74,13 @@ func (f *ZodFlavor) emitStruct(ctx *EmitContext, s *ir.StructDescriptor) ([]byte
 		buf.WriteString(ctx.IndentStr)
 		buf.WriteString(field.JSONName)
 		buf.WriteString(": ")
-		buf.WriteString(fieldSchema)
-		buf.WriteString(",\n")
+		buf.WriteString(result.schema)
+		buf.WriteString(",")
+		if result.comment != "" {
+			buf.WriteString(" // ")
+			buf.WriteString(result.comment)
+		}
+		buf.WriteString("\n")
 	}
 
 	buf.WriteString("});\n")
@@ -89,7 +94,13 @@ func (f *ZodFlavor) emitStruct(ctx *EmitContext, s *ir.StructDescriptor) ([]byte
 	return buf.Bytes(), nil
 }
 
-func (f *ZodFlavor) emitFieldSchema(ctx *EmitContext, field ir.FieldDescriptor, typeName string) (string, error) {
+// fieldSchemaResult holds the schema and optional type hint comment.
+type fieldSchemaResult struct {
+	schema  string
+	comment string // e.g., "int32 validate:\"gte=13,lte=150\""
+}
+
+func (f *ZodFlavor) emitFieldSchema(ctx *EmitContext, field ir.FieldDescriptor, typeName string) (fieldSchemaResult, error) {
 	// Check for oneof first - it replaces the base type with z.enum
 	rules := ParseValidateTag(field.ValidateTag)
 	if values := HasOneOf(rules); values != nil {
@@ -99,28 +110,52 @@ func (f *ZodFlavor) emitFieldSchema(ctx *EmitContext, field ir.FieldDescriptor, 
 		}
 		schema := fmt.Sprintf("z.enum([%s])", strings.Join(quoted, ", "))
 		if field.Optional {
-			schema += ".optional()"
+			if f.mini {
+				schema = fmt.Sprintf("z.optional(%s)", schema)
+			} else {
+				schema += ".optional()"
+			}
 		}
-		return schema, nil
+		return fieldSchemaResult{schema: schema}, nil
 	}
 
 	// Get base schema from type, tracking nullability separately
 	// so we can apply validations before .nullable()
-	baseSchema, isNullable, err := f.typeToZodWithNullable(ctx, field.Type)
+	baseSchema, isNullable, err := f.typeToZodWithNullable(ctx, field.Type, field.StringEncoded)
 	if err != nil {
-		return "", err
+		return fieldSchemaResult{}, err
 	}
 
-	// Determine if this is a string type (affects validation semantics)
-	isString := f.isPrimitiveString(field.Type)
+	// Get type hint for the underlying type
+	typeHint := f.typeHint(field.Type, field.StringEncoded)
 
-	// Apply validation rules and collect warnings for unsupported ones
+	// Determine type kind for validation semantics
+	isString := f.isPrimitiveString(field.Type)
+	typeKind := f.getTypeKind(field.Type)
+
+	var schema string
+	if f.mini {
+		// Zod-mini: use .check() for validations, functional wrapping for optional/nullable
+		schema = f.emitFieldSchemaMini(ctx, baseSchema, rules, typeKind, isNullable, field.Optional, typeName, field.Name)
+	} else {
+		// Regular Zod: use method chaining
+		schema = f.emitFieldSchemaRegular(ctx, baseSchema, rules, isString, isNullable, field.Optional, typeName, field.Name)
+	}
+
+	// Build comment from type hint and validate tag
+	comment := f.buildFieldComment(typeHint, field.ValidateTag)
+
+	return fieldSchemaResult{schema: schema, comment: comment}, nil
+}
+
+// emitFieldSchemaRegular generates schema using regular Zod method chaining.
+func (f *ZodFlavor) emitFieldSchemaRegular(ctx *EmitContext, baseSchema string, rules []ValidateRule, isString, isNullable, isOptional bool, typeName, fieldName string) string {
 	var validations strings.Builder
 	for _, rule := range rules {
 		method, support := rule.ZodMethodWithSupport(isString)
 		if support == ZodUnsupported {
 			ctx.AddWarning("%s.%s: unsupported validator %q has no Zod equivalent",
-				typeName, field.Name, rule.Name)
+				typeName, fieldName, rule.Name)
 		}
 		if method != "" && !strings.HasPrefix(method, "__ENUM__") {
 			validations.WriteString(method)
@@ -135,45 +170,180 @@ func (f *ZodFlavor) emitFieldSchema(ctx *EmitContext, field ir.FieldDescriptor, 
 	}
 
 	// Handle optionality
-	if field.Optional {
+	if isOptional {
 		schema += ".optional()"
 	}
 
-	return schema, nil
+	return schema
+}
+
+// emitFieldSchemaMini generates schema using zod-mini functional API.
+func (f *ZodFlavor) emitFieldSchemaMini(ctx *EmitContext, baseSchema string, rules []ValidateRule, typeKind ZodMiniTypeKind, isNullable, isOptional bool, typeName, fieldName string) string {
+	// Collect all checks
+	var checks []string
+	for _, rule := range rules {
+		check, support := rule.ZodMiniCheck(typeKind)
+		if support == ZodUnsupported {
+			ctx.AddWarning("%s.%s: unsupported validator %q has no Zod equivalent",
+				typeName, fieldName, rule.Name)
+		}
+		if check != "" && !strings.HasPrefix(check, "__ENUM__") {
+			checks = append(checks, check)
+		}
+	}
+
+	schema := baseSchema
+
+	// Apply checks if any
+	if len(checks) > 0 {
+		schema += ".check(" + strings.Join(checks, ", ") + ")"
+	}
+
+	// Apply nullable using functional wrapper (innermost)
+	if isNullable {
+		schema = fmt.Sprintf("z.nullable(%s)", schema)
+	}
+
+	// Apply optional using functional wrapper (outermost)
+	if isOptional {
+		schema = fmt.Sprintf("z.optional(%s)", schema)
+	}
+
+	return schema
+}
+
+// getTypeKind returns the ZodMiniTypeKind for a type descriptor.
+func (f *ZodFlavor) getTypeKind(typ ir.TypeDescriptor) ZodMiniTypeKind {
+	// Unwrap pointers
+	for {
+		if ptr, ok := typ.(*ir.PtrDescriptor); ok {
+			typ = ptr.Element
+		} else {
+			break
+		}
+	}
+
+	switch t := typ.(type) {
+	case *ir.PrimitiveDescriptor:
+		if t.PrimitiveKind == ir.PrimitiveString || t.PrimitiveKind == ir.PrimitiveBytes {
+			return ZodMiniTypeString
+		}
+		return ZodMiniTypeNumber
+	case *ir.ArrayDescriptor:
+		return ZodMiniTypeArray
+	default:
+		return ZodMiniTypeNumber
+	}
+}
+
+// typeHint returns the Go type name for types worth documenting.
+// Returns empty string for types where the Zod schema is self-explanatory.
+func (f *ZodFlavor) typeHint(typ ir.TypeDescriptor, stringEncoded bool) string {
+	// Unwrap pointers to get the underlying type
+	for {
+		if ptr, ok := typ.(*ir.PtrDescriptor); ok {
+			typ = ptr.Element
+		} else {
+			break
+		}
+	}
+
+	p, ok := typ.(*ir.PrimitiveDescriptor)
+	if !ok {
+		return ""
+	}
+
+	var hint string
+	switch p.PrimitiveKind {
+	case ir.PrimitiveInt:
+		hint = f.intTypeName(p.BitSize, true)
+	case ir.PrimitiveUint:
+		hint = f.intTypeName(p.BitSize, false)
+	case ir.PrimitiveFloat:
+		if p.BitSize == 32 {
+			hint = "float32"
+		} else {
+			hint = "float64"
+		}
+	case ir.PrimitiveBool:
+		if stringEncoded {
+			hint = "bool"
+		}
+	case ir.PrimitiveDuration:
+		return "time.Duration (nanoseconds)"
+	case ir.PrimitiveBytes:
+		return "[]byte (base64)"
+	default:
+		return ""
+	}
+
+	if stringEncoded && hint != "" {
+		return hint + ` json:",string"`
+	}
+	return hint
+}
+
+// intTypeName returns the Go type name for an integer.
+func (f *ZodFlavor) intTypeName(bitSize int, signed bool) string {
+	prefix := "int"
+	if !signed {
+		prefix = "uint"
+	}
+	if bitSize == 0 {
+		return prefix // platform-dependent
+	}
+	return fmt.Sprintf("%s%d", prefix, bitSize)
+}
+
+// buildFieldComment constructs the trailing comment for a field.
+// Format: "int32 validate:\"gte=13,lte=150\"" or just "int32" or just "validate:\"...\""
+func (f *ZodFlavor) buildFieldComment(typeHint, validateTag string) string {
+	if typeHint == "" && validateTag == "" {
+		return ""
+	}
+	if typeHint != "" && validateTag != "" {
+		return fmt.Sprintf("%s validate:%q", typeHint, validateTag)
+	}
+	if typeHint != "" {
+		return typeHint
+	}
+	return fmt.Sprintf("validate:%q", validateTag)
 }
 
 // typeToZodWithNullable returns the Zod schema and whether it's nullable.
 // This allows callers to apply validations before .nullable().
-func (f *ZodFlavor) typeToZodWithNullable(ctx *EmitContext, typ ir.TypeDescriptor) (string, bool, error) {
+func (f *ZodFlavor) typeToZodWithNullable(ctx *EmitContext, typ ir.TypeDescriptor, stringEncoded bool) (string, bool, error) {
 	if ptr, ok := typ.(*ir.PtrDescriptor); ok {
-		inner, err := f.typeToZod(ctx, ptr.Element)
+		inner, err := f.typeToZod(ctx, ptr.Element, stringEncoded)
 		if err != nil {
 			return "", false, err
 		}
 		return inner, true, nil
 	}
-	schema, err := f.typeToZod(ctx, typ)
+	schema, err := f.typeToZod(ctx, typ, stringEncoded)
 	return schema, false, err
 }
 
-func (f *ZodFlavor) typeToZod(ctx *EmitContext, typ ir.TypeDescriptor) (string, error) {
+func (f *ZodFlavor) typeToZod(ctx *EmitContext, typ ir.TypeDescriptor, stringEncoded bool) (string, error) {
 	switch t := typ.(type) {
 	case *ir.PrimitiveDescriptor:
-		return f.primitiveToZod(t), nil
+		return f.primitiveToZod(t, stringEncoded), nil
 
 	case *ir.ArrayDescriptor:
-		elem, err := f.typeToZod(ctx, t.Element)
+		// StringEncoded doesn't apply to array elements
+		elem, err := f.typeToZod(ctx, t.Element, false)
 		if err != nil {
 			return "", err
 		}
 		return fmt.Sprintf("z.array(%s)", elem), nil
 
 	case *ir.MapDescriptor:
-		key, err := f.typeToZod(ctx, t.Key)
+		// StringEncoded doesn't apply to map keys/values
+		key, err := f.typeToZod(ctx, t.Key, false)
 		if err != nil {
 			return "", err
 		}
-		value, err := f.typeToZod(ctx, t.Value)
+		value, err := f.typeToZod(ctx, t.Value, false)
 		if err != nil {
 			return "", err
 		}
@@ -183,19 +353,22 @@ func (f *ZodFlavor) typeToZod(ctx *EmitContext, typ ir.TypeDescriptor) (string, 
 		return t.Target.Name + "Schema", nil
 
 	case *ir.PtrDescriptor:
-		elem, err := f.typeToZod(ctx, t.Element)
+		elem, err := f.typeToZod(ctx, t.Element, stringEncoded)
 		if err != nil {
 			return "", err
+		}
+		if f.mini {
+			return fmt.Sprintf("z.nullable(%s)", elem), nil
 		}
 		return elem + ".nullable()", nil
 
 	case *ir.UnionDescriptor:
 		if len(t.Types) == 1 {
-			return f.typeToZod(ctx, t.Types[0])
+			return f.typeToZod(ctx, t.Types[0], stringEncoded)
 		}
 		parts := make([]string, len(t.Types))
 		for i, ut := range t.Types {
-			p, err := f.typeToZod(ctx, ut)
+			p, err := f.typeToZod(ctx, ut, stringEncoded)
 			if err != nil {
 				return "", err
 			}
@@ -212,9 +385,19 @@ func (f *ZodFlavor) typeToZod(ctx *EmitContext, typ ir.TypeDescriptor) (string, 
 	}
 }
 
-func (f *ZodFlavor) primitiveToZod(p *ir.PrimitiveDescriptor) string {
+func (f *ZodFlavor) primitiveToZod(p *ir.PrimitiveDescriptor, stringEncoded bool) string {
+	if f.mini {
+		return f.primitiveToZodMini(p, stringEncoded)
+	}
+	return f.primitiveToZodRegular(p, stringEncoded)
+}
+
+func (f *ZodFlavor) primitiveToZodRegular(p *ir.PrimitiveDescriptor, stringEncoded bool) string {
 	switch p.PrimitiveKind {
 	case ir.PrimitiveBool:
+		if stringEncoded {
+			return "z.coerce.boolean()"
+		}
 		return "z.boolean()"
 
 	case ir.PrimitiveString:
@@ -222,13 +405,22 @@ func (f *ZodFlavor) primitiveToZod(p *ir.PrimitiveDescriptor) string {
 
 	case ir.PrimitiveInt:
 		base := "z.number().int()"
-		return base + f.intConstraints(p.BitSize, true)
+		if stringEncoded {
+			base = "z.coerce.number().int()"
+		}
+		return base + f.intConstraints(p.BitSize)
 
 	case ir.PrimitiveUint:
 		base := "z.number().int().nonnegative()"
+		if stringEncoded {
+			base = "z.coerce.number().int().nonnegative()"
+		}
 		return base + f.uintConstraints(p.BitSize)
 
 	case ir.PrimitiveFloat:
+		if stringEncoded {
+			return "z.coerce.number()"
+		}
 		return "z.number()"
 
 	case ir.PrimitiveBytes:
@@ -251,7 +443,69 @@ func (f *ZodFlavor) primitiveToZod(p *ir.PrimitiveDescriptor) string {
 	}
 }
 
-func (f *ZodFlavor) intConstraints(bitSize int, signed bool) string {
+func (f *ZodFlavor) primitiveToZodMini(p *ir.PrimitiveDescriptor, stringEncoded bool) string {
+	switch p.PrimitiveKind {
+	case ir.PrimitiveBool:
+		// zod-mini doesn't have z.coerce, use pipe transform for string-encoded
+		if stringEncoded {
+			return "z.pipe(z.string(), z.transform(v => v === 'true' || v === '1'))"
+		}
+		return "z.boolean()"
+
+	case ir.PrimitiveString:
+		return "z.string()"
+
+	case ir.PrimitiveInt:
+		base := "z.number()"
+		if stringEncoded {
+			base = "z.pipe(z.string(), z.transform(Number))"
+		}
+		checks := f.intChecksMini(p.BitSize, true)
+		if checks != "" {
+			return base + ".check(" + checks + ")"
+		}
+		return base
+
+	case ir.PrimitiveUint:
+		base := "z.number()"
+		if stringEncoded {
+			base = "z.pipe(z.string(), z.transform(Number))"
+		}
+		checks := f.uintChecksMini(p.BitSize)
+		if checks != "" {
+			return base + ".check(" + checks + ")"
+		}
+		return base
+
+	case ir.PrimitiveFloat:
+		if stringEncoded {
+			return "z.pipe(z.string(), z.transform(Number))"
+		}
+		return "z.number()"
+
+	case ir.PrimitiveBytes:
+		return "z.string()" // base64 encoded
+
+	case ir.PrimitiveTime:
+		// zod-mini uses z.iso.datetime() as a check
+		return "z.string().check(z.iso.datetime())"
+
+	case ir.PrimitiveDuration:
+		return "z.number().check(z.int())" // nanoseconds
+
+	case ir.PrimitiveAny:
+		return "z.unknown()"
+
+	case ir.PrimitiveEmpty:
+		return "z.object({})"
+
+	default:
+		return "z.unknown()"
+	}
+}
+
+// intConstraints returns regular Zod method chain for int bounds.
+func (f *ZodFlavor) intConstraints(bitSize int) string {
 	switch bitSize {
 	case 8:
 		return ".min(-128).max(127)"
@@ -267,6 +521,7 @@ func (f *ZodFlavor) intConstraints(bitSize int, signed bool) string {
 	}
 }
 
+// uintConstraints returns regular Zod method chain for uint bounds.
 func (f *ZodFlavor) uintConstraints(bitSize int) string {
 	switch bitSize {
 	case 8:
@@ -283,6 +538,40 @@ func (f *ZodFlavor) uintConstraints(bitSize int) string {
 	}
 }
 
+// intChecksMini returns zod-mini check functions for signed int bounds.
+func (f *ZodFlavor) intChecksMini(bitSize int, signed bool) string {
+	switch bitSize {
+	case 8:
+		return "z.int(), z.gte(-128), z.lte(127)"
+	case 16:
+		return "z.int(), z.gte(-32768), z.lte(32767)"
+	case 32:
+		return "z.int(), z.gte(-2147483648), z.lte(2147483647)"
+	case 64:
+		// JS number can't represent full int64 range precisely
+		return "z.int(), z.gte(-9007199254740991), z.lte(9007199254740991)"
+	default:
+		return "z.int()"
+	}
+}
+
+// uintChecksMini returns zod-mini check functions for unsigned int bounds.
+func (f *ZodFlavor) uintChecksMini(bitSize int) string {
+	switch bitSize {
+	case 8:
+		return "z.int(), z.gte(0), z.lte(255)"
+	case 16:
+		return "z.int(), z.gte(0), z.lte(65535)"
+	case 32:
+		return "z.int(), z.gte(0), z.lte(4294967295)"
+	case 64:
+		// JS number can't represent full uint64 range precisely
+		return "z.int(), z.gte(0), z.lte(9007199254740991)"
+	default:
+		return "z.int(), z.gte(0)"
+	}
+}
+
 func (f *ZodFlavor) isPrimitiveString(typ ir.TypeDescriptor) bool {
 	if p, ok := typ.(*ir.PrimitiveDescriptor); ok {
 		return p.PrimitiveKind == ir.PrimitiveString
@@ -294,7 +583,7 @@ func (f *ZodFlavor) emitAlias(ctx *EmitContext, a *ir.AliasDescriptor) ([]byte, 
 	var buf bytes.Buffer
 	schemaName := a.Name.Name + "Schema"
 
-	underlying, err := f.typeToZod(ctx, a.Underlying)
+	underlying, err := f.typeToZod(ctx, a.Underlying, false)
 	if err != nil {
 		return nil, err
 	}
