@@ -2,7 +2,7 @@ import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { createClient, ServerError, ValidationError } from "@tygor/client";
 import { startServer, type RunningServer } from "@tygor/testing";
 import { registry } from "../src/rpc/manifest";
-import { schemaMap } from "../src/rpc/schemas.map";
+import { schemaMap } from "../src/rpc/schemas.map.zod";
 
 // [snippet:client-validation]
 
