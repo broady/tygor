@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"errors"
 	"log"
 	"net/http"
 	"os"
