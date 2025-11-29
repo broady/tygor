@@ -53,7 +53,7 @@ interface ServerState {
 
 const DEFAULT_OPTIONS = {
   watch: ["**/*.go"],
-  ignore: ["node_modules", ".git", "tmp", "dist"],
+  ignore: ["**/node_modules", "**/.git", "**/tmp", "**/dist"],
   health: false as const,
   port: 8080,
 };
