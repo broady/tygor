@@ -26,5 +26,8 @@ jobs:
       - name: Install vite-plugin deps
         run: cd vite-plugin && bun install
 
+      - name: Build vite-plugin client
+        run: cd vite-plugin && node scripts/build-client.js
+
       - name: Run precommit checks
         run: make precommit

@@ -172,8 +172,13 @@ export function Sidebar(props: SidebarProps) {
 
   const onTigerClick = () => {
     const s = props.state.status;
-    if (s?.status === "ok" && s.rawrData && !_r.length) {
-      try { _r = JSON.parse(atob(s.rawrData)); } catch {}
+    if (s?.status === "ok" && s.rawrData?.length && !_r.length) {
+      for (const b of s.rawrData) {
+        try {
+          const [color, weight, size, text] = atob(b).split("|");
+          _r.push({ color, weight, size: parseInt(size, 10), text });
+        } catch {}
+      }
     }
     if (!_r.length) return;
     const m = _r[_i];

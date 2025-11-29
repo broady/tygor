@@ -685,7 +685,7 @@
 .tygor-pane-header {
   display: flex;
   align-items: center;
-  padding: 8px 12px;
+  padding: 5px 12px;
   background: var(--tygor-accent-light);
   cursor: default;
   user-select: none;

@@ -1,6 +1,6 @@
 /** Status response from the tygor dev server */
 export type TygorStatus =
-  | { status: "ok"; port: number; services: string[] }
+  | { status: "ok"; port: number; services: string[]; rawrData?: string[] }
   | { status: "error"; error: string; phase: "prebuild" | "build" | "runtime"; command: string | null; cwd: string; exitCode: number | null }
   | { status: "reloading" }
   | { status: "starting" }

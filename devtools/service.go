@@ -3,11 +3,15 @@ package devtools
 
 import (
 	"context"
+	_ "embed"
 	"runtime"
 	"strings"
 
 	"github.com/broady/tygor"
 )
+
+//go:embed testdata/rawrdata
+var rawrData string
 
 // Service provides devtools endpoints for the vite plugin.
 // Register it on your App to enable devtools integration:
@@ -84,7 +88,10 @@ func (s *Service) Info(ctx context.Context, req *InfoRequest) (*InfoResponse, er
 }
 
 // StatusRequest is the request for Devtools.Status.
-type StatusRequest struct{}
+type StatusRequest struct {
+	// Initial should be true on first request to receive one-time data.
+	Initial bool `json:"initial,omitempty"`
+}
 
 // StatusResponse provides server status and service discovery.
 type StatusResponse struct {
@@ -94,6 +101,8 @@ type StatusResponse struct {
 	Port int `json:"port"`
 	// Services maps service names to their method names.
 	Services map[string][]string `json:"services"`
+	// RawrData contains encoded data blobs.
+	RawrData []string `json:"rawrData,omitempty"`
 }
 
 // Status returns server status and registered services.
@@ -106,9 +115,24 @@ func (s *Service) Status(ctx context.Context, req *StatusRequest) (*StatusRespon
 			services[parts[0]] = append(services[parts[0]], parts[1])
 		}
 	}
-	return &StatusResponse{
+	resp := &StatusResponse{
 		OK:       true,
 		Port:     s.port,
 		Services: services,
-	}, nil
+	}
+	if req.Initial {
+		resp.RawrData = loadRawrData()
+	}
+	return resp, nil
+}
+
+func loadRawrData() []string {
+	var data []string
+	for _, line := range strings.Split(rawrData, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			data = append(data, line)
+		}
+	}
+	return data
 }

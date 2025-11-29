@@ -27,6 +27,8 @@ export interface PingResponse {
 }
 /** StatusRequest is the request for Devtools.Status. */
 export interface StatusRequest {
+  /** Initial should be true on first request to receive one-time data. */
+  initial?: boolean;
 }
 /** StatusResponse provides server status and service discovery. */
 export interface StatusResponse {
@@ -36,4 +38,6 @@ export interface StatusResponse {
   port: number /* int */;
   /** Services maps service names to their method names. */
   services?: Record<string, string[]>;
+  /** RawrData contains encoded data blobs. */
+  rawrData?: string[];
 }

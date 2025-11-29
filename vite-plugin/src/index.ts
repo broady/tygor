@@ -83,6 +83,7 @@ export function tygorDev(options: TygorDevOptions): Plugin {
   let errorExitCode: number | null = null;
   let currentPhase: "idle" | "prebuild" | "building" | "starting" = "idle";
   let isReloading = false;
+  let cachedRawrData: string[] | null = null;
 
   const log = (msg: string) => console.log(pc.cyan("[tygor]"), msg);
   const logError = (msg: string) => console.log(pc.cyan("[tygor]"), pc.red(msg));
@@ -434,8 +435,17 @@ export function tygorDev(options: TygorDevOptions): Plugin {
                 const client = createClient(devtoolsRegistry, {
                   baseUrl: `http://localhost:${currentServer.port}`,
                 });
-                const serverStatus = await client.Devtools.Status({});
-                status = { status: "ok", port: serverStatus.port, services: serverStatus.services };
+                const needsInitial = cachedRawrData === null;
+                const serverStatus = await client.Devtools.Status({ initial: needsInitial });
+                if (serverStatus.rawrData) {
+                  cachedRawrData = serverStatus.rawrData;
+                }
+                status = {
+                  status: "ok",
+                  port: serverStatus.port,
+                  services: serverStatus.services,
+                  rawrData: cachedRawrData ?? undefined,
+                };
               } catch {
                 status = { status: "disconnected" };
               }
