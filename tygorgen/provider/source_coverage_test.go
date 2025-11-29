@@ -11,7 +11,7 @@ func TestSourceProvider_CustomMarshalers(t *testing.T) {
 	provider := &SourceProvider{}
 	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"CustomJSONType", "CustomTextType"},
+		RootTypes: rootTypes("CustomJSONType", "CustomTextType"),
 	})
 
 	if err != nil {
@@ -49,7 +49,7 @@ func TestSourceProvider_AllBasicTypes(t *testing.T) {
 	provider := &SourceProvider{}
 	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"AllBasicTypes"},
+		RootTypes: rootTypes("AllBasicTypes"),
 	})
 
 	if err != nil {
@@ -114,7 +114,7 @@ func TestSourceProvider_EnumVariations(t *testing.T) {
 	provider := &SourceProvider{}
 	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"EnumFloat", "EnumBool"},
+		RootTypes: rootTypes("EnumFloat", "EnumBool"),
 	})
 
 	if err != nil {
@@ -163,7 +163,7 @@ func TestSourceProvider_MapWithTextMarshalerKey(t *testing.T) {
 	provider := &SourceProvider{}
 	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"MapWithTextMarshalerKey"},
+		RootTypes: rootTypes("MapWithTextMarshalerKey"),
 	})
 
 	if err != nil {
@@ -195,7 +195,7 @@ func TestSourceProvider_NonexistentType(t *testing.T) {
 	provider := &SourceProvider{}
 	_, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"NonexistentType"},
+		RootTypes: rootTypes("NonexistentType"),
 	})
 
 	if err == nil {
@@ -207,7 +207,7 @@ func TestSourceProvider_ConstrainedGeneric(t *testing.T) {
 	provider := &SourceProvider{}
 	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"Wrapper"},
+		RootTypes: rootTypes("Wrapper"),
 	})
 
 	if err != nil {
@@ -286,7 +286,7 @@ func TestSourceProvider_NestedStructRef(t *testing.T) {
 	provider := &SourceProvider{}
 	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"NestedStruct"},
+		RootTypes: rootTypes("NestedStruct"),
 	})
 
 	if err != nil {

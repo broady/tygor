@@ -11,7 +11,7 @@ func TestSourceProvider_GenericTypes(t *testing.T) {
 	provider := &SourceProvider{}
 	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"Response", "Container", "Pair"},
+		RootTypes: rootTypes("Response", "Container", "Pair"),
 	})
 
 	if err != nil {
@@ -103,7 +103,7 @@ func TestSourceProvider_RecursiveGeneric(t *testing.T) {
 	provider := &SourceProvider{}
 	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"TreeNode"},
+		RootTypes: rootTypes("TreeNode"),
 	})
 
 	if err != nil {

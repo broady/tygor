@@ -115,10 +115,29 @@ func GenerateTypes(types []any, cfg *Config) (*GenerateResult, error) {
 
 	// Extract packages and type names from the provided types
 	var packages []string
-	var rootTypes []string
+	var rootTypes []provider.RootType
 	var reflectTypes []reflect.Type
 	seen := make(map[string]bool)
-	seenNames := make(map[string]bool)
+	seenRoots := make(map[string]bool) // key: "pkg.name"
+
+	// Helper to add a root type if not already seen
+	addRoot := func(pkg, name string) {
+		if pkg != "" && !seen[pkg] {
+			seen[pkg] = true
+			packages = append(packages, pkg)
+		}
+		if name == "" {
+			return
+		}
+		key := pkg + "." + name
+		if !seenRoots[key] {
+			seenRoots[key] = true
+			rootTypes = append(rootTypes, provider.RootType{
+				Name:    name,
+				Package: pkg,
+			})
+		}
+	}
 
 	for _, t := range types {
 		rt := reflect.TypeOf(t)
@@ -131,13 +150,33 @@ func GenerateTypes(types []any, cfg *Config) (*GenerateResult, error) {
 		}
 		reflectTypes = append(reflectTypes, rt)
 
-		if pkg := rt.PkgPath(); pkg != "" && !seen[pkg] {
-			seen[pkg] = true
-			packages = append(packages, pkg)
+		pkg := rt.PkgPath()
+		name := rt.Name()
+		if name == "" {
+			continue
 		}
-		if name := rt.Name(); name != "" && !seenNames[name] {
-			seenNames[name] = true
-			rootTypes = append(rootTypes, name)
+
+		// Parse generic type arguments: Page[github.com/.../v1.User] -> extract v1.User
+		if idx := strings.Index(name, "["); idx >= 0 {
+			typeArgs := name[idx+1 : len(name)-1] // strip [ and ]
+			baseName := name[:idx]
+
+			// Add the base generic type
+			addRoot(pkg, baseName)
+
+			// Parse and add type arguments (handles multiple: K, V)
+			for _, arg := range strings.Split(typeArgs, ",") {
+				arg = strings.TrimSpace(arg)
+				// Format: github.com/pkg/path.TypeName
+				if lastDot := strings.LastIndex(arg, "."); lastDot >= 0 {
+					argPkg := arg[:lastDot]
+					argName := arg[lastDot+1:]
+					addRoot(argPkg, argName)
+				}
+			}
+		} else {
+			// Non-generic type
+			addRoot(pkg, name)
 		}
 	}
 
@@ -546,8 +585,8 @@ func buildSchemaFromSource(ctx context.Context, routes internal.RouteMap, extraP
 		return nil, fmt.Errorf("no packages to analyze: register at least one handler or specify Packages in config")
 	}
 
-	// Collect root type names from routes
-	rootTypes := collectRootTypeNames(routes)
+	// Collect root types from routes
+	rootTypes := collectRootTypes(routes)
 
 	p := &provider.SourceProvider{}
 	opts := provider.SourceInputOptions{
@@ -619,40 +658,48 @@ func buildSchemaFromReflection(ctx context.Context, routes internal.RouteMap) (*
 	return p.BuildSchema(ctx, opts)
 }
 
-// collectRootTypeNames extracts type names from routes for source provider.
-func collectRootTypeNames(routes internal.RouteMap) []string {
-	seen := make(map[string]bool)
-	var names []string
+// collectRootTypes extracts types from routes for source provider.
+func collectRootTypes(routes internal.RouteMap) []provider.RootType {
+	seen := make(map[string]bool) // key: "pkg.name"
+	var roots []provider.RootType
 
-	for _, route := range routes {
-		if route.Request != nil {
-			// Unwrap pointers - pointer types return empty Name()
-			t := route.Request
-			for t.Kind() == reflect.Pointer {
-				t = t.Elem()
-			}
-			name := t.Name()
-			if name != "" && !seen[name] {
-				seen[name] = true
-				names = append(names, name)
-			}
+	addType := func(t reflect.Type) {
+		// Unwrap pointers
+		for t.Kind() == reflect.Pointer {
+			t = t.Elem()
 		}
-		if route.Response != nil {
-			// Unwrap pointers - pointer types return empty Name()
-			t := route.Response
-			for t.Kind() == reflect.Pointer {
-				t = t.Elem()
-			}
-			name := t.Name()
-			if name != "" && !seen[name] {
-				seen[name] = true
-				names = append(names, name)
-			}
+
+		pkg := t.PkgPath()
+		name := t.Name()
+		if name == "" {
+			return
+		}
+
+		// Strip generic type parameters
+		if idx := strings.Index(name, "["); idx >= 0 {
+			name = name[:idx]
+		}
+
+		key := pkg + "." + name
+		if !seen[key] {
+			seen[key] = true
+			roots = append(roots, provider.RootType{
+				Name:    name,
+				Package: pkg,
+			})
 		}
 	}
 
-	sort.Strings(names)
-	return names
+	for _, route := range routes {
+		if route.Request != nil {
+			addType(route.Request)
+		}
+		if route.Response != nil {
+			addType(route.Response)
+		}
+	}
+
+	return roots
 }
 
 // flavorsToStrings converts []Flavor to []string for internal use.

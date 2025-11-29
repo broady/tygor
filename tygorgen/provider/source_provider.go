@@ -19,14 +19,24 @@ import (
 // SourceProvider extracts types by analyzing Go source code.
 type SourceProvider struct{}
 
+// RootType identifies a type to extract with its package context.
+type RootType struct {
+	// Name is the type name (e.g., "User", "Page").
+	// For generic instantiations, this should be the base name without type parameters.
+	Name string
+
+	// Package is the full package path (e.g., "github.com/foo/api").
+	Package string
+}
+
 // SourceInputOptions configures source-based type extraction.
 type SourceInputOptions struct {
 	// Packages are the Go package paths to analyze.
 	Packages []string
 
-	// RootTypes are the type names to extract (e.g., "User", "CreateRequest").
+	// RootTypes are the types to extract with package context.
 	// If empty, all exported types in the packages are extracted.
-	RootTypes []string
+	RootTypes []RootType
 }
 
 // BuildSchema analyzes source code and returns a Schema.
@@ -101,9 +111,9 @@ func (p *SourceProvider) BuildSchema(ctx context.Context, opts SourceInputOption
 	// Find and process root types
 	if len(opts.RootTypes) > 0 {
 		// Extract specific root types
-		for _, rootName := range opts.RootTypes {
-			if err := builder.extractRootType(rootName); err != nil {
-				return nil, fmt.Errorf("failed to extract root type %s: %w", rootName, err)
+		for _, root := range opts.RootTypes {
+			if err := builder.extractRootType(root); err != nil {
+				return nil, fmt.Errorf("failed to extract root type %s: %w", root.Name, err)
 			}
 		}
 	} else {
@@ -133,10 +143,15 @@ type enumConstant struct {
 	obj   *types.Const // Store the const object for doc extraction
 }
 
-// extractRootType finds and extracts a named type by name.
-func (b *schemaBuilder) extractRootType(name string) error {
+// extractRootType finds and extracts a named type by name and package.
+func (b *schemaBuilder) extractRootType(root RootType) error {
 	for _, pkg := range b.pkgs {
-		obj := pkg.Types.Scope().Lookup(name)
+		// If package is specified, only look in that package
+		if root.Package != "" && pkg.PkgPath != root.Package {
+			continue
+		}
+
+		obj := pkg.Types.Scope().Lookup(root.Name)
 		if obj == nil {
 			continue
 		}
@@ -151,7 +166,10 @@ func (b *schemaBuilder) extractRootType(name string) error {
 		}
 		return nil
 	}
-	return fmt.Errorf("type %s not found in any package", name)
+	if root.Package != "" {
+		return fmt.Errorf("type %s not found in package %s", root.Name, root.Package)
+	}
+	return fmt.Errorf("type %s not found in any package", root.Name)
 }
 
 // extractAllExportedTypes extracts all exported types from all packages.

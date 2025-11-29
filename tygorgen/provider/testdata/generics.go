@@ -37,3 +37,10 @@ type TreeNode[T any] struct {
 	Value    T             `json:"value"`
 	Children []TreeNode[T] `json:"children,omitempty"`
 }
+
+// Page is a generic paginated response for testing multi-package instantiation.
+type Page[T any] struct {
+	Items   []T  `json:"items"`
+	Total   int  `json:"total"`
+	HasMore bool `json:"hasMore"`
+}

@@ -9,6 +9,9 @@ import (
 
 	"github.com/broady/tygor"
 	"github.com/broady/tygor/internal/testfixtures"
+	"github.com/broady/tygor/tygorgen/provider/testdata"
+	v1 "github.com/broady/tygor/tygorgen/provider/testdata/v1"
+	v2 "github.com/broady/tygor/tygorgen/provider/testdata/v2"
 )
 
 func TestApplyConfigDefaults(t *testing.T) {
@@ -468,5 +471,98 @@ func TestFromTypes_WithZodFlavor(t *testing.T) {
 	// Check that z.object is somewhere in the generated output
 	if !strings.Contains(allContent, "z.object") {
 		t.Error("zod output should contain z.object schemas")
+	}
+}
+
+func TestFromTypes_MultiPackageGenericInstantiation(t *testing.T) {
+	// Test that Page[v1.User] and Page[v2.User] both work correctly.
+	// The reflection provider:
+	// 1. Generates instantiated types (Page_..._v1_User, Page_..._v2_User)
+	// 2. Follows type arguments to generate both v1.User and v2.User
+	result, err := FromTypes(
+		testdata.Page[v1.User]{},
+		testdata.Page[v2.User]{},
+	).Provider("reflection").Generate()
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Collect all generated content
+	var allContent string
+	for _, f := range result.Files {
+		allContent += string(f.Content)
+	}
+
+	// Should have instantiated Page types (reflection generates concrete types, not generics)
+	if !strings.Contains(allContent, "Page_") {
+		t.Error("expected instantiated Page types")
+	}
+
+	// Should have v1.User (check for name field unique to v1)
+	if !strings.Contains(allContent, "name: string") {
+		t.Error("expected v1.User name field")
+	}
+
+	// Should have v2.User (check for its unique fields: email, role)
+	if !strings.Contains(allContent, "email: string") {
+		t.Error("expected v2.User email field")
+	}
+	if !strings.Contains(allContent, "role: string") {
+		t.Error("expected v2.User role field")
+	}
+
+	// Count User interface definitions - should have 2 (one per package)
+	userCount := strings.Count(allContent, "export interface User")
+	if userCount != 2 {
+		t.Errorf("expected 2 User interface definitions (v1 and v2), got %d", userCount)
+	}
+}
+
+func TestFromTypes_SourceProviderGenericDefinition(t *testing.T) {
+	// Test that source provider generates generic definitions (Page<T>)
+	// and follows type arguments to generate referenced types.
+	result, err := FromTypes(
+		testdata.Page[v1.User]{},
+		testdata.Page[v2.User]{},
+	).Provider("source").Generate()
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Collect all generated content
+	var allContent string
+	for _, f := range result.Files {
+		allContent += string(f.Content)
+	}
+
+	// Source provider generates generic definition with type parameter
+	if !strings.Contains(allContent, "Page<T>") {
+		t.Error("expected Page<T> generic definition from source provider")
+	}
+
+	// Should NOT have instantiated types (that's reflection provider behavior)
+	if strings.Contains(allContent, "Page_") {
+		t.Error("source provider should generate generic Page<T>, not instantiated types")
+	}
+
+	// Should follow type arguments and generate v1.User
+	if !strings.Contains(allContent, "name: string") {
+		t.Error("expected v1.User name field")
+	}
+
+	// Should follow type arguments and generate v2.User
+	if !strings.Contains(allContent, "email: string") {
+		t.Error("expected v2.User email field")
+	}
+	if !strings.Contains(allContent, "role: string") {
+		t.Error("expected v2.User role field")
+	}
+
+	// Count User interface definitions - should have 2 (one per package)
+	userCount := strings.Count(allContent, "export interface User")
+	if userCount != 2 {
+		t.Errorf("expected 2 User interface definitions (v1 and v2), got %d", userCount)
 	}
 }

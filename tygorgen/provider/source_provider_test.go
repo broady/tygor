@@ -9,11 +9,20 @@ import (
 	"github.com/broady/tygor/tygorgen/ir"
 )
 
+// rootTypes converts string names to RootType slice for test convenience.
+func rootTypes(names ...string) []RootType {
+	result := make([]RootType, len(names))
+	for i, name := range names {
+		result[i] = RootType{Name: name}
+	}
+	return result
+}
+
 func TestSourceProvider_BasicTypes(t *testing.T) {
 	provider := &SourceProvider{}
 	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"User"},
+		RootTypes: rootTypes("User"),
 	})
 
 	if err != nil {
@@ -82,7 +91,7 @@ func TestSourceProvider_EnumTypes(t *testing.T) {
 	provider := &SourceProvider{}
 	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"Status", "Priority"},
+		RootTypes: rootTypes("Status", "Priority"),
 	})
 
 	if err != nil {
@@ -143,7 +152,7 @@ func TestSourceProvider_EnumExcludesUnexportedConstants(t *testing.T) {
 	provider := &SourceProvider{}
 	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"Status"},
+		RootTypes: rootTypes("Status"),
 	})
 
 	if err != nil {
@@ -178,7 +187,7 @@ func TestSourceProvider_SliceAndArrayTypes(t *testing.T) {
 	provider := &SourceProvider{}
 	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"SliceAndArrayTypes"},
+		RootTypes: rootTypes("SliceAndArrayTypes"),
 	})
 
 	if err != nil {
@@ -248,7 +257,7 @@ func TestSourceProvider_MapTypes(t *testing.T) {
 	provider := &SourceProvider{}
 	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"MapTypes"},
+		RootTypes: rootTypes("MapTypes"),
 	})
 
 	if err != nil {
@@ -288,7 +297,7 @@ func TestSourceProvider_PointerTypes(t *testing.T) {
 	provider := &SourceProvider{}
 	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"PointerTypes"},
+		RootTypes: rootTypes("PointerTypes"),
 	})
 
 	if err != nil {
@@ -345,7 +354,7 @@ func TestSourceProvider_EmbeddedTypes(t *testing.T) {
 	provider := &SourceProvider{}
 	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"EmbeddedTypes", "NamedEmbedding"},
+		RootTypes: rootTypes("EmbeddedTypes", "NamedEmbedding"),
 	})
 
 	if err != nil {
@@ -409,7 +418,7 @@ func TestSourceProvider_TaggedFields(t *testing.T) {
 	provider := &SourceProvider{}
 	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"TaggedFields"},
+		RootTypes: rootTypes("TaggedFields"),
 	})
 
 	if err != nil {
@@ -476,7 +485,7 @@ func TestSourceProvider_DeprecatedType(t *testing.T) {
 	provider := &SourceProvider{}
 	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"OldStruct"},
+		RootTypes: rootTypes("OldStruct"),
 	})
 
 	if err != nil {
@@ -553,7 +562,7 @@ func TestSourceProvider_InterfaceTypes(t *testing.T) {
 	provider := &SourceProvider{}
 	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"InterfaceField"},
+		RootTypes: rootTypes("InterfaceField"),
 	})
 
 	if err != nil {
@@ -608,7 +617,7 @@ func TestSourceProvider_FieldDocumentation(t *testing.T) {
 	provider := &SourceProvider{}
 	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"User"},
+		RootTypes: rootTypes("User"),
 	})
 
 	if err != nil {
@@ -653,7 +662,7 @@ func TestSourceProvider_EnumMemberDocumentation(t *testing.T) {
 	provider := &SourceProvider{}
 	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"Status"},
+		RootTypes: rootTypes("Status"),
 	})
 
 	if err != nil {
@@ -703,7 +712,7 @@ func TestSourceProvider_UnionConstraint(t *testing.T) {
 	provider := &SourceProvider{}
 	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"Wrapper"},
+		RootTypes: rootTypes("Wrapper"),
 	})
 
 	if err != nil {
@@ -769,7 +778,7 @@ func TestSourceProvider_CustomMarshalerWarning(t *testing.T) {
 	provider := &SourceProvider{}
 	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"CustomJSONType", "CustomTextType"},
+		RootTypes: rootTypes("CustomJSONType", "CustomTextType"),
 	})
 
 	if err != nil {
@@ -824,7 +833,7 @@ func TestSourceProvider_JSONSpecialTypes(t *testing.T) {
 	provider := &SourceProvider{}
 	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"JSONSpecialTypes"},
+		RootTypes: rootTypes("JSONSpecialTypes"),
 	})
 
 	if err != nil {
@@ -908,7 +917,7 @@ func TestSourceProvider_AnonymousStruct_Basic(t *testing.T) {
 	provider := &SourceProvider{}
 	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"AnonymousStructField"},
+		RootTypes: rootTypes("AnonymousStructField"),
 	})
 
 	if err != nil {
@@ -970,7 +979,7 @@ func TestSourceProvider_AnonymousStruct_Nested(t *testing.T) {
 	provider := &SourceProvider{}
 	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"NestedAnonymousStructs"},
+		RootTypes: rootTypes("NestedAnonymousStructs"),
 	})
 
 	if err != nil {
@@ -1011,7 +1020,7 @@ func TestSourceProvider_AnonymousStruct_Multiple(t *testing.T) {
 	provider := &SourceProvider{}
 	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"MultipleAnonymousFields"},
+		RootTypes: rootTypes("MultipleAnonymousFields"),
 	})
 
 	if err != nil {
@@ -1034,7 +1043,7 @@ func TestSourceProvider_AnonymousStruct_WithComplexTypes(t *testing.T) {
 	provider := &SourceProvider{}
 	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"AnonymousWithSliceAndMap"},
+		RootTypes: rootTypes("AnonymousWithSliceAndMap"),
 	})
 
 	if err != nil {
@@ -1075,7 +1084,7 @@ func TestSourceProvider_AnonymousStruct_WithEmbedding(t *testing.T) {
 	provider := &SourceProvider{}
 	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"AnonymousWithEmbedding"},
+		RootTypes: rootTypes("AnonymousWithEmbedding"),
 	})
 
 	if err != nil {
@@ -1111,7 +1120,7 @@ func TestSourceProvider_AnonymousStruct_WithNamedEmbedding(t *testing.T) {
 	provider := &SourceProvider{}
 	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"AnonymousWithNamedEmbedding"},
+		RootTypes: rootTypes("AnonymousWithNamedEmbedding"),
 	})
 
 	if err != nil {
@@ -1149,7 +1158,7 @@ func TestSourceProvider_AnonymousStruct_NameCollision(t *testing.T) {
 	// and CollisionTest.Inner would generate the same synthetic name
 	_, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"CollisionTest_Inner", "CollisionTest"},
+		RootTypes: rootTypes("CollisionTest_Inner", "CollisionTest"),
 	})
 
 	if err == nil {
@@ -1169,7 +1178,7 @@ func TestSourceProvider_NameCollision(t *testing.T) {
 	// First extraction should succeed
 	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"CollisionTestA", "CollisionTestA"}, // Same type twice
+		RootTypes: rootTypes("CollisionTestA", "CollisionTestA"), // Same type twice
 	})
 
 	// Should not error - duplicate entries in RootTypes should be deduplicated
@@ -1194,7 +1203,7 @@ func TestSourceProvider_NoCollisionDifferentTypes(t *testing.T) {
 	provider := &SourceProvider{}
 	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"CollisionTestA", "CollisionTestB"},
+		RootTypes: rootTypes("CollisionTestA", "CollisionTestB"),
 	})
 
 	if err != nil {
@@ -1228,7 +1237,7 @@ func TestSourceProvider_CollisionDetection_SameType(t *testing.T) {
 	// Extract a type multiple times in RootTypes - should deduplicate
 	schema, err := provider.BuildSchema(context.Background(), SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"DuplicateType", "DuplicateType", "DuplicateType"},
+		RootTypes: rootTypes("DuplicateType", "DuplicateType", "DuplicateType"),
 	})
 
 	if err != nil {
@@ -1260,7 +1269,7 @@ func TestSourceProvider_AliasChains(t *testing.T) {
 
 	schema, err := provider.BuildSchema(ctx, SourceInputOptions{
 		Packages:  []string{"github.com/broady/tygor/tygorgen/provider/testdata"},
-		RootTypes: []string{"AliasContainer", "Node"},
+		RootTypes: rootTypes("AliasContainer", "Node"),
 	})
 
 	if err != nil {

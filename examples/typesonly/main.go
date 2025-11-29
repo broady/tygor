@@ -36,10 +36,7 @@ func generate(dir string) {
 	// Pass root types - referenced types are followed automatically.
 	_, err := tygorgen.FromTypes(
 		api.User{},
-		api.Team{},
-		api.PaginatedUsers{},
-		api.AuditEvent{},
-		api.Pagination{},
+		api.Page[api.User]{}, // generic instantiation
 	).ToDir(dir)
 
 	if err != nil {
