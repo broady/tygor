@@ -102,7 +102,7 @@ typecheck-docs:
 
 # Type-check vite plugin
 typecheck-vite-plugin:
-	@cd vite-plugin && bun run typecheck
+	@cd vite-plugin && bun run --silent typecheck
 
 # Generate devtools manifest for vite-plugin
 gen-devtools:

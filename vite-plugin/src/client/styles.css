@@ -105,6 +105,56 @@
   filter: grayscale(80%);
 }
 
+/* Expanded error pill */
+.tygor-tiger-btn--expanded {
+  width: auto;
+  border-radius: 20px;
+  padding: 0 12px 0 0;
+  gap: 8px;
+  height: auto;
+  min-height: var(--tygor-tiger-btn-size);
+}
+
+.tygor-tiger-btn--expanded:hover {
+  transform: none;
+}
+
+.tygor-tiger-btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tygor-tiger-btn-size);
+  height: var(--tygor-tiger-btn-size);
+  flex-shrink: 0;
+}
+
+.tygor-tiger-btn-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 6px 0;
+  min-width: 0;
+}
+
+.tygor-tiger-btn-title {
+  font-family: var(--tygor-font);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--tygor-error);
+  white-space: nowrap;
+}
+
+.tygor-tiger-btn-summary {
+  font-family: var(--tygor-font-mono);
+  font-size: 10px;
+  color: var(--tygor-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 280px;
+}
+
 @keyframes tygor-pulse-error {
   0%, 100% {
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);

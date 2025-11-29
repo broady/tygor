@@ -1,5 +1,5 @@
 import { createSignal, createEffect, onCleanup, Show } from "solid-js";
-import { TigerButton } from "./TigerButton";
+import { TigerButton, extractErrorSummary } from "./TigerButton";
 import { Sidebar } from "./Sidebar";
 import type { TygorStatus, TygorRpcError } from "./types";
 
@@ -148,6 +148,15 @@ export function DevTools() {
     return s?.status === "disconnected" || s?.status === "vite_disconnected";
   };
 
+  const errorInfo = () => {
+    const s = state().status;
+    if (s?.status !== "error") return null;
+    return {
+      phase: s.phase,
+      summary: extractErrorSummary(s.error),
+    };
+  };
+
   const toggleMode = () => {
     setMode((m) => (m === "overlay" ? "sidebar" : "overlay"));
   };
@@ -168,6 +177,7 @@ export function DevTools() {
           isBuilding={isBuilding()}
           hasError={hasError()}
           isDisconnected={isDisconnected()}
+          errorInfo={errorInfo()}
           onClick={toggleMode}
         />
       </Show>
