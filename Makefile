@@ -97,6 +97,7 @@ check-quiet:
 
 # Type-check documentation examples
 typecheck-docs:
+	@cd doc/examples && npm install --silent
 	@bun x typescript --noEmit --project doc/examples/tsconfig.json
 
 # Precommit sub-targets (for parallel execution, all depend on fmt-check)
