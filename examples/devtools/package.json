@@ -1,0 +1,9 @@
+{
+  "name": "tygor-devtools-example",
+  "private": true,
+  "scripts": {
+    "dev": "cd client && bun install --silent && bun run dev",
+    "gen": "go run . -gen -out ./client/src/rpc",
+    "build": "cd client && bun run build"
+  }
+}

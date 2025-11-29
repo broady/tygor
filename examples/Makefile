@@ -1,7 +1,7 @@
 # Root Makefile for all examples
 # Note: parallelism is inherited from parent make via precommit targets
 
-EXAMPLES := newsserver blog protobuf multipackage reflection typesonly zod react
+EXAMPLES := newsserver blog protobuf multipackage reflection typesonly zod react devtools
 
 .PHONY: all test gen check fmt clean readme precommit lint-examples $(EXAMPLES)
 
