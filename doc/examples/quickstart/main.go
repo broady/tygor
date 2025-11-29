@@ -11,12 +11,12 @@ import (
 )
 
 // [snippet:handlers collapse]
-func ListNews(ctx context.Context, req *ListNewsParams) ([]*News, error) {
+func GetUser(ctx context.Context, req *GetUserRequest) (*User, error) {
 	// Your implementation
 	return nil, nil
 }
 
-func CreateNews(ctx context.Context, req *CreateNewsParams) (*News, error) {
+func CreateUser(ctx context.Context, req *CreateUserRequest) (*User, error) {
 	// Your implementation
 	return nil, nil
 }
@@ -27,9 +27,9 @@ func exampleRegistration() {
 	// [snippet:registration]
 	app := tygor.NewApp()
 
-	news := app.Service("News")
-	news.Register("List", tygor.Query(ListNews))
-	news.Register("Create", tygor.Exec(CreateNews))
+	users := app.Service("Users")
+	users.Register("Get", tygor.Query(GetUser))      // GET request
+	users.Register("Create", tygor.Exec(CreateUser)) // POST request
 
 	http.ListenAndServe(":8080", app.Handler())
 	// [/snippet:registration]
@@ -38,15 +38,26 @@ func exampleRegistration() {
 func exampleGeneration() {
 	app := tygor.NewApp()
 	// [snippet:generation]
-	if _, err := tygorgen.FromApp(app).ToDir("./client/src/rpc"); err != nil {
-		log.Fatal(err)
-	}
+	tygorgen.FromApp(app).ToDir("./client/src/rpc")
 	// [/snippet:generation]
+}
+
+func exampleClient() {
+	// [snippet:client]
+	// import { createClient } from "@tygor/client";
+	// import type { Manifest } from "./rpc/manifest";
+	//
+	// const client = createClient<Manifest>("http://localhost:8080");
+	//
+	// const user = await client.Users.Get({ id: "123" });
+	// [/snippet:client]
 }
 
 // Keep imports used.
 var (
 	_ = context.Background
+	_ = log.Fatal
 	_ = exampleRegistration
 	_ = exampleGeneration
+	_ = exampleClient
 )

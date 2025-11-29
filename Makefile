@@ -6,7 +6,7 @@ SNIPPET_TOOL := cd examples && go run ./cmd/snippet
 
 # Source files for snippet extraction (relative to repo root)
 GO_FILES := $(wildcard *.go) $(wildcard middleware/*.go) $(wildcard tygorgen/*.go)
-DOC_FILES := $(wildcard doc/examples/quickstart/*.go)
+DOC_FILES := $(wildcard doc/examples/quickstart/*.go) $(wildcard doc/examples/quickstart/*.ts)
 
 .PHONY: all test test-quiet lint lint-quiet check check-quiet readme lint-readme precommit fmt fmt-check ci-local help
 

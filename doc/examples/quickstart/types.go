@@ -1,27 +1,20 @@
 // Package quickstart provides simple example types for documentation.
 package quickstart
 
-import "time"
-
 // [snippet:types]
-type News struct {
-	ID        int32      `json:"id"`
-	Title     string     `json:"title"`
-	Body      *string    `json:"body"`
-	CreatedAt *time.Time `json:"created_at"`
+type User struct {
+	ID    int64  `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email" validate:"required,email"`
 }
 
-type ListNewsParams struct {
-	Limit  *int32 `json:"limit"`
-	Offset *int32 `json:"offset"`
+type GetUserRequest struct {
+	ID int64 `json:"id"`
 }
 
-type CreateNewsParams struct {
-	Title string  `json:"title" validate:"required,min=3"`
-	Body  *string `json:"body"`
+type CreateUserRequest struct {
+	Name  string `json:"name" validate:"required,min=2"`
+	Email string `json:"email" validate:"required,email"`
 }
 
 // [/snippet:types]
-
-// Ensure time is used (for compilation).
-var _ = time.Time{}
