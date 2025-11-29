@@ -1,6 +1,7 @@
-import { Show, createSignal, onCleanup } from "solid-js";
+import { Show, For, createSignal, createEffect, onCleanup, onMount } from "solid-js";
 import type { TygorStatus, TygorRpcError } from "./types";
 import type { SidebarSide } from "./DevTools";
+import { Pane } from "./Pane";
 
 interface DevToolsState {
   status: TygorStatus | null;
@@ -32,6 +33,10 @@ function formatDuration(ms: number): string {
   return `${Math.floor(minutes / 60)}h`;
 }
 
+interface Rawr { color: string; weight: string; size: number; text: string }
+let _r: Rawr[] = [];
+let _i = 0;
+
 export function Sidebar(props: SidebarProps) {
   const [copied, setCopied] = createSignal(false);
 
@@ -39,6 +44,65 @@ export function Sidebar(props: SidebarProps) {
   const [tick, setTick] = createSignal(0);
   const interval = setInterval(() => setTick((t) => t + 1), 1000);
   onCleanup(() => clearInterval(interval));
+
+  // Pane state management
+  const STORAGE_KEY_COLLAPSED = "tygor-panes-collapsed";
+  const STORAGE_KEY_ORDER = "tygor-panes-order";
+  const DEFAULT_ORDER = ["system", "services"];
+
+  const loadPaneState = () => {
+    try {
+      return {
+        collapsed: JSON.parse(sessionStorage.getItem(STORAGE_KEY_COLLAPSED) || "{}") as Record<string, boolean>,
+        order: JSON.parse(sessionStorage.getItem(STORAGE_KEY_ORDER) || "null") as string[] | null,
+      };
+    } catch {
+      return { collapsed: {}, order: null };
+    }
+  };
+
+  const initial = loadPaneState();
+  // Merge stored order with DEFAULT_ORDER to include any new panes
+  const mergedOrder = initial.order
+    ? [...initial.order, ...DEFAULT_ORDER.filter((id) => !initial.order!.includes(id))]
+    : DEFAULT_ORDER;
+  const [paneCollapsed, setPaneCollapsed] = createSignal<Record<string, boolean>>(initial.collapsed);
+  const [paneOrder, setPaneOrder] = createSignal<string[]>(mergedOrder);
+  const [draggedPane, setDraggedPane] = createSignal<string | null>(null);
+  const [dragTarget, setDragTarget] = createSignal<string | null>(null);
+
+  // Persist pane state to sessionStorage
+  createEffect(() => {
+    sessionStorage.setItem(STORAGE_KEY_COLLAPSED, JSON.stringify(paneCollapsed()));
+    sessionStorage.setItem(STORAGE_KEY_ORDER, JSON.stringify(paneOrder()));
+  });
+
+  const togglePane = (id: string) => {
+    setPaneCollapsed((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const handlePaneDrop = (targetId: string) => {
+    const fromId = draggedPane();
+    if (!fromId || fromId === targetId) return;
+
+    const order = [...paneOrder()];
+    const fromIndex = order.indexOf(fromId);
+    const toIndex = order.indexOf(targetId);
+
+    if (fromIndex === -1 || toIndex === -1) return;
+
+    order.splice(fromIndex, 1);
+    order.splice(toIndex, 0, fromId);
+
+    setPaneOrder(order);
+    setDraggedPane(null);
+    setDragTarget(null);
+  };
+
+  const clearDragState = () => {
+    setDraggedPane(null);
+    setDragTarget(null);
+  };
 
   // Vite status: connected unless vite_disconnected
   const viteStatus = (): { label: string; state: "ok" | "disconnected" } => {
@@ -82,6 +146,21 @@ export function Sidebar(props: SidebarProps) {
     return s?.status === "error" ? s : null;
   };
 
+  // Auto-expand system pane and move to top on mount if there's an error
+  onMount(() => {
+    if (errorStatus()) {
+      // Expand system pane
+      setPaneCollapsed((prev) => ({ ...prev, system: false }));
+      // Move system to top
+      const order = paneOrder();
+      const systemIndex = order.indexOf("system");
+      if (systemIndex > 0) {
+        const newOrder = ["system", ...order.filter((id) => id !== "system")];
+        setPaneOrder(newOrder);
+      }
+    }
+  });
+
   const copyError = async () => {
     const err = errorStatus();
     if (!err) return;
@@ -89,6 +168,18 @@ export function Sidebar(props: SidebarProps) {
     await navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
+  };
+
+  const onTigerClick = () => {
+    const s = props.state.status;
+    if (s?.status === "ok" && s.rawrData && !_r.length) {
+      try { _r = JSON.parse(atob(s.rawrData)); } catch {}
+    }
+    if (!_r.length) return;
+    const m = _r[_i];
+    const style = `color:${m.color};font-weight:${m.weight};font-size:${m.size}px`;
+    console.log(`%c🐯 ${m.text}`, style);
+    _i = (_i + 1) % _r.length;
   };
 
   return (
@@ -99,7 +190,7 @@ export function Sidebar(props: SidebarProps) {
       {/* Header */}
       <div class="tygor-sidebar-header">
         <div class="tygor-sidebar-title">
-          <span class="tygor-sidebar-icon">🐯</span>
+          <span class="tygor-sidebar-icon" onClick={onTigerClick}>🐯</span>
           <span class="tygor-sidebar-name">tygor</span>
         </div>
         <div class="tygor-sidebar-header-actions">
@@ -120,50 +211,112 @@ export function Sidebar(props: SidebarProps) {
         </div>
       </div>
 
-      {/* Component Status */}
-      <div class="tygor-sidebar-status-grid">
-        <div class="tygor-sidebar-status-item">
-          <span class="tygor-sidebar-status-name">Vite</span>
-          <span class={`tygor-sidebar-status-value tygor-sidebar-status-value--${viteStatus().state}`}>
-            {viteStatus().label}
-          </span>
-          <Show when={duration() && viteStatus().state === "disconnected"}>
-            <span class="tygor-sidebar-status-duration">{duration()}</span>
-          </Show>
-        </div>
-        <div class="tygor-sidebar-status-item">
-          <span class="tygor-sidebar-status-name">Go</span>
-          <span class={`tygor-sidebar-status-value tygor-sidebar-status-value--${apiStatus().state}`}>
-            {apiStatus().label}
-          </span>
-          <Show when={duration() && viteStatus().state === "ok" && apiStatus().state !== "ok"}>
-            <span class="tygor-sidebar-status-duration">{duration()}</span>
-          </Show>
-        </div>
-      </div>
+      {/* Panes */}
+      <div class="tygor-sidebar-panes" ondragend={clearDragState}>
+        <For each={paneOrder()}>
+          {(paneId) => {
+            if (paneId === "system") {
+              const systemCollapsedStatus = () => {
+                const vite = viteStatus();
+                const api = apiStatus();
+                if (vite.state !== "ok") return vite.label;
+                if (api.state !== "ok") return api.label;
+                return "OK";
+              };
 
-      {/* Error Panel */}
-      <Show when={errorStatus()}>
-        {(err) => (
-          <div class="tygor-sidebar-error">
-            <div class="tygor-sidebar-error-header">
-              <span class="tygor-sidebar-error-title">Error Output</span>
-              <button
-                class="tygor-sidebar-error-copy"
-                classList={{ "tygor-sidebar-error-copy--copied": copied() }}
-                onClick={copyError}
-              >
-                {copied() ? "Copied" : "Copy"}
-              </button>
-            </div>
-            <Show when={err().command}>
-              <p class="tygor-sidebar-error-cmd">$ {err().command}</p>
-            </Show>
-            <pre class="tygor-sidebar-error-output">{err().error}</pre>
-            <p class="tygor-sidebar-error-hint">Fix the error and save — auto-reloads when fixed.</p>
-          </div>
-        )}
-      </Show>
+              return (
+                <Pane
+                  id="system"
+                  title="System Status"
+                  collapsed={paneCollapsed().system ?? false}
+                  collapsedStatus={systemCollapsedStatus}
+                  onToggle={() => togglePane("system")}
+                  onDragStart={() => setDraggedPane("system")}
+                  onDragOver={() => setDragTarget("system")}
+                  onDrop={() => handlePaneDrop("system")}
+                  isDragTarget={dragTarget() === "system" && draggedPane() !== "system"}
+                >
+                  <div class="tygor-sidebar-status-grid">
+                    <div class="tygor-sidebar-status-item">
+                      <span class="tygor-sidebar-status-name">Vite</span>
+                      <span class={`tygor-sidebar-status-value tygor-sidebar-status-value--${viteStatus().state}`}>
+                        {viteStatus().label}
+                      </span>
+                      <Show when={duration() && viteStatus().state === "disconnected"}>
+                        <span class="tygor-sidebar-status-duration">{duration()}</span>
+                      </Show>
+                    </div>
+                    <div class="tygor-sidebar-status-item">
+                      <span class="tygor-sidebar-status-name">Go</span>
+                      <span class={`tygor-sidebar-status-value tygor-sidebar-status-value--${apiStatus().state}`}>
+                        {apiStatus().label}
+                      </span>
+                      <Show when={duration() && viteStatus().state === "ok" && apiStatus().state !== "ok"}>
+                        <span class="tygor-sidebar-status-duration">{duration()}</span>
+                      </Show>
+                    </div>
+                  </div>
+                  <Show when={errorStatus()}>
+                    {(err) => (
+                      <div class="tygor-sidebar-error">
+                        <div class="tygor-sidebar-error-header">
+                          <span class="tygor-sidebar-error-title">Error Output</span>
+                          <button
+                            class="tygor-sidebar-error-copy"
+                            classList={{ "tygor-sidebar-error-copy--copied": copied() }}
+                            onClick={copyError}
+                          >
+                            {copied() ? "Copied" : "Copy"}
+                          </button>
+                        </div>
+                        <Show when={err().command}>
+                          <p class="tygor-sidebar-error-cmd">$ {err().command}</p>
+                        </Show>
+                        <pre class="tygor-sidebar-error-output">{err().error}</pre>
+                        <p class="tygor-sidebar-error-hint">Fix the error and save — auto-reloads when fixed.</p>
+                      </div>
+                    )}
+                  </Show>
+                </Pane>
+              );
+            }
+
+            if (paneId === "services") {
+              const s = props.state.status;
+              const services = () => (s?.status === "ok" ? s.services : []);
+
+              return (
+                <Pane
+                  id="services"
+                  title="Services"
+                  collapsed={paneCollapsed().services ?? false}
+                  collapsedStatus={() => {
+                    const count = services().length;
+                    return count > 0 ? `${count}` : null;
+                  }}
+                  onToggle={() => togglePane("services")}
+                  onDragStart={() => setDraggedPane("services")}
+                  onDragOver={() => setDragTarget("services")}
+                  onDrop={() => handlePaneDrop("services")}
+                  isDragTarget={dragTarget() === "services" && draggedPane() !== "services"}
+                >
+                  <Show when={services().length > 0} fallback={
+                    <div class="tygor-pane-empty">No services available</div>
+                  }>
+                    <ul class="tygor-sidebar-services">
+                      {services().map((svc) => (
+                        <li class="tygor-sidebar-service">{svc}</li>
+                      ))}
+                    </ul>
+                  </Show>
+                </Pane>
+              );
+            }
+
+            return null;
+          }}
+        </For>
+      </div>
 
       {/* RPC Error */}
       <Show when={props.state.rpcError}>
@@ -184,24 +337,6 @@ export function Sidebar(props: SidebarProps) {
         )}
       </Show>
 
-      {/* Services (when OK) */}
-      <Show when={props.state.status?.status === "ok"}>
-        {() => {
-          const s = props.state.status as TygorStatus & { status: "ok" };
-          return (
-            <Show when={s.services.length > 0}>
-              <div class="tygor-sidebar-section">
-                <div class="tygor-sidebar-section-title">Services</div>
-                <ul class="tygor-sidebar-services">
-                  {s.services.map((svc) => (
-                    <li class="tygor-sidebar-service">{svc}</li>
-                  ))}
-                </ul>
-              </div>
-            </Show>
-          );
-        }}
-      </Show>
     </div>
   );
 }

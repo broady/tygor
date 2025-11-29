@@ -28,6 +28,24 @@
 }
 
 /* ============================================
+   Global: Default cursor (not text cursor)
+   ============================================ */
+
+.tygor-tiger-btn,
+.tygor-sidebar {
+  cursor: default;
+}
+
+/* Text cursor for copyable content */
+.tygor-sidebar-error-output,
+.tygor-sidebar-error-cmd,
+.tygor-sidebar-rpc-code,
+.tygor-sidebar-rpc-message,
+.tygor-sidebar-rpc-endpoint {
+  cursor: text;
+}
+
+/* ============================================
    Tiger Button (Overlay Mode)
    ============================================ */
 
@@ -234,6 +252,16 @@
 
 .tygor-sidebar-icon {
   font-size: 16px;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.tygor-sidebar-icon:hover {
+  transform: scale(1.15);
+}
+
+.tygor-sidebar-icon:active {
+  transform: scale(0.95);
 }
 
 .tygor-sidebar-name {
@@ -290,7 +318,6 @@
 /* Status Grid */
 .tygor-sidebar-status-grid {
   padding: 8px 12px;
-  border-bottom: 1px solid var(--tygor-border);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -641,4 +668,73 @@
 .status-message {
   font-size: 12px;
   color: var(--tygor-text);
+}
+
+/* ============================================
+   Pane Component
+   ============================================ */
+
+.tygor-pane {
+  border-bottom: 1px solid var(--tygor-border);
+}
+
+.tygor-pane--drag-target {
+  border-top: 2px solid var(--tygor-accent);
+}
+
+.tygor-pane-header {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--tygor-accent-light);
+  cursor: default;
+  user-select: none;
+  gap: 6px;
+}
+
+.tygor-pane-header:hover {
+  background: rgba(255, 172, 66, 0.2);
+}
+
+.tygor-pane-title {
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--tygor-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tygor-pane-status {
+  margin-left: auto;
+  margin-right: 4px;
+  font-size: 10px;
+  color: var(--tygor-text-hint);
+  font-family: var(--tygor-font-mono);
+}
+
+.tygor-pane-chevron {
+  font-size: 10px;
+  color: var(--tygor-text-hint);
+  width: 12px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.tygor-pane-content {
+  /* Content styling inherits from existing section styles */
+}
+
+.tygor-pane--collapsed .tygor-pane-content {
+  display: none;
+}
+
+.tygor-pane-empty {
+  padding: 12px;
+  color: var(--tygor-text-hint);
+  font-size: 11px;
+}
+
+/* Services list inside pane */
+.tygor-pane-content .tygor-sidebar-services {
+  padding: 8px 12px;
 }
