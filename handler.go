@@ -408,8 +408,13 @@ func (h *handlerBase[Req, Res]) serve(ctx *rpcContext, cacheControl string, deco
 		}
 
 		if !h.skipValidation {
-			if err := validate.Struct(req); err != nil {
-				return req, err
+			// Skip validation for tygor.Empty (nil is its valid zero value).
+			// For other types, nil would be caught by validate.Struct anyway.
+			_, isEmptyType := any(req).(Empty)
+			if !isEmptyType {
+				if err := validate.Struct(req); err != nil {
+					return req, err
+				}
 			}
 		}
 		return req, nil
