@@ -8,7 +8,7 @@ import { schemaMap } from "../src/rpc/schemas.map";
 
 /**
  * This test demonstrates automatic client-side validation:
- * 1. Client validates input before sending (using schemaMap)
+ * 1. Client validates request before sending (using schemaMap)
  * 2. Server validates with go-playground/validator
  *
  * Both use the same validation rules from Go struct tags.
@@ -16,7 +16,7 @@ import { schemaMap } from "../src/rpc/schemas.map";
 
 let server: RunningServer;
 
-// Client WITH validation (input validation enabled by default when schemas provided)
+// Client WITH validation (request validation enabled by default when schemas provided)
 let validatedClient: ReturnType<typeof createClient<typeof registry.manifest>>;
 
 // Client WITHOUT validation (for testing server-side validation)
@@ -27,7 +27,7 @@ beforeAll(async () => {
     cwd: new URL("../../", import.meta.url).pathname,
   });
 
-  // Create client with automatic input validation
+  // Create client with automatic request validation
   validatedClient = createClient(registry, {
     baseUrl: server.url,
     schemas: schemaMap,
@@ -42,7 +42,7 @@ afterAll(async () => {
 });
 
 describe("Automatic client validation", () => {
-  test("client throws ValidationError for invalid input before request", async () => {
+  test("client throws ValidationError for invalid request", async () => {
     try {
       await validatedClient.Users.Create({
         username: "ab", // too short (min=3)
@@ -53,7 +53,7 @@ describe("Automatic client validation", () => {
     } catch (e) {
       expect(e).toBeInstanceOf(ValidationError);
       if (e instanceof ValidationError) {
-        expect(e.direction).toBe("input");
+        expect(e.direction).toBe("request");
         expect(e.endpoint).toBe("Users.Create");
       }
     }

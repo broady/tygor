@@ -5,28 +5,28 @@ import * as s from './schemas.zod';
 
 export const schemaMap = {
   "Tasks.Create": {
-    input: s.CreateTaskRequestSchema,
-    output: s.TaskSchema,
+    request: s.CreateTaskRequestSchema,
+    response: s.TaskSchema,
   },
   "Tasks.Get": {
-    input: s.GetTaskParamsSchema,
-    output: s.TaskSchema,
+    request: s.GetTaskParamsSchema,
+    response: s.TaskSchema,
   },
   "Tasks.List": {
-    input: s.ListParamsSchema,
-    output: z.array(s.TaskSchema),
+    request: s.ListParamsSchema,
+    response: z.array(s.TaskSchema),
   },
   "Tasks.Update": {
-    input: s.UpdateTaskRequestSchema,
-    output: s.TaskSchema,
+    request: s.UpdateTaskRequestSchema,
+    response: s.TaskSchema,
   },
   "Users.Create": {
-    input: s.CreateUserRequestSchema,
-    output: s.UserSchema,
+    request: s.CreateUserRequestSchema,
+    response: s.UserSchema,
   },
   "Users.List": {
-    input: s.ListParamsSchema,
-    output: z.array(s.UserSchema),
+    request: s.ListParamsSchema,
+    response: z.array(s.UserSchema),
   },
 } as const;
 

@@ -104,10 +104,10 @@ export interface StandardSchemaIssue {
 export class ValidationError extends Error {
   readonly kind = "validation" as const;
   issues: readonly StandardSchemaIssue[];
-  direction: "input" | "output";
+  direction: "request" | "response";
   endpoint: string;
 
-  constructor(endpoint: string, direction: "input" | "output", issues: readonly StandardSchemaIssue[]) {
+  constructor(endpoint: string, direction: "request" | "response", issues: readonly StandardSchemaIssue[]) {
     const paths = issues.map((i) => i.path?.join(".") || "(root)").join(", ");
     super(`${direction} validation failed for ${endpoint}: ${paths}`);
     this.name = "ValidationError";
@@ -121,12 +121,12 @@ export class ValidationError extends Error {
  * Schema map entry for a single endpoint.
  */
 export interface SchemaMapEntry {
-  input: StandardSchema;
-  output: StandardSchema;
+  request: StandardSchema;
+  response: StandardSchema;
 }
 
 /**
- * Schema map type - maps endpoint names to their input/output schemas.
+ * Schema map type - maps endpoint names to their request/response schemas.
  */
 export type SchemaMap = Record<string, SchemaMapEntry>;
 
@@ -135,9 +135,9 @@ export type SchemaMap = Record<string, SchemaMapEntry>;
  */
 export interface ValidateConfig {
   /** Validate request data before sending. Default: true if schemas provided */
-  input?: boolean;
+  request?: boolean;
   /** Validate response data after receiving. Default: false */
-  output?: boolean;
+  response?: boolean;
 }
 
 export interface ClientConfig {
@@ -163,8 +163,8 @@ export function createClient<Manifest extends Record<string, any>>(
 
   // Determine validation settings
   const schemas = config.schemas;
-  const validateInput = schemas && (config.validate?.input ?? true); // Default: true if schemas provided
-  const validateOutput = schemas && (config.validate?.output ?? false); // Default: false
+  const validateRequest = schemas && (config.validate?.request ?? true); // Default: true if schemas provided
+  const validateResponse = schemas && (config.validate?.response ?? false); // Default: false
 
   return new Proxy(
     {},
@@ -181,12 +181,12 @@ export function createClient<Manifest extends Record<string, any>>(
               }
 
               return async (req: any) => {
-                // Input validation (before request)
-                if (validateInput && schemas?.[opId]?.input) {
-                  const schema = schemas[opId].input;
+                // Request validation (before sending)
+                if (validateRequest && schemas?.[opId]?.request) {
+                  const schema = schemas[opId].request;
                   const result = await schema["~standard"].validate(req);
                   if (result.issues) {
-                    throw new ValidationError(opId, "input", result.issues);
+                    throw new ValidationError(opId, "request", result.issues);
                   }
                 }
 
@@ -273,12 +273,12 @@ export function createClient<Manifest extends Record<string, any>>(
                   );
                 }
 
-                // Output validation (after successful response)
-                if (validateOutput && schemas?.[opId]?.output) {
-                  const schema = schemas[opId].output;
+                // Response validation (after receiving)
+                if (validateResponse && schemas?.[opId]?.response) {
+                  const schema = schemas[opId].response;
                   const result = await schema["~standard"].validate(envelope.result);
                   if (result.issues) {
-                    throw new ValidationError(opId, "output", result.issues);
+                    throw new ValidationError(opId, "response", result.issues);
                   }
                 }
 

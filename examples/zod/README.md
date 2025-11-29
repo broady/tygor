@@ -23,7 +23,7 @@ The generator produces:
 |------|---------|
 | `types.ts` | TypeScript interfaces |
 | `schemas.zod.ts` | Zod schemas with validation rules |
-| `schemas.map.ts` | Maps endpoints to their input/output schemas |
+| `schemas.map.ts` | Maps endpoints to their request/response schemas |
 | `manifest.ts` | Service registry and metadata |
 
 ## Enabling Zod Generation
@@ -45,7 +45,7 @@ import { createClient, ValidationError } from "@tygor/client";
 import { registry } from "./rpc/manifest";
 import { schemaMap } from "./rpc/schemas.map";
 
-// Client with automatic input validation
+// Client with automatic request validation
 const client = createClient(registry, {
   baseUrl: "http://localhost:8080",
   schemas: schemaMap, // enables validation
@@ -61,7 +61,7 @@ try {
 } catch (e) {
   if (e instanceof ValidationError) {
     console.log(e.endpoint);   // "Users.Create"
-    console.log(e.direction);  // "input"
+    console.log(e.direction);  // "request"
     console.log(e.issues);     // validation issues
   }
 }
@@ -70,18 +70,18 @@ try {
 ### Validation Options
 
 ```typescript
-// Input validation only (default when schemas provided)
+// Request validation only (default when schemas provided)
 const client = createClient(registry, {
   baseUrl: "...",
   schemas: schemaMap,
-  validate: { input: true, output: false },
+  validate: { request: true, response: false },
 });
 
-// Both input and output validation
+// Both request and response validation
 const strictClient = createClient(registry, {
   baseUrl: "...",
   schemas: schemaMap,
-  validate: { input: true, output: true },
+  validate: { request: true, response: true },
 });
 
 // No validation (don't import schemaMap - tree-shakes away)

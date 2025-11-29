@@ -753,20 +753,20 @@ func (g *TypeScriptGenerator) generateSchemaMap(ctx context.Context, schema *ir.
 
 		buf.WriteString(fmt.Sprintf("  %q: {\n", endpoint.FullName))
 
-		// Input schema
-		buf.WriteString("    input: ")
+		// Request schema
+		buf.WriteString("    request: ")
 		if endpoint.Request == nil {
 			buf.WriteString("z.object({})")
 		} else {
-			inputSchema := typeToZodSchema(endpoint.Request)
-			buf.WriteString(inputSchema)
+			requestSchema := typeToZodSchema(endpoint.Request)
+			buf.WriteString(requestSchema)
 		}
 		buf.WriteString(",\n")
 
-		// Output schema
-		buf.WriteString("    output: ")
-		outputSchema := typeToZodSchema(endpoint.Response)
-		buf.WriteString(outputSchema)
+		// Response schema
+		buf.WriteString("    response: ")
+		responseSchema := typeToZodSchema(endpoint.Response)
+		buf.WriteString(responseSchema)
 		buf.WriteString(",\n")
 
 		buf.WriteString("  },\n")
