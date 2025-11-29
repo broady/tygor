@@ -1,0 +1,5 @@
+# Air hot-reload build directory
+tmp/
+
+# Go binary
+/react

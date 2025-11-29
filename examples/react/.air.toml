@@ -1,0 +1,25 @@
+# Air configuration for hot-reload development
+# Runs via: go run github.com/air-verse/air@latest
+
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  # Run tygorgen before rebuilding - keeps TS types in sync
+  pre_cmd = ["go run . -gen -out ./client/src/rpc"]
+  cmd = "go build -o ./tmp/main ."
+  entrypoint = "./tmp/main"
+
+  # Watch Go files only
+  include_ext = ["go"]
+  include_dir = [".", "api"]
+  exclude_dir = ["tmp", "client", "node_modules"]
+
+  # Delay to batch rapid changes
+  delay = 500
+
+[log]
+  time = false
+
+[misc]
+  clean_on_exit = true

@@ -1,18 +1,44 @@
 # React Example
 
-A minimal React + Vite application demonstrating tygor's type-safe RPC client.
+A minimal React + Vite application demonstrating tygor's type-safe RPC client with full hot-reload across Go and TypeScript.
 
 ## Quick Start
 
 ```bash
-# Terminal 1: Start Go server
-make run
-
-# Terminal 2: Start Vite dev server
-make dev
+bun dev (or make dev)
 ```
 
 Open http://localhost:5173
+
+This single command:
+- Starts Go server with hot-reload (via [air](https://github.com/air-verse/air))
+- Starts Vite dev server with HMR
+- Vite proxies API requests to Go (no CORS needed)
+- Editing Go types → tygorgen runs → TypeScript updates → browser refreshes
+
+## How It Works
+
+```
+Edit .go file
+    ↓
+Air detects change
+    ↓
+tygorgen regenerates types (only if changed)
+    ↓
+Go server rebuilds & restarts
+    ↓
+Vite HMR picks up TypeScript changes
+    ↓
+Browser updates
+```
+
+The Vite config auto-derives proxy routes from the generated manifest:
+
+```javascript
+import { registry } from "./src/rpc/manifest";
+
+// Routes like /System/*, /Tasks/* proxy to Go
+```
 
 ## Code Snippets
 
@@ -20,9 +46,8 @@ Open http://localhost:5173
 
 <!-- [snippet:app-setup] -->
 ```go title="main.go"
-app := tygor.NewApp().
-	WithMiddleware(middleware.CORS(middleware.CORSAllowAll)).
-	WithUnaryInterceptor(middleware.LoggingInterceptor(nil))
+// No CORS needed - Vite proxies API requests in dev, same-origin in prod
+app := tygor.NewApp()
 
 system := app.Service("System")
 system.Register("Info", tygor.Query(GetRuntimeInfo))
@@ -44,9 +69,8 @@ import { createClient } from "@tygor/client";
 import { registry } from "./rpc/manifest";
 import type { Task, RuntimeInfo } from "./rpc/types";
 
-const client = createClient(registry, {
-  baseUrl: "http://localhost:8080",
-});
+// No baseUrl needed - uses current origin (works with Vite proxy in dev, same-origin in prod)
+const client = createClient(registry);
 
 ```
 <!-- [/snippet:client-setup] -->

@@ -141,7 +141,7 @@ export interface ValidateConfig {
 }
 
 export interface ClientConfig {
-  baseUrl: string;
+  baseUrl?: string;
   headers?: () => Record<string, string>;
   fetch?: FetchFunction;
   /** Schema map for client-side validation. Import from schemas.map.ts */
@@ -157,7 +157,7 @@ export interface ServiceRegistry<Manifest extends Record<string, any>> {
 
 export function createClient<Manifest extends Record<string, any>>(
   registry: ServiceRegistry<Manifest>,
-  config: ClientConfig
+  config: ClientConfig = {}
 ): Client<Manifest> {
   const fetchFn = config.fetch || globalThis.fetch;
 
@@ -191,7 +191,7 @@ export function createClient<Manifest extends Record<string, any>>(
                 }
 
                 const headers = config.headers ? config.headers() : {};
-                let url = config.baseUrl + meta.path;
+                let url = (config.baseUrl || "") + meta.path;
                 const options: RequestInit = {
                   method: meta.method,
                   headers: {

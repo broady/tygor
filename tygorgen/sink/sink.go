@@ -3,6 +3,7 @@
 package sink
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -71,6 +72,13 @@ func (s *FilesystemSink) WriteFile(ctx context.Context, path string, content []b
 	}
 	if !strings.HasPrefix(absPath, absRoot+string(filepath.Separator)) && absPath != absRoot {
 		return fmt.Errorf("path escapes root directory: %q", path)
+	}
+
+	// Skip write if file exists with identical content
+	if existing, err := os.ReadFile(fullPath); err == nil {
+		if bytes.Equal(existing, content) {
+			return nil // No change needed
+		}
 	}
 
 	// Create parent directories

@@ -6,8 +6,12 @@ TS_FILES := $(wildcard client/src/*.tsx client/src/rpc/*.ts)
 include ../common.mk
 
 
-# Run Vite dev server (run 'make run' in another terminal for the Go server)
+# Run Go server (with hot-reload) and Vite dev server in parallel
+# - Air watches Go files, runs tygorgen, rebuilds
+# - Vite proxies API requests to Go and picks up TS changes via HMR
+# - concurrently prefixes output and kills both on exit
 dev: gen
+	@bun install --silent
 	@(cd client && bun install --silent)
-	@echo "Starting Vite... (run 'make run' in another terminal for the Go server)"
-	@(cd client && bun run dev)
+	@echo "Open http://localhost:5173 in your browser"
+	@bun run dev

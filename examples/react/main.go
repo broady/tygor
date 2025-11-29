@@ -12,7 +12,6 @@ import (
 
 	"github.com/broady/tygor"
 	"github.com/broady/tygor/examples/react/api"
-	"github.com/broady/tygor/middleware"
 	"github.com/broady/tygor/tygorgen"
 )
 
@@ -97,9 +96,8 @@ func main() {
 
 	// [snippet:app-setup]
 
-	app := tygor.NewApp().
-		WithMiddleware(middleware.CORS(middleware.CORSAllowAll)).
-		WithUnaryInterceptor(middleware.LoggingInterceptor(nil))
+	// No CORS needed - Vite proxies API requests in dev, same-origin in prod
+	app := tygor.NewApp()
 
 	system := app.Service("System")
 	system.Register("Info", tygor.Query(GetRuntimeInfo))

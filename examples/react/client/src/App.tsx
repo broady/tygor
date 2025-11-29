@@ -5,9 +5,8 @@ import { createClient } from "@tygor/client";
 import { registry } from "./rpc/manifest";
 import type { Task, RuntimeInfo } from "./rpc/types";
 
-const client = createClient(registry, {
-  baseUrl: "http://localhost:8080",
-});
+// No baseUrl needed - uses current origin (works with Vite proxy in dev, same-origin in prod)
+const client = createClient(registry);
 
 // [/snippet:client-setup]
 
