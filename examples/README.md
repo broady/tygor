@@ -11,6 +11,7 @@ This directory contains example applications demonstrating tygor features. Each 
 | [protobuf](./protobuf) | Using protobuf-generated types with tygor |
 | [react](./react) | React + Vite app with type-safe RPC client |
 | [reflection](./reflection) | Generic type instantiation with reflection provider |
+| [typesonly](./typesonly) | Standalone type generation without RPC app |
 | [zod](./zod) | Zod schema generation from Go validate tags |
 
 ## Running Examples
