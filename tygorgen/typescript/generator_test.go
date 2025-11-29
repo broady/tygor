@@ -903,8 +903,9 @@ func TestTypeScriptGenerator_Generate_MultiFile(t *testing.T) {
 	}
 
 	// Should have 3 files: types_example_com_api_v1.ts, types_example_com_api_v2.ts, types.ts (barrel)
-	if len(result.Files) != 4 { // +1 for manifest.ts
-		t.Errorf("expected 4 files (2 packages + barrel + manifest), got %d", len(result.Files))
+	// No manifest since schema.Services is nil (types-only generation)
+	if len(result.Files) != 3 {
+		t.Errorf("expected 3 files (2 packages + barrel), got %d", len(result.Files))
 		for _, f := range result.Files {
 			t.Logf("  %s", f.Path)
 		}

@@ -128,20 +128,23 @@ func (g *TypeScriptGenerator) Generate(ctx context.Context, schema *ir.Schema, o
 		}
 	}
 
-	// Generate manifest.ts (always, even if empty)
-	manifestContent, err := g.generateManifest(ctx, schema, opts.Config, tsConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate manifest: %w", err)
-	}
+	// Generate manifest.ts only when using app mode (services not nil)
+	// This is skipped for types-only generation where Services is explicitly nil
+	if schema.Services != nil {
+		manifestContent, err := g.generateManifest(ctx, schema, opts.Config, tsConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate manifest: %w", err)
+		}
 
-	manifestPath := "manifest.ts"
-	if err := opts.Sink.WriteFile(ctx, manifestPath, manifestContent); err != nil {
-		return nil, fmt.Errorf("failed to write %s: %w", manifestPath, err)
+		manifestPath := "manifest.ts"
+		if err := opts.Sink.WriteFile(ctx, manifestPath, manifestContent); err != nil {
+			return nil, fmt.Errorf("failed to write %s: %w", manifestPath, err)
+		}
+		result.Files = append(result.Files, OutputFile{
+			Path: manifestPath,
+			Size: int64(len(manifestContent)),
+		})
 	}
-	result.Files = append(result.Files, OutputFile{
-		Path: manifestPath,
-		Size: int64(len(manifestContent)),
-	})
 
 	return result, nil
 }

@@ -22,7 +22,7 @@ func (f Flavor) String() string {
 }
 
 // Generator provides a fluent API for code generation.
-// Create with FromApp() and configure with method chaining.
+// Create with FromApp() or FromTypes() and configure with method chaining.
 //
 // Example:
 //
@@ -30,14 +30,34 @@ func (f Flavor) String() string {
 //	    WithFlavor(tygorgen.FlavorZod).
 //	    ToDir("./client/src/rpc")
 type Generator struct {
-	app *tygor.App
-	cfg Config
+	app   *tygor.App
+	types []any // For standalone type generation without an app
+	cfg   Config
 }
 
 // FromApp creates a new Generator for the given app.
 // This is the entry point for the fluent API.
 func FromApp(app *tygor.App) *Generator {
 	return &Generator{app: app}
+}
+
+// FromTypes creates a Generator for standalone type generation without a tygor app.
+// Pass zero values of the types you want to generate TypeScript for.
+//
+// Example:
+//
+//	tygorgen.FromTypes(
+//	    User{},
+//	    CreateUserRequest{},
+//	    ListUsersResponse{},
+//	).ToDir("./client/src/types")
+//
+// By default, this uses the source provider for full enum and comment support.
+// Use .Provider("reflection") for faster generation without source analysis.
+func FromTypes(types ...any) *Generator {
+	return &Generator{
+		types: types,
+	}
 }
 
 // WithFlavor adds a flavor to the generation output.
@@ -120,11 +140,17 @@ func (g *Generator) Packages(pkgs ...string) *Generator {
 // This is a terminal operation that writes files to disk.
 func (g *Generator) ToDir(dir string) (*GenerateResult, error) {
 	g.cfg.OutDir = dir
-	return Generate(g.app, &g.cfg)
+	if g.app != nil {
+		return Generate(g.app, &g.cfg)
+	}
+	return GenerateTypes(g.types, &g.cfg)
 }
 
 // Generate returns generated files in memory without writing to disk.
 // Use ToDir() to write files to disk instead.
 func (g *Generator) Generate() (*GenerateResult, error) {
-	return Generate(g.app, &g.cfg)
+	if g.app != nil {
+		return Generate(g.app, &g.cfg)
+	}
+	return GenerateTypes(g.types, &g.cfg)
 }

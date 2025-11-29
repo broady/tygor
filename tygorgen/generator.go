@@ -100,6 +100,164 @@ type Config struct {
 	EmitTypes *bool
 }
 
+// GenerateTypes generates TypeScript types from Go types without a tygor app.
+// This is the standalone equivalent of Generate() for use with FromTypes().
+// No manifest is generated since there are no RPC endpoints.
+func GenerateTypes(types []any, cfg *Config) (*GenerateResult, error) {
+	if len(types) == 0 {
+		return nil, fmt.Errorf("no types provided: pass at least one type to FromTypes()")
+	}
+
+	// Apply defaults
+	cfg = applyConfigDefaults(cfg)
+
+	ctx := context.Background()
+
+	// Extract packages and type names from the provided types
+	var packages []string
+	var rootTypes []string
+	var reflectTypes []reflect.Type
+	seen := make(map[string]bool)
+	seenNames := make(map[string]bool)
+
+	for _, t := range types {
+		rt := reflect.TypeOf(t)
+		if rt == nil {
+			continue
+		}
+		// Unwrap pointers
+		for rt.Kind() == reflect.Pointer {
+			rt = rt.Elem()
+		}
+		reflectTypes = append(reflectTypes, rt)
+
+		if pkg := rt.PkgPath(); pkg != "" && !seen[pkg] {
+			seen[pkg] = true
+			packages = append(packages, pkg)
+		}
+		if name := rt.Name(); name != "" && !seenNames[name] {
+			seenNames[name] = true
+			rootTypes = append(rootTypes, name)
+		}
+	}
+
+	// Add any extra packages specified in config
+	packages = append(packages, cfg.Packages...)
+
+	// Build schema using configured provider
+	var schema *ir.Schema
+	var err error
+
+	switch cfg.Provider {
+	case "source":
+		if len(packages) == 0 {
+			return nil, fmt.Errorf("no packages found: ensure types are from named packages")
+		}
+		p := &provider.SourceProvider{}
+		opts := provider.SourceInputOptions{
+			Packages:  packages,
+			RootTypes: rootTypes,
+		}
+		schema, err = p.BuildSchema(ctx, opts)
+	case "reflection":
+		p := &provider.ReflectionProvider{}
+		opts := provider.ReflectionInputOptions{
+			RootTypes: reflectTypes,
+		}
+		schema, err = p.BuildSchema(ctx, opts)
+	default:
+		return nil, fmt.Errorf("unknown provider: %q (expected \"source\" or \"reflection\")", cfg.Provider)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to build schema: %w", err)
+	}
+
+	// Collect warnings
+	var warnings []Warning
+	for _, w := range schema.Warnings {
+		warnings = append(warnings, Warning{Code: w.Code, Message: w.Message})
+	}
+
+	// No services for standalone type generation
+	schema.Services = nil
+
+	// Validate schema
+	if errs := schema.Validate(); len(errs) > 0 {
+		return nil, fmt.Errorf("schema validation failed: %w", errs[0])
+	}
+
+	// Configure TypeScript generator
+	tsConfig := typescript.GeneratorConfig{
+		TypePrefix:         "",
+		TypeSuffix:         "",
+		FieldCase:          "preserve",
+		TypeCase:           "preserve",
+		StripPackagePrefix: cfg.StripPackagePrefix,
+		SingleFile:         cfg.SingleFile,
+		IndentStyle:        "space",
+		IndentSize:         2,
+		LineEnding:         "lf",
+		TrailingNewline:    true,
+		EmitComments:       cfg.PreserveComments != "none",
+		Frontmatter:        cfg.Frontmatter,
+		TypeMappings:       cfg.TypeMappings,
+		Custom: map[string]any{
+			"EmitExport":        true,
+			"EmitDeclare":       false,
+			"UseInterface":      true,
+			"UseReadonlyArrays": false,
+			"EnumStyle":         cfg.EnumStyle,
+			"OptionalType":      cfg.OptionalType,
+			"UnknownType":       "unknown",
+			"Flavors":           flavorsToStrings(cfg.Flavors),
+			"EmitTypes":         cfg.EmitTypes,
+		},
+	}
+
+	// Create sink (filesystem if OutDir set, memory otherwise)
+	var outputSink sink.OutputSink
+	var memorySink *sink.MemorySink
+	if cfg.OutDir != "" {
+		outputSink = sink.NewFilesystemSink(cfg.OutDir)
+	} else {
+		memorySink = sink.NewMemorySink()
+		outputSink = memorySink
+	}
+
+	// Generate TypeScript
+	gen := &typescript.TypeScriptGenerator{}
+	tsResult, err := gen.Generate(ctx, schema, typescript.GenerateOptions{
+		Sink:   outputSink,
+		Config: tsConfig,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate TypeScript: %w", err)
+	}
+
+	// Collect generator warnings
+	for _, w := range tsResult.Warnings {
+		warnings = append(warnings, Warning{Code: w.Code, Message: w.Message})
+	}
+
+	// Build result
+	result := &GenerateResult{
+		Warnings: warnings,
+	}
+
+	// Include files if using memory sink
+	if memorySink != nil {
+		for path, content := range memorySink.Files() {
+			result.Files = append(result.Files, GeneratedFile{
+				Path:    path,
+				Content: content,
+			})
+		}
+	}
+
+	return result, nil
+}
+
 // Generate generates the TypeScript types and manifest for the registered services.
 // If OutDir is set, files are written to disk. Otherwise, files are returned in the result.
 func Generate(app *tygor.App, cfg *Config) (*GenerateResult, error) {

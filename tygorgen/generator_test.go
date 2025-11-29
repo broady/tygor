@@ -356,3 +356,117 @@ func TestGenerate_GETParamsUseLowercaseNames(t *testing.T) {
 		t.Error("ListPostsParams should NOT have 'Published' - should use lowercase 'published'")
 	}
 }
+
+func TestFromTypes_GeneratesTypes(t *testing.T) {
+	result, err := FromTypes(
+		testfixtures.User{},
+		testfixtures.CreateUserRequest{},
+	).Provider("reflection").Generate()
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(result.Files) == 0 {
+		t.Fatal("expected files in result")
+	}
+
+	// Collect all content across files
+	var allContent string
+	var hasTypesBarrel bool
+	for _, f := range result.Files {
+		allContent += string(f.Content)
+		if f.Path == "types.ts" {
+			hasTypesBarrel = true
+		}
+	}
+
+	if !hasTypesBarrel {
+		t.Fatal("missing types.ts barrel file in result files")
+	}
+
+	// Verify User interface is generated (may be in a package-specific file)
+	if !strings.Contains(allContent, "export interface User") {
+		t.Error("expected User interface to be generated")
+	}
+
+	// Verify CreateUserRequest interface is generated
+	if !strings.Contains(allContent, "export interface CreateUserRequest") {
+		t.Error("expected CreateUserRequest interface to be generated")
+	}
+
+	// Should NOT have manifest.ts (no app)
+	for _, f := range result.Files {
+		if f.Path == "manifest.ts" {
+			t.Error("should not have manifest.ts when using FromTypes")
+		}
+	}
+}
+
+func TestFromTypes_WritesToDir(t *testing.T) {
+	outDir := t.TempDir()
+
+	_, err := FromTypes(
+		testfixtures.User{},
+	).Provider("reflection").ToDir(outDir)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Check types.ts barrel exists
+	typesPath := filepath.Join(outDir, "types.ts")
+	if _, err := os.Stat(typesPath); os.IsNotExist(err) {
+		t.Fatal("types.ts was not created")
+	}
+
+	// Read all .ts files and check for User interface
+	files, _ := filepath.Glob(filepath.Join(outDir, "*.ts"))
+	var foundUser bool
+	for _, f := range files {
+		content, _ := os.ReadFile(f)
+		if strings.Contains(string(content), "export interface User") {
+			foundUser = true
+			break
+		}
+	}
+	if !foundUser {
+		t.Error("expected User interface in generated files")
+	}
+
+	// Should NOT have manifest.ts
+	manifestPath := filepath.Join(outDir, "manifest.ts")
+	if _, err := os.Stat(manifestPath); !os.IsNotExist(err) {
+		t.Error("should not have manifest.ts when using FromTypes")
+	}
+}
+
+func TestFromTypes_WithZodFlavor(t *testing.T) {
+	result, err := FromTypes(
+		testfixtures.User{},
+	).Provider("reflection").WithFlavor(FlavorZod).Generate()
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Collect all content to check for zod schemas
+	var allContent string
+	var hasZodFile bool
+	for _, f := range result.Files {
+		content := string(f.Content)
+		allContent += content
+		if strings.Contains(f.Path, "zod") {
+			hasZodFile = true
+		}
+	}
+
+	if !hasZodFile {
+		t.Error("expected zod schema file when FlavorZod is set")
+	}
+
+	// Check that z.object is somewhere in the generated output
+	if !strings.Contains(allContent, "z.object") {
+		t.Error("zod output should contain z.object schemas")
+	}
+}
