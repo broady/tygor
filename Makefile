@@ -10,7 +10,7 @@ DOC_FILES := $(wildcard doc/examples/quickstart/*.go) $(wildcard doc/examples/qu
              $(wildcard doc/examples/tygorgen/*.go) $(wildcard doc/examples/tygorgen/*.ts) \
              $(wildcard doc/examples/client/*.ts)
 
-.PHONY: all test test-quiet lint lint-quiet check check-quiet readme lint-readme precommit fmt fmt-check ci-local typecheck-docs help
+.PHONY: all test test-quiet lint lint-quiet check check-quiet readme lint-readme precommit fmt fmt-check ci-local typecheck-docs typecheck-vite-plugin help
 
 # Default target
 all: test lint
@@ -100,16 +100,21 @@ typecheck-docs:
 	@cd doc/examples && npm install --silent
 	@bun x typescript --noEmit --project doc/examples/tsconfig.json
 
+# Type-check vite plugin
+typecheck-vite-plugin:
+	@cd vite-plugin && bun run typecheck
+
 # Precommit sub-targets (for parallel execution, all depend on fmt-check)
-.PHONY: precommit-test precommit-lint precommit-check precommit-examples precommit-typecheck
+.PHONY: precommit-test precommit-lint precommit-check precommit-examples precommit-typecheck precommit-vite-plugin
 precommit-test: fmt-check ; @$(MAKE) --no-print-directory test-quiet
 precommit-lint: fmt-check ; @$(MAKE) --no-print-directory lint-quiet
 precommit-check: fmt-check ; @$(MAKE) --no-print-directory check-quiet
 precommit-examples: fmt-check ; @$(MAKE) --no-print-directory -C examples precommit
 precommit-typecheck: fmt-check ; @$(MAKE) --no-print-directory typecheck-docs
+precommit-vite-plugin: fmt-check ; @$(MAKE) --no-print-directory typecheck-vite-plugin
 
 # Run all precommit checks in parallel (fmt-check runs first)
-precommit: precommit-test precommit-lint precommit-check precommit-examples precommit-typecheck
+precommit: precommit-test precommit-lint precommit-check precommit-examples precommit-typecheck precommit-vite-plugin
 	@echo "All precommit checks passed."
 
 # Run CI locally using act (https://github.com/nektos/act)
