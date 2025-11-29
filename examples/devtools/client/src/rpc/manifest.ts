@@ -27,6 +27,10 @@ export interface Manifest {
     req: types.ListTasksParams;
     res: types.Task[];
   };
+  "Tasks.MakeError": {
+    req: unknown;
+    res: unknown;
+  };
   "Tasks.Toggle": {
     req: types.ToggleTaskParams;
     res: types.Task;
@@ -40,6 +44,7 @@ const metadata = {
   "System.Kill": { method: "POST", path: "/System/Kill" },
   "Tasks.Create": { method: "POST", path: "/Tasks/Create" },
   "Tasks.List": { method: "GET", path: "/Tasks/List" },
+  "Tasks.MakeError": { method: "POST", path: "/Tasks/MakeError" },
   "Tasks.Toggle": { method: "POST", path: "/Tasks/Toggle" },
 } as const;
 

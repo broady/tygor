@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -72,6 +74,10 @@ func CreateTask(ctx context.Context, req *api.CreateTaskParams) (*api.Task, erro
 	return task, nil
 }
 
+func MakeError(ctx context.Context, req tygor.Empty) (tygor.Empty, error) {
+	return nil, errors.New("hi from tygor!")
+}
+
 func ToggleTask(ctx context.Context, req *api.ToggleTaskParams) (*api.Task, error) {
 	tasksMu.Lock()
 	defer tasksMu.Unlock()
@@ -118,6 +124,7 @@ func main() {
 	tasksvc.Register("List", tygor.Query(ListTasks))
 	tasksvc.Register("Create", tygor.Exec(CreateTask))
 	tasksvc.Register("Toggle", tygor.Exec(ToggleTask))
+	tasksvc.Register("MakeError", tygor.Exec(MakeError))
 
 	if *genFlag {
 		fmt.Printf("Generating types to %s...\n", *outDir)
