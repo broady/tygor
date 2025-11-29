@@ -153,7 +153,8 @@ export function DevTools() {
     if (s?.status !== "error") return null;
     return {
       phase: s.phase,
-      summary: extractErrorSummary(s.error),
+      summary: extractErrorSummary(s.error, s.phase),
+      exitCode: s.exitCode,
     };
   };
 

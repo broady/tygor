@@ -80,6 +80,7 @@ export function tygorDev(options: TygorDevOptions): Plugin {
   let buildError: string | null = null;
   let errorPhase: "prebuild" | "build" | "runtime" | null = null;
   let errorCommand: string | null = null;
+  let errorExitCode: number | null = null;
   let currentPhase: "idle" | "prebuild" | "building" | "starting" = "idle";
   let isReloading = false;
 
@@ -218,6 +219,7 @@ export function tygorDev(options: TygorDevOptions): Plugin {
           buildError = stderr || `Process exited with code ${code}`;
           errorPhase = "runtime";
           errorCommand = cmdArray.join(" ");
+          errorExitCode = code;
           logError(`Server exited with code ${code}`);
           resolve({ process: null, port, ready: false });
         }
@@ -241,6 +243,7 @@ export function tygorDev(options: TygorDevOptions): Plugin {
             buildError = null;
             errorPhase = null;
             errorCommand = null;
+            errorExitCode = null;
             resolve({ process: proc, port, ready: true });
             return;
           }
@@ -420,7 +423,7 @@ export function tygorDev(options: TygorDevOptions): Plugin {
 
             let status;
             if (buildError) {
-              status = { status: "error", error: buildError, phase: errorPhase ?? "build", command: errorCommand, cwd: workdir };
+              status = { status: "error", error: buildError, phase: errorPhase ?? "build", command: errorCommand, cwd: workdir, exitCode: errorExitCode };
             } else if (isReloading) {
               status = { status: "reloading" };
             } else if (!currentServer.ready) {
