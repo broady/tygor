@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 // [snippet:zod-output]
 export const UserSchema = z.object({
   id: z.number().int(),

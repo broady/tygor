@@ -76,7 +76,7 @@ export const UserSchema = z.object({
 
 <!-- [snippet:doc/examples/quickstart:client-call] -->
 ```typescript title="client_usage.ts"
-const user = await client.Users.Get({ id: 123 });
+const user = await client.Users.Get({ id: "123" });
 // user: User (autocomplete works)
 ```
 <!-- [/snippet:doc/examples/quickstart:client-call] -->
@@ -147,12 +147,16 @@ tygorgen.FromApp(app).ToDir("./client/src/rpc")
 
 ### 3. Call from TypeScript
 
+```typescript
+import { createClient } from "@tygor/client";
+import { registry } from "./rpc/manifest";
+```
+
 <!-- [snippet:doc/examples/quickstart:client-usage] -->
 ```typescript title="client_usage.ts"
-import { createClient } from "@tygor/client";
-import type { Manifest } from "./rpc/manifest";
-
-const client = createClient<Manifest>("http://localhost:8080");
+const client = createClient(registry, {
+  baseUrl: "http://localhost:8080",
+});
 
 const user = await client.Users.Get({ id: "123" });
 ```

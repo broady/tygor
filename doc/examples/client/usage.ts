@@ -6,7 +6,7 @@ import {
   ServerError,
   type FetchFunction,
   type ServiceRegistry,
-} from '../../../client/runtime';
+} from '@tygor/client';
 
 // Mock registry type for documentation examples
 type Manifest = {
