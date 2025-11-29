@@ -92,7 +92,10 @@ export function Sidebar(props: SidebarProps) {
   };
 
   return (
-    <div class="tygor-sidebar" classList={{ "tygor-sidebar--left": props.side === "left" }}>
+    <div class="tygor-sidebar" classList={{
+      "tygor-sidebar--left": props.side === "left",
+      "tygor-sidebar--docked": props.docked
+    }}>
       {/* Header */}
       <div class="tygor-sidebar-header">
         <div class="tygor-sidebar-title">

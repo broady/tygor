@@ -170,23 +170,40 @@
 
 .tygor-sidebar {
   position: fixed;
-  top: 0;
-  right: 0;
+  top: 16px;
+  right: 16px;
   width: var(--tygor-sidebar-width);
-  height: 100vh;
+  height: calc(100vh - 32px);
   background: var(--tygor-bg);
-  border-left: 1px solid var(--tygor-border);
+  border: 1px solid var(--tygor-border);
+  border-radius: 24px;
   z-index: var(--tygor-z-index);
   display: flex;
   flex-direction: column;
   font-family: var(--tygor-font);
   font-size: 12px;
   color: var(--tygor-text);
-  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.12), 0 2px 12px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
 }
 
 .tygor-sidebar--left {
   right: auto;
+  left: 16px;
+}
+
+/* Docked mode: snap to edges */
+.tygor-sidebar--docked {
+  top: 0;
+  right: 0;
+  height: 100vh;
+  border-radius: 0;
+  border: none;
+  border-left: 1px solid var(--tygor-border);
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.08);
+}
+
+.tygor-sidebar--docked.tygor-sidebar--left {
   left: 0;
   border-left: none;
   border-right: 1px solid var(--tygor-border);
@@ -198,9 +215,15 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
+  padding: 10px 16px;
   background: var(--tygor-accent-light);
   border-bottom: 1px solid var(--tygor-border);
+  border-radius: 24px 24px 0 0;
+}
+
+.tygor-sidebar--docked .tygor-sidebar-header {
+  border-radius: 0;
+  padding: 10px 12px;
 }
 
 .tygor-sidebar-title {
