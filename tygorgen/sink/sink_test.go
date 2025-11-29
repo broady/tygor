@@ -265,6 +265,7 @@ func TestMemorySink_Concurrent(t *testing.T) {
 	}
 
 	// Concurrent reads
+	wg.Add(numGoroutines)
 	for i := 0; i < numGoroutines; i++ {
 		go func() {
 			defer wg.Done()
@@ -274,7 +275,6 @@ func TestMemorySink_Concurrent(t *testing.T) {
 			}
 		}()
 	}
-	wg.Add(numGoroutines)
 
 	wg.Wait()
 
