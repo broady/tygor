@@ -1,5 +1,5 @@
 ![tygor banner](doc/banner-generator/tygor-banner.svg)
-[![Go Reference](https://pkg.go.dev/badge/github.com/broady/tygor.svg)](https://pkg.go.dev/github.com/broady/tygor)
+[![Go Reference](https://pkg.go.dev/badge/github.com/broady/tygor.svg)](https://pkg.go.dev/github.com/broady/tygor) [![NPM](https://img.shields.io/npm/v/%40tygor%2Fclient?style=flat&logo=ts-node&logoColor=white)](https://www.npmjs.com/package/@tygor/client)
 
 # tygor
 
