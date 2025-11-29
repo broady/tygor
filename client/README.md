@@ -1,5 +1,3 @@
-<!-- snippet-lint-disable -->
-
 # @tygor/client
 
 TypeScript runtime client for the [tygor](https://github.com/broady/tygor) RPC framework.
@@ -19,7 +17,10 @@ This package provides the runtime client used with tygor-generated TypeScript ty
 ```typescript
 import { createClient } from '@tygor/client';
 import { registry } from './generated/manifest';
+```
 
+<!-- [snippet:doc/examples/client:basic-usage] -->
+```typescript title="usage.ts"
 const client = createClient(
   registry,
   {
@@ -33,6 +34,7 @@ const client = createClient(
 // Type-safe RPC calls
 const result = await client.MyService.MyMethod({ param: 'value' });
 ```
+<!-- [/snippet:doc/examples/client:basic-usage] -->
 
 ### Custom fetch Implementation
 
@@ -40,7 +42,10 @@ You can provide a custom `fetch` implementation for testing, adding retry logic,
 
 ```typescript
 import { createClient, type FetchFunction } from '@tygor/client';
+```
 
+<!-- [snippet:doc/examples/client:custom-fetch] -->
+```typescript title="usage.ts"
 // Type-safe custom fetch
 const customFetch: FetchFunction = async (url, init) => {
   console.log('Fetching:', url);
@@ -55,6 +60,7 @@ const client = createClient(
   }
 );
 ```
+<!-- [/snippet:doc/examples/client:custom-fetch] -->
 
 This is particularly useful for:
 - **Testing**: Pass a mock fetch function without type casting
@@ -70,21 +76,25 @@ This is particularly useful for:
 
 ## Error Handling
 
-The client throws `RPCError` instances for failed requests:
+The client throws `ServerError` instances for failed requests:
 
 ```typescript
-import { RPCError } from '@tygor/client';
+import { ServerError } from '@tygor/client';
+```
 
+<!-- [snippet:doc/examples/client:error-handling] -->
+```typescript title="usage.ts"
 try {
   await client.MyService.MyMethod({ param: 'value' });
 } catch (err) {
-  if (err instanceof RPCError) {
+  if (err instanceof ServerError) {
     console.error(err.code);     // e.g., "invalid_argument"
     console.error(err.message);  // Human-readable message
     console.error(err.details);  // Additional error details
   }
 }
 ```
+<!-- [/snippet:doc/examples/client:error-handling] -->
 
 ## Documentation
 
