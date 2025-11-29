@@ -4,6 +4,10 @@
  */
 export abstract class TygorError extends Error {
   abstract readonly kind: "server" | "transport";
+
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+  }
 }
 
 /**
@@ -34,8 +38,8 @@ export class TransportError extends TygorError {
   httpStatus: number;
   rawBody?: string;
 
-  constructor(message: string, httpStatus: number, rawBody?: string) {
-    super(message);
+  constructor(message: string, httpStatus: number, cause?: unknown, rawBody?: string) {
+    super(message, { cause });
     this.name = "TransportError";
     this.httpStatus = httpStatus;
     this.rawBody = rawBody;
@@ -150,6 +154,20 @@ export interface ClientConfig {
   validate?: ValidateConfig;
 }
 
+/**
+ * Emit a custom event for tygor devtools to display RPC errors.
+ * Only emits in browser environment.
+ */
+function emitRpcError(service: string, method: string, code: string, message: string): void {
+  if (typeof window !== "undefined" && typeof CustomEvent !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent("tygor:rpc-error", {
+        detail: { service, method, code, message, timestamp: Date.now() },
+      })
+    );
+  }
+}
+
 export interface ServiceRegistry<Manifest extends Record<string, any>> {
   manifest: Manifest;
   metadata: Record<string, { method: string; path: string }>;
@@ -186,7 +204,9 @@ export function createClient<Manifest extends Record<string, any>>(
                   const schema = schemas[opId].request;
                   const result = await schema["~standard"].validate(req);
                   if (result.issues) {
-                    throw new ValidationError(opId, "request", result.issues);
+                    const err = new ValidationError(opId, "request", result.issues);
+                    emitRpcError(service, method, "validation_error", err.message);
+                    throw err;
                   }
                 }
 
@@ -226,7 +246,15 @@ export function createClient<Manifest extends Record<string, any>>(
                   options.body = JSON.stringify(req);
                 }
 
-                const res = await fetchFn(url, options);
+                let res: globalThis.Response;
+                try {
+                  res = await fetchFn(url, options);
+                } catch (e) {
+                  // Network error (server down, CORS, DNS failure, etc.)
+                  const msg = e instanceof Error ? e.message : "Network error";
+                  emitRpcError(service, method, "network_error", msg);
+                  throw new TransportError(msg, 0, e);
+                }
                 const httpStatus = res.status;
 
                 // Try to parse as JSON
@@ -238,39 +266,30 @@ export function createClient<Manifest extends Record<string, any>>(
                   envelope = JSON.parse(rawBody);
                 } catch {
                   // JSON parse failed - this is a transport error (proxy HTML page, etc.)
-                  throw new TransportError(
-                    res.statusText || "Failed to parse response",
-                    httpStatus,
-                    rawBody.slice(0, 1000) // Truncate for sanity
-                  );
+                  const msg = res.statusText || "Failed to parse response";
+                  emitRpcError(service, method, "transport_error", msg);
+                  throw new TransportError(msg, httpStatus, undefined, rawBody.slice(0, 1000));
                 }
 
                 // Handle malformed or null envelope
                 if (!envelope || typeof envelope !== "object") {
-                  throw new TransportError(
-                    "Invalid response format",
-                    httpStatus,
-                    rawBody.slice(0, 1000)
-                  );
+                  emitRpcError(service, method, "transport_error", "Invalid response format");
+                  throw new TransportError("Invalid response format", httpStatus, undefined, rawBody.slice(0, 1000));
                 }
 
                 // Validate envelope has expected structure
                 if (!("result" in envelope) && !("error" in envelope)) {
-                  throw new TransportError(
-                    "Invalid response format: missing result or error field",
-                    httpStatus,
-                    rawBody.slice(0, 1000)
-                  );
+                  const msg = "Invalid response format: missing result or error field";
+                  emitRpcError(service, method, "transport_error", msg);
+                  throw new TransportError(msg, httpStatus, undefined, rawBody.slice(0, 1000));
                 }
 
                 // Check for error in envelope - this is an application-level error
                 if (envelope.error) {
-                  throw new ServerError(
-                    envelope.error.code || "unknown",
-                    envelope.error.message || "Unknown error",
-                    httpStatus,
-                    envelope.error.details
-                  );
+                  const code = envelope.error.code || "unknown";
+                  const msg = envelope.error.message || "Unknown error";
+                  emitRpcError(service, method, code, msg);
+                  throw new ServerError(code, msg, httpStatus, envelope.error.details);
                 }
 
                 // Response validation (after receiving)
@@ -278,7 +297,9 @@ export function createClient<Manifest extends Record<string, any>>(
                   const schema = schemas[opId].response;
                   const result = await schema["~standard"].validate(envelope.result);
                   if (result.issues) {
-                    throw new ValidationError(opId, "response", result.issues);
+                    const err = new ValidationError(opId, "response", result.issues);
+                    emitRpcError(service, method, "validation_error", err.message);
+                    throw err;
                   }
                 }
 
