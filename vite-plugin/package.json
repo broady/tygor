@@ -15,7 +15,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "node scripts/build-client.js && tsc",
+    "build:client": "node scripts/build-client.js",
     "typecheck": "tsc --noEmit",
     "dev": "tsc --watch",
     "prepublishOnly": "npm run build"
@@ -42,10 +43,13 @@
   "dependencies": {
     "@tygor/client": "file:../client",
     "chokidar": "^3.6.0",
-    "picocolors": "^1.0.0"
+    "picocolors": "^1.0.0",
+    "solid-js": "^1.9.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "esbuild": "^0.25.0",
+    "esbuild-plugin-solid": "^0.6.0",
     "typescript": "^5.0.0",
     "vite": "^6.0.0"
   }
