@@ -10,7 +10,7 @@ DOC_FILES := $(wildcard doc/examples/quickstart/*.go) $(wildcard doc/examples/qu
              $(wildcard doc/examples/tygorgen/*.go) $(wildcard doc/examples/tygorgen/*.ts) \
              $(wildcard doc/examples/client/*.ts)
 
-.PHONY: all test test-quiet lint lint-quiet check check-quiet readme lint-readme precommit fmt fmt-check ci-local typecheck-docs typecheck-vite-plugin help
+.PHONY: all test test-quiet lint lint-quiet check check-quiet readme lint-readme precommit fmt fmt-check ci-local typecheck-docs typecheck-vite-plugin gen-devtools help
 
 # Default target
 all: test lint
@@ -104,17 +104,32 @@ typecheck-docs:
 typecheck-vite-plugin:
 	@cd vite-plugin && bun run typecheck
 
+# Generate devtools manifest for vite-plugin
+gen-devtools:
+	@go run ./devtools/gen/main.go ./vite-plugin/src/devtools
+
 # Precommit sub-targets (for parallel execution, all depend on fmt-check)
-.PHONY: precommit-test precommit-lint precommit-check precommit-examples precommit-typecheck precommit-vite-plugin
+.PHONY: precommit-test precommit-lint precommit-check precommit-examples precommit-typecheck precommit-vite-plugin precommit-devtools
 precommit-test: fmt-check ; @$(MAKE) --no-print-directory test-quiet
 precommit-lint: fmt-check ; @$(MAKE) --no-print-directory lint-quiet
 precommit-check: fmt-check ; @$(MAKE) --no-print-directory check-quiet
 precommit-examples: fmt-check ; @$(MAKE) --no-print-directory -C examples precommit
 precommit-typecheck: fmt-check ; @$(MAKE) --no-print-directory typecheck-docs
 precommit-vite-plugin: fmt-check ; @$(MAKE) --no-print-directory typecheck-vite-plugin
+precommit-devtools: fmt-check
+	@go run ./devtools/gen/main.go ./vite-plugin/src/devtools
+	@if [ -n "$$(git diff --name-only vite-plugin/src/devtools 2>/dev/null)" ]; then \
+		echo ""; \
+		echo "ERROR: Generated devtools manifest out of sync with source code."; \
+		echo "The files have been updated. Please commit the changes:"; \
+		echo ""; \
+		git --no-pager diff --stat vite-plugin/src/devtools; \
+		echo ""; \
+		exit 1; \
+	fi
 
 # Run all precommit checks in parallel (fmt-check runs first)
-precommit: precommit-test precommit-lint precommit-check precommit-examples precommit-typecheck precommit-vite-plugin
+precommit: precommit-test precommit-lint precommit-check precommit-examples precommit-typecheck precommit-vite-plugin precommit-devtools
 	@echo "All precommit checks passed."
 
 # Run CI locally using act (https://github.com/nektos/act)
