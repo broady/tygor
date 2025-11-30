@@ -7,6 +7,11 @@ export interface Manifest {
     req: types.Empty;
     res: types.RuntimeInfo;
   };
+  "System.InfoStream": {
+    req: types.Empty;
+    res: types.RuntimeInfo;
+    primitive: "stream";
+  };
   "Tasks.Create": {
     req: types.CreateTaskParams;
     res: types.Task;
@@ -23,6 +28,7 @@ export interface Manifest {
 
 const metadata = {
   "System.Info": { path: "/System/Info", primitive: "query" },
+  "System.InfoStream": { path: "/System/InfoStream", primitive: "stream" },
   "Tasks.Create": { path: "/Tasks/Create", primitive: "exec" },
   "Tasks.List": { path: "/Tasks/List", primitive: "query" },
   "Tasks.Toggle": { path: "/Tasks/Toggle", primitive: "exec" },

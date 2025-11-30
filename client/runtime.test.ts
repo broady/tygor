@@ -37,7 +37,7 @@ describe("TygorError hierarchy", () => {
   });
 
   test("TransportError has correct properties", () => {
-    const error = new TransportError("Bad Gateway", 502, "<html>...</html>");
+    const error = new TransportError("Bad Gateway", 502, undefined, "<html>...</html>");
     expect(error.name).toBe("TransportError");
     expect(error.kind).toBe("transport");
     expect(error.message).toBe("Bad Gateway");
@@ -67,11 +67,11 @@ describe("TygorError hierarchy", () => {
 
 describe("createClient", () => {
   const mockMetadata = {
-    "Test.Get": { method: "GET", path: "/test/get" },
-    "Test.Post": { method: "POST", path: "/test/post" },
-    "Test.Put": { method: "PUT", path: "/test/put" },
-    "Test.Patch": { method: "PATCH", path: "/test/patch" },
-    "Test.Delete": { method: "DELETE", path: "/test/delete" },
+    "Test.Get": { path: "/test/get", primitive: "query" as const },
+    "Test.Post": { path: "/test/post", primitive: "exec" as const },
+    "Test.Put": { path: "/test/put", primitive: "exec" as const },
+    "Test.Patch": { path: "/test/patch", primitive: "exec" as const },
+    "Test.Delete": { path: "/test/delete", primitive: "exec" as const },
   };
 
   type TestManifest = {
@@ -87,7 +87,7 @@ describe("createClient", () => {
     metadata: mockMetadata,
   };
 
-  test("successful GET request", async () => {
+  test("successful query request", async () => {
     const mockFetch = mock(async () => mockResponse(200, { result: { data: "success" } }));
 
     const client = createClient(mockRegistry, {
@@ -104,7 +104,7 @@ describe("createClient", () => {
     );
   });
 
-  test("successful POST request", async () => {
+  test("successful exec request", async () => {
     const mockFetch = mock(async () => mockResponse(200, { result: { created: true } }));
 
     const client = createClient(mockRegistry, {
@@ -125,7 +125,7 @@ describe("createClient", () => {
     );
   });
 
-  test("GET request with custom headers", async () => {
+  test("query request with custom headers", async () => {
     const mockFetch = mock(async () => mockResponse(200, { result: { data: "success" } }));
 
     const client = createClient(mockRegistry, {
@@ -266,11 +266,11 @@ describe("createClient", () => {
     }).toThrow("Unknown service method: Unknown.Method");
   });
 
-  test("GET request handles array parameters", async () => {
+  test("query request handles array parameters", async () => {
     const mockFetch = mock(async () => mockResponse(200, { result: { data: "success" } }));
     global.fetch = mockFetch as any;
 
-    const metadata = { "Test.Search": { method: "GET", path: "/test/search" } };
+    const metadata = { "Test.Search": { path: "/test/search", primitive: "query" as const } };
     type SearchManifest = { "Test.Search": { req: { tags: string[] }; res: { data: string } } };
     const searchRegistry: ServiceRegistry<SearchManifest> = {
       manifest: {} as SearchManifest,
@@ -286,11 +286,11 @@ describe("createClient", () => {
     );
   });
 
-  test("GET request omits null and undefined parameters", async () => {
+  test("query request omits null and undefined parameters", async () => {
     const mockFetch = mock(async () => mockResponse(200, { result: { data: "success" } }));
     global.fetch = mockFetch as any;
 
-    const metadata = { "Test.Query": { method: "GET", path: "/test/query" } };
+    const metadata = { "Test.Query": { path: "/test/query", primitive: "query" as const } };
     type QueryManifest = {
       "Test.Query": { req: { id: string; optional?: string; nullable: string | null }; res: { data: string } };
     };
@@ -308,7 +308,7 @@ describe("createClient", () => {
     );
   });
 
-  test("POST request with custom headers preserves Authorization header", async () => {
+  test("exec request with custom headers preserves Authorization header", async () => {
     const mockFetch = mock(async () => mockResponse(200, { result: { created: true } }));
     global.fetch = mockFetch as any;
 
@@ -361,32 +361,11 @@ describe("createClient", () => {
     expect(result).toEqual({ deleted: true });
   });
 
-  test("HEAD request should use query parameters like GET", async () => {
-    const mockFetch = mock(async () => mockResponse(200, { result: { exists: true } }));
-    global.fetch = mockFetch as any;
-
-    const metadata = { "Test.Head": { method: "HEAD", path: "/test/head" } };
-    type HeadManifest = { "Test.Head": { req: { id: string }; res: { exists: boolean } } };
-    const headRegistry: ServiceRegistry<HeadManifest> = {
-      manifest: {} as HeadManifest,
-      metadata,
-    };
-
-    const client = createClient(headRegistry, { baseUrl: "http://localhost:8080" });
-    const result = await client.Test.Head({ id: "123" });
-
-    expect(result).toEqual({ exists: true });
-    expect(mockFetch).toHaveBeenCalledWith(
-      "http://localhost:8080/test/head?id=123",
-      expect.objectContaining({ method: "HEAD" })
-    );
-  });
-
-  test("GET request query parameters are sorted for consistent caching", async () => {
+  test("query request parameters are sorted for consistent caching", async () => {
     const mockFetch = mock(async () => mockResponse(200, { result: { data: "success" } }));
     global.fetch = mockFetch as any;
 
-    const metadata = { "Test.Search": { method: "GET", path: "/test/search" } };
+    const metadata = { "Test.Search": { path: "/test/search", primitive: "query" as const } };
     type SearchManifest = {
       "Test.Search": { req: { name: string; id: string; limit: number }; res: { data: string } };
     };

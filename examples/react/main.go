@@ -9,6 +9,7 @@ import (
 	"os"
 	"runtime"
 	"sync"
+	"time"
 
 	"github.com/broady/tygor"
 	"github.com/broady/tygor/examples/react/api"
@@ -36,6 +37,26 @@ func GetRuntimeInfo(ctx context.Context, req *api.Empty) (*api.RuntimeInfo, erro
 			NumGC:      m.NumGC,
 		},
 	}, nil
+}
+
+func StreamRuntimeInfo(ctx context.Context, req *api.Empty, e *tygor.Emitter[*api.RuntimeInfo]) error {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+			info, err := GetRuntimeInfo(ctx, req)
+			if err != nil {
+				return err
+			}
+			if err := e.Send(info); err != nil {
+				return err
+			}
+		}
+	}
 }
 
 // [snippet:handlers collapse]
@@ -101,6 +122,7 @@ func main() {
 
 	system := app.Service("System")
 	system.Register("Info", tygor.Query(GetRuntimeInfo))
+	system.Register("InfoStream", tygor.StreamEmit(StreamRuntimeInfo))
 
 	tasks := app.Service("Tasks")
 	tasks.Register("List", tygor.Query(ListTasks))

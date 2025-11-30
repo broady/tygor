@@ -25,14 +25,7 @@ export default function App() {
     fetchTasks();
   }, []);
 
-  useEffect(() => {
-    const fetchInfo = async () => {
-      setInfo(await client.System.Info({}));
-    };
-    fetchInfo();
-    const interval = setInterval(fetchInfo, 1000);
-    return () => clearInterval(interval);
-  }, []);
+  useEffect(() => client.System.InfoStream({}).subscribe(setInfo), []);
 
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault();

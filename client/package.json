@@ -16,8 +16,8 @@
     "runtime.d.ts"
   ],
   "scripts": {
-    "build": "tsc",
-    "prepublishOnly": "npm run build"
+    "build": "bunx tsc",
+    "prepublishOnly": "bun run build"
   },
   "keywords": [
     "rpc",

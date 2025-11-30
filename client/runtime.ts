@@ -181,6 +181,26 @@ export interface StreamOptions {
   signal?: AbortSignal;
 }
 
+/**
+ * Stream represents a server-sent event stream.
+ * It's both an AsyncIterable (for `for await` loops) and has a subscribe method
+ * for reactive frameworks like React, Svelte, etc.
+ */
+export interface Stream<T> extends AsyncIterable<T> {
+  /**
+   * Subscribe to stream values. Returns an unsubscribe function.
+   * Designed to work naturally with React's useEffect:
+   *
+   * @example
+   * useEffect(() => client.System.InfoStream({}).subscribe(setInfo), []);
+   *
+   * @param onValue - Called for each value emitted by the stream
+   * @param onError - Optional error handler. AbortErrors from cleanup are automatically ignored.
+   * @returns Unsubscribe function that cancels the stream
+   */
+  subscribe(onValue: (value: T) => void, onError?: (error: Error) => void): () => void;
+}
+
 export function createClient<Manifest extends Record<string, any>>(
   registry: ServiceRegistry<Manifest>,
   config: ClientConfig = {}
@@ -344,7 +364,8 @@ export function createClient<Manifest extends Record<string, any>>(
 }
 
 /**
- * Creates an AsyncIterable that streams SSE events from the server.
+ * Creates a Stream that emits SSE events from the server.
+ * The returned object is both an AsyncIterable and has a subscribe() method.
  */
 function createSSEStream<T>(
   opId: string,
@@ -358,9 +379,9 @@ function createSSEStream<T>(
   schemas: SchemaMap | undefined,
   validateRequest: boolean | undefined,
   validateResponse: boolean | undefined
-): AsyncIterable<T> {
-  return {
-    [Symbol.asyncIterator](): AsyncIterator<T> {
+): Stream<T> {
+  // Factory function to create the async iterator - called fresh for each iteration/subscription
+  const createIterator = (signal?: AbortSignal): AsyncIterator<T> => {
       let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
       let buffer = "";
       let done = false;
@@ -391,7 +412,7 @@ function createSSEStream<T>(
                 Accept: "text/event-stream",
               },
               body: JSON.stringify(req),
-              signal: options?.signal,
+              signal,
             };
 
             let res: globalThis.Response;
@@ -506,6 +527,35 @@ function createSSEStream<T>(
           return { done: true, value: undefined as any };
         },
       };
+  };
+
+  return {
+    [Symbol.asyncIterator](): AsyncIterator<T> {
+      // Use the signal from options if provided (for manual for-await usage)
+      return createIterator(options?.signal);
+    },
+
+    subscribe(onValue: (value: T) => void, onError?: (error: Error) => void): () => void {
+      const controller = new AbortController();
+      const iterator = createIterator(controller.signal);
+
+      (async () => {
+        while (true) {
+          const { done, value } = await iterator.next();
+          if (done) break;
+          onValue(value);
+        }
+      })().catch((err) => {
+        // Silently ignore AbortError from cleanup - this is expected behavior
+        if (err.name === "AbortError") return;
+        if (onError) {
+          onError(err);
+        } else {
+          console.error("Stream error:", err);
+        }
+      });
+
+      return () => controller.abort();
     },
   };
 }
@@ -519,7 +569,7 @@ type ServiceMethods<M, S extends string> = {
     res: infer Res;
     primitive: "stream";
   }
-    ? (req: Req, options?: StreamOptions) => AsyncIterable<Res>
+    ? (req: Req, options?: StreamOptions) => Stream<Res>
     : M[K] extends {
           req: infer Req;
           res: infer Res;
