@@ -51,7 +51,7 @@ TAG="v${NEW_VERSION}"
 echo ""
 echo "New version: ${NEW_VERSION}"
 
-# Update vite-plugin version and its @tygor/client dependency
+# Update vite-plugin version and @tygor/client dependency
 echo ""
 echo "Updating vite-plugin/package.json..."
 jq --arg v "${NEW_VERSION}" --arg dep "^${NEW_VERSION}" \
@@ -104,17 +104,17 @@ fi
 git commit -a -m "Release ${TAG}"
 git tag "${TAG}"
 
-# Publish both packages
+# Publish both packages (use bun to resolve workspace:* dependencies)
 echo ""
 echo "Publishing @tygor/client..."
 cd client
-npm --browser=echo publish
+bun publish
 cd ..
 
 echo ""
 echo "Publishing @tygor/vite-plugin..."
 cd vite-plugin
-npm --browser=echo publish
+bun publish
 cd ..
 
 echo ""

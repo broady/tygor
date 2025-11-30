@@ -1,8 +1,6 @@
 coverage.*
 node_modules
 package-lock.json
-bun.lock
-bun.lockb
 
 # TypeScript build output (client runtime)
 client/runtime.js

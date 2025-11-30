@@ -24,14 +24,14 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Build client
-        run: cd client && npm install && npm run build
+      - name: Install all workspace packages
+        run: bun install --ignore-scripts
 
-      - name: Install vite-plugin deps
-        run: cd vite-plugin && bun install
+      - name: Build client package
+        run: bun run --cwd client build
 
-      - name: Build vite-plugin client
-        run: cd vite-plugin && node scripts/build-client.js
+      - name: Build vite-plugin
+        run: bun run --cwd vite-plugin build:client
 
       - name: Run precommit checks
         run: make precommit

@@ -16,7 +16,7 @@
   ],
   "scripts": {
     "build": "node scripts/build-client.js && tsc",
-    "build:client": "node scripts/build-client.js",
+    "build:client": "bun scripts/build-client.js",
     "dev:client": "node scripts/build-client.js --watch",
     "typecheck": "tsc --noEmit",
     "dev": "tsc --watch",
