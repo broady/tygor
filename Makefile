@@ -10,7 +10,7 @@ DOC_FILES := $(wildcard doc/examples/quickstart/*.go) $(wildcard doc/examples/qu
              $(wildcard doc/examples/tygorgen/*.go) $(wildcard doc/examples/tygorgen/*.ts) \
              $(wildcard doc/examples/client/*.ts)
 
-.PHONY: all test test-quiet lint lint-quiet check check-quiet readme lint-readme precommit fmt fmt-check ci-local typecheck-docs typecheck-vite-plugin gen-devtools help
+.PHONY: all test test-quiet lint lint-quiet check check-quiet readme lint-readme precommit fmt fmt-check ci-local typecheck-docs typecheck-vite-plugin gen-devtools release help
 
 # Default target
 all: test lint
@@ -136,6 +136,13 @@ precommit: precommit-test precommit-lint precommit-check precommit-examples prec
 ci-local:
 	go run github.com/nektos/act@latest --container-architecture linux/amd64
 
+# Release packages (usage: make release TYPE=patch|minor|major)
+release:
+ifndef TYPE
+	$(error TYPE is required. Usage: make release TYPE=patch)
+endif
+	./release.bash $(TYPE)
+
 # Help
 help:
 	@echo "Available targets:"
@@ -149,3 +156,4 @@ help:
 	@echo "  make check          - Verify READMEs are up-to-date"
 	@echo "  make precommit      - Run all checks (test, lint, check, examples, typecheck)"
 	@echo "  make ci-local       - Run GitHub Actions workflow locally via Docker (requires act)"
+	@echo "  make release TYPE=  - Release packages (TYPE: patch|minor|major)"
