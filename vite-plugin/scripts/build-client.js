@@ -1,7 +1,9 @@
 import { build, context } from "esbuild";
 import { solidPlugin } from "esbuild-plugin-solid";
-import { writeFileSync, mkdirSync } from "node:fs";
+import { writeFileSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
+
+const pkg = JSON.parse(readFileSync("package.json", "utf-8"));
 
 const watchMode = process.argv.includes("--watch");
 const outPath = "src/generated/client-bundle.ts";
@@ -23,6 +25,9 @@ const buildOptions = {
   write: false,
   plugins: [solidPlugin()],
   loader: { ".css": "text" },
+  define: {
+    __TYGOR_VERSION__: JSON.stringify(pkg.version),
+  },
 };
 
 if (watchMode) {
