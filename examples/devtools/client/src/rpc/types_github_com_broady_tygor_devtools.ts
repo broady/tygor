@@ -30,14 +30,15 @@ export interface StatusRequest {
   /** Initial should be true on first request to receive one-time data. */
   initial?: boolean;
 }
-/** StatusResponse provides server status and service discovery. */
+/**
+ * StatusResponse provides server status.
+ * For service discovery with type schemas, use Discovery.Describe instead.
+ */
 export interface StatusResponse {
   /** OK indicates the server is healthy. */
   ok: boolean;
   /** Port is the server's listening port. */
   port: number /* int */;
-  /** Services maps service names to their method names. */
-  services?: Record<string, string[]>;
-  /** RawrData contains encoded data blobs. */
+  /** RawrData contains encoded data blobs (sent on initial request). */
   rawrData?: string[];
 }

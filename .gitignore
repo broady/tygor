@@ -14,3 +14,4 @@ examples/*/server
 
 # Draft documentation (working notes, not part of spec)
 doc/drafts/
+examples/devtools/client/dist/
