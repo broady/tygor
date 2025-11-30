@@ -1,5 +1,7 @@
 import { Show, JSX } from "solid-js";
 
+export type DropPosition = "before" | "after";
+
 export interface PaneProps {
   id: string;
   title: string;
@@ -8,9 +10,8 @@ export interface PaneProps {
   onToggle: () => void;
   // Drag-and-drop
   onDragStart: () => void;
-  onDragOver: () => void;
-  onDrop: () => void;
-  isDragTarget: boolean;
+  onDragOver: (position: DropPosition) => void;
+  isDragging: boolean;
   children: JSX.Element;
 }
 
@@ -20,23 +21,25 @@ export function Pane(props: PaneProps) {
       class="tygor-pane"
       classList={{
         "tygor-pane--collapsed": props.collapsed,
-        "tygor-pane--drag-target": props.isDragTarget,
-      }}
-      draggable={true}
-      ondragstart={(e) => {
-        e.dataTransfer!.effectAllowed = "move";
-        props.onDragStart();
+        "tygor-pane--dragging": props.isDragging,
       }}
       ondragover={(e) => {
         e.preventDefault();
-        props.onDragOver();
-      }}
-      ondrop={(e) => {
-        e.preventDefault();
-        props.onDrop();
+        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        const midpoint = rect.top + rect.height / 2;
+        const position: DropPosition = e.clientY < midpoint ? "before" : "after";
+        props.onDragOver(position);
       }}
     >
-      <div class="tygor-pane-header" onClick={props.onToggle}>
+      <div
+        class="tygor-pane-header"
+        draggable={true}
+        ondragstart={(e) => {
+          e.dataTransfer!.effectAllowed = "move";
+          props.onDragStart();
+        }}
+        onClick={props.onToggle}
+      >
         <span class="tygor-pane-chevron">{props.collapsed ? "▸" : "▾"}</span>
         <span class="tygor-pane-title">{props.title}</span>
         <Show when={props.collapsed && props.collapsedStatus}>

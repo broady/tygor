@@ -1,11 +1,46 @@
 /** Status response from the tygor dev server */
 export type TygorStatus =
-  | { status: "ok"; port: number; services: string[]; rawrData?: string[] }
+  | { status: "ok"; port: number; rawrData?: string[] }
   | { status: "error"; error: string; phase: "prebuild" | "build" | "runtime"; command: string | null; cwd: string; exitCode: number | null }
   | { status: "reloading" }
   | { status: "starting" }
   | { status: "disconnected" }
   | { status: "vite_disconnected" };
+
+/** Type reference in the IR schema */
+export interface IRTypeRef {
+  kind: string;
+  name?: string;
+  primitiveKind?: string;
+  element?: IRTypeRef;
+}
+
+/** Field descriptor in a struct type */
+export interface IRField {
+  name: string;
+  jsonName: string;
+}
+
+/** Type descriptor (struct, etc.) */
+export interface IRType {
+  kind: string;
+  Name: { name: string; package: string };
+  Fields?: IRField[];
+}
+
+/** Discovery schema from discovery.json */
+export interface DiscoverySchema {
+  Types?: IRType[];
+  Services?: Array<{
+    name: string;
+    endpoints: Array<{
+      name: string;
+      httpMethod?: string;
+      request?: IRTypeRef;
+      response?: IRTypeRef;
+    }>;
+  }>;
+}
 
 /** RPC error reported by @tygor/client */
 export interface TygorRpcError {
