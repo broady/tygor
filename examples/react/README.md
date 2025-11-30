@@ -5,7 +5,8 @@ A minimal React + Vite application demonstrating tygor's type-safe RPC client wi
 ## Quick Start
 
 ```bash
-bun dev (or make dev)
+bun install
+bun dev
 ```
 
 Open http://localhost:5173

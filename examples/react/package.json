@@ -1,9 +1,10 @@
 {
   "name": "tygor-react-example",
   "private": true,
+  "workspaces": ["client"],
   "scripts": {
+    "postinstall": "go run . -gen -out ./client/src/rpc",
     "dev": "concurrently --kill-others -n tygor,vite -c green,blue \"go run github.com/air-verse/air@latest\" \"cd client && bun run dev\"",
-    "gen": "go run . -gen -out ./client/src/rpc",
     "build": "cd client && bun run build"
   },
   "devDependencies": {

@@ -8,10 +8,9 @@ Thanks for your interest in contributing to tygor!
 
 ### Prerequisites
 
-- Go 1.21 or later
+- Go 1.23 or later
 - Docker (for local CI testing)
-- Node.js 18+ or Bun (for running TypeScript examples and tests)
-- npm (comes with Node.js)
+- Bun (for TypeScript packages and examples)
 
 ### Initial Setup
 
@@ -21,22 +20,21 @@ Thanks for your interest in contributing to tygor!
    cd tygor
    ```
 
-2. Install dependencies (sets up workspace):
+2. Install dependencies (sets up bun workspaces):
    ```bash
-   npm install
+   bun install
    ```
 
-   This creates symlinks so the examples use your local `@tygor/client` package during development.
+   This creates symlinks so examples and vite-plugin use your local `@tygor/client` package during development.
 
 3. Run Go tests:
    ```bash
-   go test ./...
+   make test
    ```
 
 4. Run TypeScript runtime tests:
    ```bash
-   cd client
-   bun test
+   cd client && bun test
    ```
 
 ## Development Workflow
@@ -84,39 +82,49 @@ tygor/
 │   ├── runtime.ts       # TypeScript client runtime
 │   ├── runtime.test.ts  # Runtime tests
 │   └── package.json     # Published to npm as @tygor/client
+├── vite-plugin/         # @tygor/vite-plugin npm package
 ├── examples/            # Example applications (separate Go module)
-│   ├── go.mod           # Separate module for heavier dependencies
+│   ├── go.mod           # Shared examples module
 │   ├── newsserver/      # Simple CRUD example
 │   ├── blog/            # Complex auth/authz example
-│   └── protobuf/        # Protobuf types example
+│   ├── protobuf/        # Protobuf types example
+│   └── react/           # Standalone React+Vite example (own go.mod)
 ├── middleware/          # Built-in middleware (CORS, logging)
 ├── tygorgen/            # Code generator
+├── go.work              # Go workspace (links all modules)
 └── *.go                 # Core framework files
 ```
 
 ### Multi-Module Repository
 
-The `examples/` directory is a separate Go module with its own `go.mod`. This allows examples to have heavier dependencies (like protobuf) without polluting the main module's dependency tree.
+This repo uses a Go workspace (`go.work`) to manage multiple Go modules:
+
+- **`/`** - Main tygor module
+- **`/examples`** - Shared examples module (protobuf, etc.)
+- **`/examples/react`** - Standalone React example (can be used as a template)
+
+The workspace allows examples to use the local tygor package during development while also being usable standalone via `degit`.
 
 ```bash
-# Main module tests
-go test ./...
+# Main module tests (uses GOWORK=off to test main module only)
+make test
 
-# Build examples (from examples/)
+# Build examples
 cd examples && go build ./...
 ```
 
 ## Monorepo Setup
 
-This repo uses npm workspaces to manage the TypeScript client and examples:
+This repo uses bun workspaces to manage TypeScript packages:
 
 - **`/client`** - The `@tygor/client` package published to npm
+- **`/vite-plugin`** - The `@tygor/vite-plugin` package (uses workspace client)
 - **`/examples/*/client`** - Example clients that depend on `@tygor/client`
 
-During development, npm creates symlinks so examples automatically use your local client code. When you make changes to `client/runtime.ts`:
+During development, bun creates symlinks so examples and vite-plugin automatically use your local client code. When you make changes to `client/runtime.ts`:
 
-1. Rebuild the client: `cd client && npm run build`
-2. Examples will use the updated version via symlink
+1. Rebuild the client: `cd client && bun run build`
+2. All workspace packages will use the updated version via symlink
 
 ## Making Changes
 
@@ -131,12 +139,11 @@ During development, npm creates symlinks so examples automatically use your loca
 
 1. Edit `client/runtime.ts`
 2. Run tests: `cd client && bun test`
-3. Build: `npm run build`
+3. Build: `cd client && bun run build`
 4. Test with examples:
    ```bash
-   cd ../examples/newsserver
-   go run main.go &  # Start server
-   cd client && bun run index.ts  # Run client
+   cd examples/react
+   bun dev  # Starts Go server + Vite with hot reload
    ```
 
 ### Code Generator
@@ -170,17 +177,17 @@ bun test          # Run tests
 bun test --watch  # Watch mode
 ```
 
-## Publishing the Client
+## Publishing Packages
 
-**Note**: Only maintainers can publish. If you're contributing changes to the client, we'll publish after merging.
+**Note**: Only maintainers can publish. If you're contributing changes, we'll publish after merging.
 
-To publish a new version of `@tygor/client`:
+To publish new versions of `@tygor/client` and `@tygor/vite-plugin`:
 
-1. Update version in `client/package.json`
-2. Rebuild: `cd client && npm run build`
-3. Publish: `npm publish --access public`
-4. Commit the version bump
-5. Tag the release: `git tag client/v0.1.1 && git push --tags`
+1. Update versions in `client/package.json` and `vite-plugin/package.json`
+2. Rebuild: `bun run --cwd client build && bun run --cwd vite-plugin build`
+3. Publish: `npm publish --access public` in each package directory
+4. Commit the version bumps
+5. Tag the release
 
 ## Examples
 

@@ -15,23 +15,23 @@ DOC_FILES := $(wildcard doc/examples/quickstart/*.go) $(wildcard doc/examples/qu
 # Default target
 all: test lint
 
-# Run tests
+# Run tests (GOWORK=off to test main module only; examples tested separately)
 test:
-	go test ./...
+	GOWORK=off go test ./...
 
 # Run tests quietly (output only on failure)
 test-quiet:
-	@output=$$(go test ./... 2>&1) || (echo "$$output"; exit 1)
+	@output=$$(GOWORK=off go test ./... 2>&1) || (echo "$$output"; exit 1)
 
-# Run linters
+# Run linters (GOWORK=off to lint main module only; examples linted separately)
 lint:
-	go vet ./...
-	go run honnef.co/go/tools/cmd/staticcheck@v0.6.1 ./...
+	GOWORK=off go vet ./...
+	GOWORK=off go run honnef.co/go/tools/cmd/staticcheck@v0.6.1 ./...
 
 # Run linters quietly (output only on failure)
 lint-quiet:
-	@output=$$(go vet ./... 2>&1) || (echo "$$output"; exit 1)
-	@output=$$(go run honnef.co/go/tools/cmd/staticcheck@v0.6.1 ./... 2>&1) || (echo "$$output"; exit 1)
+	@output=$$(GOWORK=off go vet ./... 2>&1) || (echo "$$output"; exit 1)
+	@output=$$(GOWORK=off go run honnef.co/go/tools/cmd/staticcheck@v0.6.1 ./... 2>&1) || (echo "$$output"; exit 1)
 
 # Format code
 fmt:

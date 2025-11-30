@@ -12,8 +12,9 @@ import (
 	"time"
 
 	"github.com/broady/tygor"
-	"github.com/broady/tygor/examples/react/api"
 	"github.com/broady/tygor/tygorgen"
+
+	"github.com/broady/tygor/examples/react/api"
 )
 
 // In-memory task store
