@@ -119,47 +119,47 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-    <div>
-      {error ? (
-        <div className="info" style={{ background: "#fff3cd", color: "#856404" }}>
-          <strong>{error.type}</strong>
-          {error.code && <code style={{ marginLeft: 8, marginRight: 8, background: "rgba(0,0,0,0.1)", padding: "2px 6px", borderRadius: 3 }}>{error.code}</code>}
-          <span style={{ marginLeft: 8 }}>{error.message}</span>
-        </div>
-      ) : info && (
-        <div className="info">
-          <strong>:{info.port}</strong> | {info.version} | {info.num_goroutines} goroutines |{" "}
-          {formatBytes(info.memory.alloc)} alloc | {info.memory.num_gc} GC |{" "}
-          <button onClick={() => client.System.Kill({}).catch((e) => setError(toAppError(e)))} style={{ fontSize: "0.7rem", padding: "2px 6px" }}>
-            Kill
-          </button>
-        </div>
-      )}
-          <button onClick={() => client.Tasks.MakeError({}).catch((e) => setError(toAppError(e)))} style={{ fontSize: "0.7rem", padding: "2px 6px" }}>
-		  Make an error
-          </button>
+      <div>
+        {error ? (
+          <div className="info" style={{ background: "#fff3cd", color: "#856404" }}>
+            <strong>{error.type}</strong>
+            {error.code && <code style={{ marginLeft: 8, marginRight: 8, background: "rgba(0,0,0,0.1)", padding: "2px 6px", borderRadius: 3 }}>{error.code}</code>}
+            <span style={{ marginLeft: 8 }}>{error.message}</span>
+          </div>
+        ) : info && (
+          <div className="info">
+            <strong>:{info.port}</strong> | {info.version} | {info.num_goroutines} goroutines |{" "}
+            {formatBytes(info.memory.alloc)} alloc | {info.memory.num_gc} GC |{" "}
+            <button onClick={() => client.System.Kill({}).catch((e) => setError(toAppError(e)))} style={{ fontSize: "0.7rem", padding: "2px 6px" }}>
+              Kill
+            </button>
+          </div>
+        )}
+        <button onClick={() => client.Tasks.MakeError({}).catch((e) => setError(toAppError(e)))} style={{ fontSize: "0.7rem", padding: "2px 6px" }}>
+          Make an error
+        </button>
 
-      <h1>Tasks</h1>
-      <form onSubmit={handleCreate}>
-        <input
-          value={newTask}
-          onChange={(e) => setNewTask(e.target.value)}
-          placeholder="New task..."
-        />
-        <button type="submit">Add</button>
-      </form>
-      <ul>
-        {tasks.map((task) => (
-          <li
-            key={task.id}
-            className={task.done ? "done" : ""}
-            onClick={() => handleToggle(task.id)}
-          >
-            {task.done ? "✓" : "○"} {task.title}
-          </li>
-        ))}
-      </ul>
-    </div>
+        <h1>Tasks</h1>
+        <form onSubmit={handleCreate}>
+          <input
+            value={newTask}
+            onChange={(e) => setNewTask(e.target.value)}
+            placeholder="New task..."
+          />
+          <button type="submit">Add</button>
+        </form>
+        <ul>
+          {tasks.map((task) => (
+            <li
+              key={task.id}
+              className={task.done ? "done" : ""}
+              onClick={() => handleToggle(task.id)}
+            >
+              {task.done ? "✓" : "○"} {task.title}
+            </li>
+          ))}
+        </ul>
+      </div>
     </ErrorBoundary>
   );
 }

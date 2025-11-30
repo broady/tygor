@@ -1,7 +1,52 @@
-import { Show, For, createSignal, createEffect, onCleanup, onMount } from "solid-js";
-import type { TygorStatus, TygorRpcError } from "./types";
+import { Show, For, createSignal, createEffect, onCleanup, onMount, createResource } from "solid-js";
+import type { TygorStatus, TygorRpcError, DiscoverySchema, IRTypeRef, IRType } from "./types";
 import type { SidebarSide } from "./DevTools";
-import { Pane } from "./Pane";
+import { Pane, type DropPosition } from "./Pane";
+
+declare const __TYGOR_VERSION__: string;
+
+// Check if a type reference is "empty" (tygor.Empty or Any primitive)
+function isEmptyType(ref: IRTypeRef | undefined): boolean {
+  if (!ref) return true;
+  if (ref.kind === "primitive" && ref.primitiveKind === "Any") return true;
+  if (ref.kind === "reference" && ref.name === "Empty") return true;
+  return false;
+}
+
+// Format a type reference for display
+function formatTypeRef(ref: IRTypeRef | undefined): string {
+  if (!ref || isEmptyType(ref)) return "";
+  switch (ref.kind) {
+    case "reference": return ref.name || "unknown";
+    case "primitive": return ref.primitiveKind?.toLowerCase() || "any";
+    case "array": return `${formatTypeRef(ref.element)}[]`;
+    case "ptr": return `${formatTypeRef(ref.element)} | null`;
+    default: return ref.kind;
+  }
+}
+
+// Format request parameters as field names
+function formatRequestParams(ref: IRTypeRef | undefined, types: IRType[] | undefined): string {
+  if (!ref || isEmptyType(ref) || ref.kind !== "reference" || !types) return "";
+  const typeDef = types.find(t => t.Name.name === ref.name);
+  if (!typeDef?.Fields?.length) return "";
+  const fields = typeDef.Fields;
+  if (fields.length <= 3) {
+    return fields.map(f => f.jsonName).join(", ");
+  }
+  return fields.slice(0, 2).map(f => f.jsonName).join(", ") + ", ...";
+}
+
+// Fetch discovery schema from tygor plugin endpoint
+const fetchDiscovery = async (): Promise<DiscoverySchema | null> => {
+  try {
+    const res = await fetch("/__tygor/discovery");
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+};
 
 interface DevToolsState {
   status: TygorStatus | null;
@@ -39,6 +84,26 @@ let _i = 0;
 
 export function Sidebar(props: SidebarProps) {
   const [copied, setCopied] = createSignal(false);
+  const [expandedServices, setExpandedServices] = createSignal<Record<string, boolean>>({});
+
+  // Track when server becomes ready to refetch discovery schema
+  const [schemaVersion, setSchemaVersion] = createSignal(0);
+  let wasReloading = false;
+  createEffect(() => {
+    const status = props.state.status?.status;
+    if (wasReloading && status === "ok") {
+      // Server just finished reloading - refetch schema
+      setSchemaVersion(v => v + 1);
+    }
+    wasReloading = status === "reloading" || status === "starting";
+  });
+
+  // Refetch discovery when schemaVersion changes
+  const [discovery] = createResource(schemaVersion, fetchDiscovery);
+
+  const toggleService = (name: string) => {
+    setExpandedServices(prev => ({ ...prev, [name]: !prev[name] }));
+  };
 
   // Tick for duration updates
   const [tick, setTick] = createSignal(0);
@@ -69,7 +134,7 @@ export function Sidebar(props: SidebarProps) {
   const [paneCollapsed, setPaneCollapsed] = createSignal<Record<string, boolean>>(initial.collapsed);
   const [paneOrder, setPaneOrder] = createSignal<string[]>(mergedOrder);
   const [draggedPane, setDraggedPane] = createSignal<string | null>(null);
-  const [dragTarget, setDragTarget] = createSignal<string | null>(null);
+  let dragStartOrder: string[] | null = null;
 
   // Persist pane state to sessionStorage
   createEffect(() => {
@@ -81,27 +146,56 @@ export function Sidebar(props: SidebarProps) {
     setPaneCollapsed((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const handlePaneDrop = (targetId: string) => {
+  const handleDragStart = (paneId: string) => {
+    dragStartOrder = [...paneOrder()];
+    setDraggedPane(paneId);
+  };
+
+  const movePane = (targetId: string, position: DropPosition) => {
     const fromId = draggedPane();
     if (!fromId || fromId === targetId) return;
 
     const order = [...paneOrder()];
     const fromIndex = order.indexOf(fromId);
-    const toIndex = order.indexOf(targetId);
 
-    if (fromIndex === -1 || toIndex === -1) return;
+    // Special case: dropping at the start
+    if (targetId === "__start__") {
+      if (fromIndex === 0) return;
+      order.splice(fromIndex, 1);
+      order.unshift(fromId);
+    } else if (targetId === "__end__") {
+      // Special case: dropping at the end
+      if (fromIndex === order.length - 1) return;
+      order.splice(fromIndex, 1);
+      order.push(fromId);
+    } else {
+      const toIndex = order.indexOf(targetId);
+      if (fromIndex === -1 || toIndex === -1) return;
 
-    order.splice(fromIndex, 1);
-    order.splice(toIndex, 0, fromId);
+      // Calculate insert position based on drop position indicator
+      let insertIndex: number;
+      if (position === "before") {
+        insertIndex = fromIndex < toIndex ? toIndex - 1 : toIndex;
+      } else {
+        insertIndex = fromIndex < toIndex ? toIndex : toIndex + 1;
+      }
+      // Skip if already in position
+      if (insertIndex === fromIndex) return;
+
+      order.splice(fromIndex, 1);
+      order.splice(insertIndex, 0, fromId);
+    }
 
     setPaneOrder(order);
-    setDraggedPane(null);
-    setDragTarget(null);
   };
 
-  const clearDragState = () => {
+  const handleDragEnd = (e: DragEvent) => {
+    // dropEffect is "none" when dropped outside valid targets (cancelled)
+    if (e.dataTransfer?.dropEffect === "none" && dragStartOrder) {
+      setPaneOrder(dragStartOrder);
+    }
+    dragStartOrder = null;
     setDraggedPane(null);
-    setDragTarget(null);
   };
 
   // Vite status: connected unless vite_disconnected
@@ -196,7 +290,8 @@ export function Sidebar(props: SidebarProps) {
       <div class="tygor-sidebar-header">
         <div class="tygor-sidebar-title">
           <span class="tygor-sidebar-icon" onClick={onTigerClick}>🐯</span>
-          <span class="tygor-sidebar-name">tygor</span>
+          <span class="tygor-sidebar-name">tygor dev tools</span>
+          <span class="tygor-sidebar-version">v{__TYGOR_VERSION__}</span>
         </div>
         <div class="tygor-sidebar-header-actions">
           <button
@@ -217,7 +312,18 @@ export function Sidebar(props: SidebarProps) {
       </div>
 
       {/* Panes */}
-      <div class="tygor-sidebar-panes" ondragend={clearDragState}>
+      <div class="tygor-sidebar-panes" ondragend={handleDragEnd}>
+        {/* Drop zone for moving to start of list */}
+        <Show when={draggedPane()}>
+          <div
+            class="tygor-pane-drop-end"
+            ondragover={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              movePane("__start__", "before");
+            }}
+          />
+        </Show>
         <For each={paneOrder()}>
           {(paneId) => {
             if (paneId === "system") {
@@ -236,10 +342,9 @@ export function Sidebar(props: SidebarProps) {
                   collapsed={paneCollapsed().system ?? false}
                   collapsedStatus={systemCollapsedStatus}
                   onToggle={() => togglePane("system")}
-                  onDragStart={() => setDraggedPane("system")}
-                  onDragOver={() => setDragTarget("system")}
-                  onDrop={() => handlePaneDrop("system")}
-                  isDragTarget={dragTarget() === "system" && draggedPane() !== "system"}
+                  onDragStart={() => handleDragStart("system")}
+                  onDragOver={(pos) => movePane("system", pos)}
+                  isDragging={draggedPane() === "system"}
                 >
                   <div class="tygor-sidebar-status-grid">
                     <div class="tygor-sidebar-status-item">
@@ -287,8 +392,7 @@ export function Sidebar(props: SidebarProps) {
             }
 
             if (paneId === "services") {
-              const s = props.state.status;
-              const services = () => (s?.status === "ok" ? s.services : []);
+              const services = () => discovery()?.Services ?? [];
 
               return (
                 <Pane
@@ -300,18 +404,51 @@ export function Sidebar(props: SidebarProps) {
                     return count > 0 ? `${count}` : null;
                   }}
                   onToggle={() => togglePane("services")}
-                  onDragStart={() => setDraggedPane("services")}
-                  onDragOver={() => setDragTarget("services")}
-                  onDrop={() => handlePaneDrop("services")}
-                  isDragTarget={dragTarget() === "services" && draggedPane() !== "services"}
+                  onDragStart={() => handleDragStart("services")}
+                  onDragOver={(pos) => movePane("services", pos)}
+                  isDragging={draggedPane() === "services"}
                 >
                   <Show when={services().length > 0} fallback={
-                    <div class="tygor-pane-empty">No services available</div>
+                    <div class="tygor-pane-empty">{discovery.loading ? "Loading..." : "No services available"}</div>
                   }>
                     <ul class="tygor-sidebar-services">
-                      {services().map((svc) => (
-                        <li class="tygor-sidebar-service">{svc}</li>
-                      ))}
+                      <For each={services()}>
+                        {(svc) => (
+                          <li class="tygor-sidebar-service">
+                            <div
+                              class="tygor-sidebar-service-header"
+                              onClick={() => toggleService(svc.name)}
+                            >
+                              <span class="tygor-sidebar-service-toggle">
+                                {expandedServices()[svc.name] ? "▼" : "▶"}
+                              </span>
+                              <span class="tygor-sidebar-service-name">{svc.name}</span>
+                              <span class="tygor-sidebar-service-count">({svc.endpoints.length})</span>
+                            </div>
+                            <Show when={expandedServices()[svc.name]}>
+                              <ul class="tygor-sidebar-endpoints">
+                                <For each={svc.endpoints}>
+                                  {(ep) => {
+                                    const isQuery = ep.httpMethod === "GET";
+                                    const params = formatRequestParams(ep.request, discovery()?.Types);
+                                    const res = formatTypeRef(ep.response);
+                                    return (
+                                      <li class="tygor-sidebar-endpoint">
+                                        <span class={`tygor-sidebar-endpoint-verb tygor-sidebar-endpoint-verb--${isQuery ? 'query' : 'exec'}`}>
+                                          {isQuery ? "Query" : "Exec\u00A0"}
+                                        </span>
+                                        <span class="tygor-sidebar-endpoint-sig">
+                                          {ep.name}({params}){res && <span class="tygor-sidebar-endpoint-res"> → {res}</span>}
+                                        </span>
+                                      </li>
+                                    );
+                                  }}
+                                </For>
+                              </ul>
+                            </Show>
+                          </li>
+                        )}
+                      </For>
                     </ul>
                   </Show>
                 </Pane>
@@ -321,6 +458,16 @@ export function Sidebar(props: SidebarProps) {
             return null;
           }}
         </For>
+        {/* Drop zone for moving to end of list */}
+        <Show when={draggedPane()}>
+          <div
+            class="tygor-pane-drop-end"
+            ondragover={(e) => {
+              e.preventDefault();
+              movePane("__end__", "after");
+            }}
+          />
+        </Show>
       </div>
 
       {/* RPC Error */}

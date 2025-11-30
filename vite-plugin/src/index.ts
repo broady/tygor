@@ -1,6 +1,6 @@
 import { spawn, ChildProcess, exec } from "node:child_process";
 import { resolve, dirname } from "node:path";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync, existsSync } from "node:fs";
 import { createServer } from "node:net";
 import { request as httpRequest } from "node:http";
 import { watch } from "chokidar";
@@ -10,11 +10,6 @@ import pc from "picocolors";
 import { createClient } from "@tygor/client";
 import { registry as devtoolsRegistry } from "./devtools/manifest";
 import { clientBundle } from "./generated/client-bundle";
-
-/** Tygor manifest registry type */
-export interface TygorRegistry {
-  metadata: Record<string, { path: string; [key: string]: unknown }>;
-}
 
 export interface TygorDevOptions {
   /** Command to run before starting the server (e.g., codegen) */
@@ -29,8 +24,8 @@ export interface TygorDevOptions {
     env?: Record<string, string>;
     cwd?: string;
   };
-  /** Tygor manifest registry - proxy paths are derived automatically */
-  manifest?: TygorRegistry;
+  /** Directory containing generated RPC files (default: './src/rpc'). Used for serving discovery.json and deriving proxy paths */
+  rpcDir?: string;
   /** Glob patterns to watch (default: ['**\/*.go']) */
   watch?: string[];
   /** Glob patterns to ignore (default: ['node_modules', '.git', 'tmp']) */
@@ -41,7 +36,7 @@ export interface TygorDevOptions {
   port?: number;
   /** Working directory for Go commands and file watcher (default: process.cwd()) */
   workdir?: string;
-  /** Proxy path prefixes to route to Go server (auto-derived if manifest provided) */
+  /** Proxy path prefixes to route to Go server (auto-derived from discovery.json if not specified) */
   proxy?: string[];
 }
 
@@ -56,6 +51,7 @@ const DEFAULT_OPTIONS = {
   ignore: ["**/node_modules", "**/.git", "**/tmp", "**/dist"],
   health: false as const,
   port: 8080,
+  rpcDir: "./src/rpc",
 };
 
 /** Find an available port starting from the given port */
@@ -314,6 +310,9 @@ export function tygorDev(options: TygorDevOptions): Plugin {
       return;
     }
 
+    // Reload proxy paths in case new services were added
+    proxyPaths = loadProxyPaths();
+
     // Run build (separate from start so we can distinguish build vs runtime errors)
     const buildOk = await runBuild();
     if (!buildOk) {
@@ -357,16 +356,32 @@ export function tygorDev(options: TygorDevOptions): Plugin {
     reloadTimeout = setTimeout(reload, 300);
   }
 
-  // Derive proxy paths from manifest or use explicit proxy option
-  let proxyPaths = opts.proxy ?? [];
-  if (opts.manifest && proxyPaths.length === 0) {
-    const services = new Set<string>();
-    for (const meta of Object.values(opts.manifest.metadata)) {
-      const service = meta.path.split("/")[1];
-      if (service) services.add(`/${service}`);
+  // Load proxy paths from discovery.json
+  function loadProxyPaths(): string[] {
+    if (opts.proxy && opts.proxy.length > 0) {
+      return opts.proxy; // Explicit proxy paths take precedence
     }
-    proxyPaths = [...services];
+    const discoveryPath = resolve(process.cwd(), opts.rpcDir!, "discovery.json");
+    try {
+      if (existsSync(discoveryPath)) {
+        const content = readFileSync(discoveryPath, "utf-8");
+        const discovery = JSON.parse(content);
+        const services = new Set<string>();
+        for (const svc of discovery.Services ?? []) {
+          if (svc.name) services.add(`/${svc.name}`);
+        }
+        if (services.size > 0) {
+          log(`Proxy paths from discovery.json: ${[...services].join(", ")}`);
+          return [...services];
+        }
+      }
+    } catch (err) {
+      log(`Failed to load discovery.json: ${err}`);
+    }
+    return [];
   }
+
+  let proxyPaths = loadProxyPaths();
 
   // Call Devtools.Ping for heartbeat using generated client
   async function heartbeat(): Promise<boolean> {
@@ -415,7 +430,11 @@ export function tygorDev(options: TygorDevOptions): Plugin {
     apply: "serve",
 
     async configureServer(server: ViteDevServer) {
-      // Status endpoint for polling
+      // Resolve rpcDir path for discovery endpoint
+      const rpcDir = resolve(process.cwd(), opts.rpcDir!);
+      const discoveryPath = resolve(rpcDir, "discovery.json");
+
+      // Status and discovery endpoints
       server.middlewares.use((req, res, next) => {
         // Handle tygor status endpoint
         if (req.url === "/__tygor/status") {
@@ -430,7 +449,7 @@ export function tygorDev(options: TygorDevOptions): Plugin {
             } else if (!currentServer.ready) {
               status = { status: "starting" };
             } else {
-              // Get status from Go server (includes services for discovery)
+              // Get status from Go server
               try {
                 const client = createClient(devtoolsRegistry, {
                   baseUrl: `http://localhost:${currentServer.port}`,
@@ -443,7 +462,6 @@ export function tygorDev(options: TygorDevOptions): Plugin {
                 status = {
                   status: "ok",
                   port: serverStatus.port,
-                  services: serverStatus.services,
                   rawrData: cachedRawrData ?? undefined,
                 };
               } catch {
@@ -452,6 +470,24 @@ export function tygorDev(options: TygorDevOptions): Plugin {
             }
             res.end(JSON.stringify(status));
           })();
+          return;
+        }
+
+        // Handle tygor discovery endpoint - serve discovery.json from rpcDir
+        if (req.url === "/__tygor/discovery") {
+          try {
+            if (existsSync(discoveryPath)) {
+              const content = readFileSync(discoveryPath, "utf-8");
+              res.writeHead(200, { "Content-Type": "application/json" });
+              res.end(content);
+            } else {
+              res.writeHead(404, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ error: "discovery.json not found. Run tygorgen with WithDiscovery()." }));
+            }
+          } catch (err) {
+            res.writeHead(500, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: String(err) }));
+          }
           return;
         }
 

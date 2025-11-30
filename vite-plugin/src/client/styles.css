@@ -90,12 +90,14 @@
 .tygor-tiger-icon {
   font-size: 20px;
   line-height: 1;
+  user-select: none;
 }
 
 /* Pacing tiger animation - instant flip, smooth position */
 .tygor-tiger-runner {
   font-size: 20px;
   line-height: 1;
+  user-select: none;
   animation: tygor-pace 0.8s steps(1) infinite;
 }
 
@@ -205,6 +207,12 @@
   overflow: hidden;
 }
 
+.tygor-sidebar-panes {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
 .tygor-sidebar--left {
   right: auto;
   left: 16px;
@@ -254,6 +262,7 @@
   font-size: 16px;
   cursor: pointer;
   transition: transform 0.15s;
+  user-select: none;
 }
 
 .tygor-sidebar-icon:hover {
@@ -268,6 +277,12 @@
   font-weight: 600;
   font-size: 13px;
   color: var(--tygor-accent-dark);
+}
+
+.tygor-sidebar-version {
+  font-size: 10px;
+  color: var(--tygor-text-hint);
+  font-weight: 400;
 }
 
 .tygor-sidebar-header-actions {
@@ -489,10 +504,79 @@
 }
 
 .tygor-sidebar-service {
-  padding: 4px 0;
   font-family: var(--tygor-font-mono);
   font-size: 11px;
   color: var(--tygor-text);
+}
+
+.tygor-sidebar-service-header {
+  display: flex;
+  align-items: center;
+  padding: 4px 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.tygor-sidebar-service-header:hover {
+  color: var(--tygor-accent-dark);
+}
+
+.tygor-sidebar-service-toggle {
+  width: 12px;
+  font-size: 8px;
+  color: var(--tygor-text-hint);
+}
+
+.tygor-sidebar-service-name {
+  font-weight: 500;
+}
+
+.tygor-sidebar-service-count {
+  color: var(--tygor-text-hint);
+  font-size: 10px;
+  margin-left: 4px;
+  font-weight: 400;
+}
+
+.tygor-sidebar-endpoints {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 4px 0;
+}
+
+.tygor-sidebar-endpoint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  font-size: 11px;
+}
+
+.tygor-sidebar-endpoint-verb {
+  font-size: 8px;
+  font-weight: 600;
+  padding: 1px 4px;
+  border-radius: 2px;
+  height: fit-content;
+}
+
+.tygor-sidebar-endpoint-verb--query {
+  background: rgba(34, 197, 94, 0.15);
+  color: #16a34a;
+}
+
+.tygor-sidebar-endpoint-verb--exec {
+  background: rgba(251, 146, 60, 0.15);
+  color: #c2410c;
+}
+
+.tygor-sidebar-endpoint-sig {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  color: var(--tygor-text);
+}
+
+.tygor-sidebar-endpoint-res {
+  color: var(--tygor-text-muted);
 }
 
 /* ============================================
@@ -537,6 +621,7 @@
 
 .tygor-alert-icon {
   font-size: 14px;
+  user-select: none;
 }
 
 .tygor-alert-prefix {
@@ -678,8 +763,15 @@
   border-bottom: 1px solid var(--tygor-border);
 }
 
-.tygor-pane--drag-target {
-  border-top: 2px solid var(--tygor-accent);
+.tygor-pane--dragging {
+  opacity: 0.5;
+}
+
+.tygor-pane-drop-end {
+  height: 8px;
+  margin: -4px 0;
+  position: relative;
+  z-index: 1;
 }
 
 .tygor-pane-header {

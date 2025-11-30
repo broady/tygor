@@ -15,16 +15,15 @@ Add the plugin to your Vite config:
 ```typescript
 import { defineConfig } from "vite";
 import { tygorDev } from "@tygor/vite-plugin";
-import { registry } from "./src/rpc/manifest";
 
 export default defineConfig({
   plugins: [
     tygorDev({
+      prebuild: "go run . -gen -out ./client/src/rpc",
       build: "go build -o ./tmp/server .",
       start: (port) => ({
         cmd: `./tmp/server -addr=:${port}`,
       }),
-      manifest: registry,
     }),
   ],
 });
@@ -35,7 +34,7 @@ export default defineConfig({
 - **Hot reload**: Watches Go files and rebuilds/restarts the server on changes
 - **Zero-downtime**: Starts new server on different port before swapping
 - **Error overlay**: Shows build and runtime errors in-browser
-- **Auto proxy**: Derives API routes from tygor manifest automatically
+- **Auto proxy**: Derives API routes from discovery.json automatically
 - **Devtools sidebar**: Expandable panel showing server status and RPC errors
 - **Watchdog**: Automatically restarts crashed servers
 
@@ -47,8 +46,8 @@ export default defineConfig({
 | `build` | `string \| string[]` | - | Build command (e.g., `go build -o ./tmp/server .`) |
 | `prebuild` | `string \| string[]` | - | Command to run before build (e.g., codegen) |
 | `buildOutput` | `string` | - | Path to build output (creates parent directory) |
-| `manifest` | `TygorRegistry` | - | Tygor manifest for auto-deriving proxy paths |
-| `proxy` | `string[]` | - | Additional proxy path prefixes (e.g., `/health`, `/static`) |
+| `rpcDir` | `string` | `'./src/rpc'` | Directory containing generated RPC files (for discovery.json and proxy paths) |
+| `proxy` | `string[]` | - | Proxy path prefixes (auto-derived from discovery.json if not specified) |
 | `watch` | `string[]` | `['**/*.go']` | Glob patterns to watch |
 | `ignore` | `string[]` | `['node_modules', '.git', 'tmp', 'dist']` | Patterns to ignore |
 | `health` | `string \| false` | `false` | Health check endpoint (false = TCP probe) |
@@ -87,20 +86,43 @@ Build and runtime errors are displayed in an overlay injected into your app:
 
 The devtools UI uses Shadow DOM for style isolation.
 
+## API Discovery
+
+The plugin serves your API schema at `/__tygor/discovery` for runtime introspection. This enables devtools and API browsers to display your services and types.
+
+**Setup:**
+
+1. Enable discovery in your Go app's code generation:
+```go
+tygorgen.FromApp(app).
+    WithDiscovery().  // Generates discovery.json
+    ToDir("./client/src/rpc")
+```
+
+2. The plugin reads `discovery.json` from `rpcDir` (default: `./src/rpc`) and serves it at `/__tygor/discovery`.
+
+3. Fetch the schema in your client:
+```typescript
+const schema = await fetch("/__tygor/discovery").then(r => r.json());
+// schema.Services - array of services with endpoints
+// schema.Types - array of type definitions
+```
+
+The devtools sidebar automatically uses this endpoint to display registered services.
+
 ## Proxy Behavior
 
-When a `manifest` is provided, the plugin automatically proxies requests to your Go server based on service names:
+The plugin automatically reads `discovery.json` from `rpcDir` and proxies requests based on service names:
 
 ```typescript
-// If manifest contains paths like /Users/Get, /Tasks/List
+// If discovery.json contains services like "Users", "Tasks"
 // Plugin proxies all requests starting with /Users, /Tasks
 ```
 
-Use `proxy` to add additional paths beyond those derived from the manifest:
+Use `proxy` to override auto-detection or add paths not in your schema:
 
 ```typescript
 tygorDev({
-  manifest: registry,
   proxy: ["/health", "/static", "/uploads"],
   // ...
 })
