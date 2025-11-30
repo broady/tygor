@@ -7,20 +7,20 @@ func TestServiceDescriptor(t *testing.T) {
 		Name: "Users",
 		Endpoints: []EndpointDescriptor{
 			{
-				Name:       "Create",
-				FullName:   "Users.Create",
-				HTTPMethod: "POST",
-				Path:       "/Users/Create",
-				Request:    Ref("CreateUserRequest", "api"),
-				Response:   Ref("User", "api"),
+				Name:      "Create",
+				FullName:  "Users.Create",
+				Primitive: "exec",
+				Path:      "/Users/Create",
+				Request:   Ref("CreateUserRequest", "api"),
+				Response:  Ref("User", "api"),
 			},
 			{
-				Name:       "Get",
-				FullName:   "Users.Get",
-				HTTPMethod: "GET",
-				Path:       "/Users/Get",
-				Request:    Ref("GetUserRequest", "api"),
-				Response:   Ref("User", "api"),
+				Name:      "Get",
+				FullName:  "Users.Get",
+				Primitive: "query",
+				Path:      "/Users/Get",
+				Request:   Ref("GetUserRequest", "api"),
+				Response:  Ref("User", "api"),
 			},
 		},
 		Documentation: Documentation{Summary: "User management service"},
@@ -39,12 +39,12 @@ func TestServiceDescriptor(t *testing.T) {
 
 func TestEndpointDescriptor_POST(t *testing.T) {
 	ep := EndpointDescriptor{
-		Name:       "Create",
-		FullName:   "Users.Create",
-		HTTPMethod: "POST",
-		Path:       "/Users/Create",
-		Request:    Ref("CreateUserRequest", "api"),
-		Response:   Ref("User", "api"),
+		Name:      "Create",
+		FullName:  "Users.Create",
+		Primitive: "exec",
+		Path:      "/Users/Create",
+		Request:   Ref("CreateUserRequest", "api"),
+		Response:  Ref("User", "api"),
 		Documentation: Documentation{
 			Summary: "Create a new user",
 			Body:    "Create a new user with the given details.",
@@ -57,8 +57,8 @@ func TestEndpointDescriptor_POST(t *testing.T) {
 	if ep.FullName != "Users.Create" {
 		t.Errorf("EndpointDescriptor.FullName = %q, want Users.Create", ep.FullName)
 	}
-	if ep.HTTPMethod != "POST" {
-		t.Errorf("EndpointDescriptor.HTTPMethod = %q, want POST", ep.HTTPMethod)
+	if ep.Primitive != "exec" {
+		t.Errorf("EndpointDescriptor.Primitive = %q, want exec", ep.Primitive)
 	}
 	if ep.Path != "/Users/Create" {
 		t.Errorf("EndpointDescriptor.Path = %q, want /Users/Create", ep.Path)
@@ -73,16 +73,16 @@ func TestEndpointDescriptor_POST(t *testing.T) {
 
 func TestEndpointDescriptor_GET(t *testing.T) {
 	ep := EndpointDescriptor{
-		Name:       "List",
-		FullName:   "Posts.List",
-		HTTPMethod: "GET",
-		Path:       "/Posts/List",
-		Request:    Ref("ListPostsParams", "api"),
-		Response:   Slice(Ref("Post", "api")),
+		Name:      "List",
+		FullName:  "Posts.List",
+		Primitive: "query",
+		Path:      "/Posts/List",
+		Request:   Ref("ListPostsParams", "api"),
+		Response:  Slice(Ref("Post", "api")),
 	}
 
-	if ep.HTTPMethod != "GET" {
-		t.Errorf("EndpointDescriptor.HTTPMethod = %q, want GET", ep.HTTPMethod)
+	if ep.Primitive != "query" {
+		t.Errorf("EndpointDescriptor.Primitive = %q, want query", ep.Primitive)
 	}
 	if ep.Response.Kind() != KindArray {
 		t.Errorf("EndpointDescriptor.Response.Kind() = %v, want KindArray", ep.Response.Kind())
@@ -92,12 +92,12 @@ func TestEndpointDescriptor_GET(t *testing.T) {
 func TestEndpointDescriptor_NilRequest(t *testing.T) {
 	// Endpoints with no request parameters have nil Request
 	ep := EndpointDescriptor{
-		Name:       "Health",
-		FullName:   "System.Health",
-		HTTPMethod: "GET",
-		Path:       "/System/Health",
-		Request:    nil,
-		Response:   Ref("HealthResponse", "api"),
+		Name:      "Health",
+		FullName:  "System.Health",
+		Primitive: "query",
+		Path:      "/System/Health",
+		Request:   nil,
+		Response:  Ref("HealthResponse", "api"),
 	}
 
 	if ep.Request != nil {
@@ -108,12 +108,12 @@ func TestEndpointDescriptor_NilRequest(t *testing.T) {
 func TestEndpointDescriptor_VoidResponse(t *testing.T) {
 	// Endpoints returning void use *struct{}
 	ep := EndpointDescriptor{
-		Name:       "Delete",
-		FullName:   "Users.Delete",
-		HTTPMethod: "POST",
-		Path:       "/Users/Delete",
-		Request:    Ref("DeleteUserRequest", "api"),
-		Response:   Ptr(Empty()), // *struct{} -> null on wire
+		Name:      "Delete",
+		FullName:  "Users.Delete",
+		Primitive: "exec",
+		Path:      "/Users/Delete",
+		Request:   Ref("DeleteUserRequest", "api"),
+		Response:  Ptr(Empty()), // *struct{} -> null on wire
 	}
 
 	if ep.Response.Kind() != KindPtr {

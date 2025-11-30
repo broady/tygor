@@ -6,10 +6,10 @@ import "reflect"
 
 // MethodMetadata holds runtime metadata for a registered service method.
 type MethodMetadata struct {
-	Name       string
-	HTTPMethod string
-	Request    reflect.Type
-	Response   reflect.Type
+	Name      string
+	Primitive string // "query", "exec", "stream"
+	Request   reflect.Type
+	Response  reflect.Type
 }
 
 // RouteMap maps route names to their metadata.

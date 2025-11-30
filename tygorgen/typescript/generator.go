@@ -413,6 +413,11 @@ func (g *TypeScriptGenerator) generateManifest(ctx context.Context, schema *ir.S
 		buf.WriteString(resType)
 		buf.WriteString(";\n")
 
+		// Primitive field for stream endpoints
+		if endpoint.Primitive == "stream" {
+			buf.WriteString("    primitive: \"stream\";\n")
+		}
+
 		buf.WriteString("  };\n")
 	}
 
@@ -422,8 +427,8 @@ func (g *TypeScriptGenerator) generateManifest(ctx context.Context, schema *ir.S
 	// Generate metadata constant
 	buf.WriteString("const metadata = {\n")
 	for _, endpoint := range endpoints {
-		buf.WriteString(fmt.Sprintf("  %q: { method: %q, path: %q },\n",
-			endpoint.FullName, endpoint.HTTPMethod, endpoint.Path))
+		buf.WriteString(fmt.Sprintf("  %q: { path: %q, primitive: %q },\n",
+			endpoint.FullName, endpoint.Path, endpoint.Primitive))
 	}
 	buf.WriteString("} as const;\n")
 	buf.WriteString("\n")

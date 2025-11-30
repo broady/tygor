@@ -145,12 +145,12 @@ func TestSchema_Full(t *testing.T) {
 		Name: "Users",
 		Endpoints: []EndpointDescriptor{
 			{
-				Name:       "Get",
-				FullName:   "Users.Get",
-				HTTPMethod: "GET",
-				Path:       "/Users/Get",
-				Request:    Ref("GetUserRequest", "api"),
-				Response:   Ref("User", "api"),
+				Name:      "Get",
+				FullName:  "Users.Get",
+				Primitive: "query",
+				Path:      "/Users/Get",
+				Request:   Ref("GetUserRequest", "api"),
+				Response:  Ref("User", "api"),
 			},
 		},
 	})
@@ -207,20 +207,20 @@ func TestSchema_Validate_ValidSchema(t *testing.T) {
 		Name: "Users",
 		Endpoints: []EndpointDescriptor{
 			{
-				Name:       "Create",
-				FullName:   "Users.Create",
-				HTTPMethod: "POST",
-				Path:       "/Users/Create",
-				Request:    Ref("CreateUserRequest", "api"),
-				Response:   Ref("User", "api"),
+				Name:      "Create",
+				FullName:  "Users.Create",
+				Primitive: "exec",
+				Path:      "/Users/Create",
+				Request:   Ref("CreateUserRequest", "api"),
+				Response:  Ref("User", "api"),
 			},
 			{
-				Name:       "List",
-				FullName:   "Users.List",
-				HTTPMethod: "GET",
-				Path:       "/Users/List",
-				Request:    nil, // nil request is valid
-				Response:   Slice(Ref("User", "api")),
+				Name:      "List",
+				FullName:  "Users.List",
+				Primitive: "query",
+				Path:      "/Users/List",
+				Request:   nil, // nil request is valid
+				Response:  Slice(Ref("User", "api")),
 			},
 		},
 	})
@@ -244,12 +244,12 @@ func TestSchema_Validate_MissingTypeReference(t *testing.T) {
 		Name: "Users",
 		Endpoints: []EndpointDescriptor{
 			{
-				Name:       "Create",
-				FullName:   "Users.Create",
-				HTTPMethod: "POST",
-				Path:       "/Users/Create",
-				Request:    Ref("CreateUserRequest", "api"), // Missing type
-				Response:   Ref("User", "api"),              // Missing type
+				Name:      "Create",
+				FullName:  "Users.Create",
+				Primitive: "exec",
+				Path:      "/Users/Create",
+				Request:   Ref("CreateUserRequest", "api"), // Missing type
+				Response:  Ref("User", "api"),              // Missing type
 			},
 		},
 	})
@@ -284,20 +284,20 @@ func TestSchema_Validate_DuplicateEndpointName(t *testing.T) {
 		Name: "Users",
 		Endpoints: []EndpointDescriptor{
 			{
-				Name:       "Create",
-				FullName:   "Users.Create",
-				HTTPMethod: "POST",
-				Path:       "/Users/Create",
-				Request:    String(),
-				Response:   String(),
+				Name:      "Create",
+				FullName:  "Users.Create",
+				Primitive: "exec",
+				Path:      "/Users/Create",
+				Request:   String(),
+				Response:  String(),
 			},
 			{
-				Name:       "Create", // Duplicate name in same service
-				FullName:   "Users.Create",
-				HTTPMethod: "PUT",
-				Path:       "/Users/Create",
-				Request:    String(),
-				Response:   String(),
+				Name:      "Create", // Duplicate name in same service
+				FullName:  "Users.Create",
+				Primitive: "exec",
+				Path:      "/Users/Create",
+				Request:   String(),
+				Response:  String(),
 			},
 		},
 	})
@@ -332,11 +332,11 @@ func TestSchema_Validate_DuplicateEndpointAcrossServices(t *testing.T) {
 		Name: "Users",
 		Endpoints: []EndpointDescriptor{
 			{
-				Name:       "Create",
-				FullName:   "Users.Create",
-				HTTPMethod: "POST",
-				Path:       "/Users/Create",
-				Response:   String(),
+				Name:      "Create",
+				FullName:  "Users.Create",
+				Primitive: "exec",
+				Path:      "/Users/Create",
+				Response:  String(),
 			},
 		},
 	})
@@ -345,11 +345,11 @@ func TestSchema_Validate_DuplicateEndpointAcrossServices(t *testing.T) {
 		Name: "Posts",
 		Endpoints: []EndpointDescriptor{
 			{
-				Name:       "Create", // Same name, different service - should be OK
-				FullName:   "Posts.Create",
-				HTTPMethod: "POST",
-				Path:       "/Posts/Create",
-				Response:   String(),
+				Name:      "Create", // Same name, different service - should be OK
+				FullName:  "Posts.Create",
+				Primitive: "exec",
+				Path:      "/Posts/Create",
+				Response:  String(),
 			},
 		},
 	})
@@ -372,11 +372,11 @@ func TestSchema_Validate_InvalidFullName(t *testing.T) {
 		Name: "Users",
 		Endpoints: []EndpointDescriptor{
 			{
-				Name:       "Create",
-				FullName:   "Wrong.Name", // Should be "Users.Create"
-				HTTPMethod: "POST",
-				Path:       "/Users/Create",
-				Response:   String(),
+				Name:      "Create",
+				FullName:  "Wrong.Name", // Should be "Users.Create"
+				Primitive: "exec",
+				Path:      "/Users/Create",
+				Response:  String(),
 			},
 		},
 	})
@@ -407,11 +407,11 @@ func TestSchema_Validate_InvalidPath(t *testing.T) {
 		Name: "Users",
 		Endpoints: []EndpointDescriptor{
 			{
-				Name:       "Create",
-				FullName:   "Users.Create",
-				HTTPMethod: "POST",
-				Path:       "/api/users/create", // Should be "/Users/Create"
-				Response:   String(),
+				Name:      "Create",
+				FullName:  "Users.Create",
+				Primitive: "exec",
+				Path:      "/api/users/create", // Should be "/Users/Create"
+				Response:  String(),
 			},
 		},
 	})
@@ -443,19 +443,19 @@ func TestSchema_Validate_MultipleErrors(t *testing.T) {
 		Name: "Users",
 		Endpoints: []EndpointDescriptor{
 			{
-				Name:       "Create",
-				FullName:   "Wrong.Create", // Invalid FullName
-				HTTPMethod: "POST",
-				Path:       "/wrong/path",         // Invalid Path
-				Request:    Ref("Missing", "api"), // Missing type
-				Response:   Ref("User", "api"),    // Missing type
+				Name:      "Create",
+				FullName:  "Wrong.Create", // Invalid FullName
+				Primitive: "exec",
+				Path:      "/wrong/path",         // Invalid Path
+				Request:   Ref("Missing", "api"), // Missing type
+				Response:  Ref("User", "api"),    // Missing type
 			},
 			{
-				Name:       "Create", // Duplicate name
-				FullName:   "Users.Create",
-				HTTPMethod: "PUT",
-				Path:       "/Users/Create",
-				Response:   String(),
+				Name:      "Create", // Duplicate name
+				FullName:  "Users.Create",
+				Primitive: "exec",
+				Path:      "/Users/Create",
+				Response:  String(),
 			},
 		},
 	})
@@ -485,32 +485,32 @@ func TestSchema_Validate_NestedTypeReferences(t *testing.T) {
 		Name: "Users",
 		Endpoints: []EndpointDescriptor{
 			{
-				Name:       "GetArray",
-				FullName:   "Users.GetArray",
-				HTTPMethod: "GET",
-				Path:       "/Users/GetArray",
-				Response:   Slice(Ref("Missing", "api")), // Missing type in array
+				Name:      "GetArray",
+				FullName:  "Users.GetArray",
+				Primitive: "query",
+				Path:      "/Users/GetArray",
+				Response:  Slice(Ref("Missing", "api")), // Missing type in array
 			},
 			{
-				Name:       "GetMap",
-				FullName:   "Users.GetMap",
-				HTTPMethod: "GET",
-				Path:       "/Users/GetMap",
-				Response:   Map(String(), Ref("Missing", "api")), // Missing type in map value
+				Name:      "GetMap",
+				FullName:  "Users.GetMap",
+				Primitive: "query",
+				Path:      "/Users/GetMap",
+				Response:  Map(String(), Ref("Missing", "api")), // Missing type in map value
 			},
 			{
-				Name:       "GetPtr",
-				FullName:   "Users.GetPtr",
-				HTTPMethod: "GET",
-				Path:       "/Users/GetPtr",
-				Response:   Ptr(Ref("Missing", "api")), // Missing type in pointer
+				Name:      "GetPtr",
+				FullName:  "Users.GetPtr",
+				Primitive: "query",
+				Path:      "/Users/GetPtr",
+				Response:  Ptr(Ref("Missing", "api")), // Missing type in pointer
 			},
 			{
-				Name:       "GetValid",
-				FullName:   "Users.GetValid",
-				HTTPMethod: "GET",
-				Path:       "/Users/GetValid",
-				Response:   Slice(Ref("User", "api")), // Valid reference
+				Name:      "GetValid",
+				FullName:  "Users.GetValid",
+				Primitive: "query",
+				Path:      "/Users/GetValid",
+				Response:  Slice(Ref("User", "api")), // Valid reference
 			},
 		},
 	})
@@ -568,12 +568,12 @@ func TestSchema_Validate_PrimitiveResponse(t *testing.T) {
 		Name: "Math",
 		Endpoints: []EndpointDescriptor{
 			{
-				Name:       "Add",
-				FullName:   "Math.Add",
-				HTTPMethod: "POST",
-				Path:       "/Math/Add",
-				Request:    Slice(Int(64)),
-				Response:   Int(64),
+				Name:      "Add",
+				FullName:  "Math.Add",
+				Primitive: "exec",
+				Path:      "/Math/Add",
+				Request:   Slice(Int(64)),
+				Response:  Int(64),
 			},
 		},
 	})
@@ -613,11 +613,11 @@ func TestSchema_Validate_UnionTypeReferences(t *testing.T) {
 		Name: "Users",
 		Endpoints: []EndpointDescriptor{
 			{
-				Name:       "Get",
-				FullName:   "Users.Get",
-				HTTPMethod: "GET",
-				Path:       "/Users/Get",
-				Response:   Union(Ref("User", "api"), Ref("Missing", "api")),
+				Name:      "Get",
+				FullName:  "Users.Get",
+				Primitive: "query",
+				Path:      "/Users/Get",
+				Response:  Union(Ref("User", "api"), Ref("Missing", "api")),
 			},
 		},
 	})
@@ -649,11 +649,11 @@ func TestSchema_Validate_TypeParameterConstraint(t *testing.T) {
 		Name: "Generic",
 		Endpoints: []EndpointDescriptor{
 			{
-				Name:       "Process",
-				FullName:   "Generic.Process",
-				HTTPMethod: "POST",
-				Path:       "/Generic/Process",
-				Response:   TypeParam("T", Ref("MissingConstraint", "api")),
+				Name:      "Process",
+				FullName:  "Generic.Process",
+				Primitive: "exec",
+				Path:      "/Generic/Process",
+				Response:  TypeParam("T", Ref("MissingConstraint", "api")),
 			},
 		},
 	})
@@ -680,11 +680,11 @@ func TestSchema_Validate_TypeParameterNoConstraint(t *testing.T) {
 		Name: "Generic",
 		Endpoints: []EndpointDescriptor{
 			{
-				Name:       "Process",
-				FullName:   "Generic.Process",
-				HTTPMethod: "POST",
-				Path:       "/Generic/Process",
-				Response:   TypeParam("T", nil), // nil constraint is valid
+				Name:      "Process",
+				FullName:  "Generic.Process",
+				Primitive: "exec",
+				Path:      "/Generic/Process",
+				Response:  TypeParam("T", nil), // nil constraint is valid
 			},
 		},
 	})

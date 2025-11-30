@@ -170,7 +170,15 @@ function emitRpcError(service: string, method: string, code: string, message: st
 
 export interface ServiceRegistry<Manifest extends Record<string, any>> {
   manifest: Manifest;
-  metadata: Record<string, { method: string; path: string }>;
+  metadata: Record<string, { path: string; primitive: "query" | "exec" | "stream" }>;
+}
+
+/**
+ * Options for streaming requests.
+ */
+export interface StreamOptions {
+  /** AbortSignal to cancel the stream */
+  signal?: AbortSignal;
 }
 
 export function createClient<Manifest extends Record<string, any>>(
@@ -198,6 +206,26 @@ export function createClient<Manifest extends Record<string, any>>(
                 throw new Error(`Unknown service method: ${opId}`);
               }
 
+              // Streaming endpoints return AsyncIterable
+              if (meta.primitive === "stream") {
+                return (req: any, options?: StreamOptions) => {
+                  return createSSEStream(
+                    opId,
+                    service,
+                    method,
+                    meta,
+                    req,
+                    options,
+                    config,
+                    fetchFn,
+                    schemas,
+                    validateRequest,
+                    validateResponse
+                  );
+                };
+              }
+
+              // Unary endpoints return Promise
               return async (req: any) => {
                 // Request validation (before sending)
                 if (validateRequest && schemas?.[opId]?.request) {
@@ -212,15 +240,16 @@ export function createClient<Manifest extends Record<string, any>>(
 
                 const headers = config.headers ? config.headers() : {};
                 let url = (config.baseUrl || "") + meta.path;
+                const httpMethod = meta.primitive === "query" ? "GET" : "POST";
                 const options: RequestInit = {
-                  method: meta.method,
+                  method: httpMethod,
                   headers: {
                     ...headers,
                   },
                 };
 
-                // Methods that use query parameters (no body)
-                const usesQueryParams = meta.method === "GET" || meta.method === "HEAD";
+                // Query primitive uses query parameters (no body)
+                const usesQueryParams = meta.primitive === "query";
 
                 if (usesQueryParams) {
                   const params = new URLSearchParams();
@@ -314,17 +343,189 @@ export function createClient<Manifest extends Record<string, any>>(
   ) as Client<Manifest>;
 }
 
+/**
+ * Creates an AsyncIterable that streams SSE events from the server.
+ */
+function createSSEStream<T>(
+  opId: string,
+  service: string,
+  method: string,
+  meta: { path: string; primitive: "query" | "exec" | "stream" },
+  req: any,
+  options: StreamOptions | undefined,
+  config: ClientConfig,
+  fetchFn: FetchFunction,
+  schemas: SchemaMap | undefined,
+  validateRequest: boolean | undefined,
+  validateResponse: boolean | undefined
+): AsyncIterable<T> {
+  return {
+    [Symbol.asyncIterator](): AsyncIterator<T> {
+      let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+      let buffer = "";
+      let done = false;
+      let httpStatus = 0;
+
+      return {
+        async next(): Promise<IteratorResult<T>> {
+          // First call: establish connection
+          if (!reader) {
+            // Request validation (before sending)
+            if (validateRequest && schemas?.[opId]?.request) {
+              const schema = schemas[opId].request;
+              const result = await schema["~standard"].validate(req);
+              if (result.issues) {
+                const err = new ValidationError(opId, "request", result.issues);
+                emitRpcError(service, method, "validation_error", err.message);
+                throw err;
+              }
+            }
+
+            const headers = config.headers ? config.headers() : {};
+            const url = (config.baseUrl || "") + meta.path;
+            const fetchOptions: RequestInit = {
+              method: "POST", // stream primitive always uses POST
+              headers: {
+                ...headers,
+                "Content-Type": "application/json",
+                Accept: "text/event-stream",
+              },
+              body: JSON.stringify(req),
+              signal: options?.signal,
+            };
+
+            let res: globalThis.Response;
+            try {
+              res = await fetchFn(url, fetchOptions);
+            } catch (e) {
+              const msg = e instanceof Error ? e.message : "Network error";
+              emitRpcError(service, method, "network_error", msg);
+              throw new TransportError(msg, 0, e);
+            }
+
+            httpStatus = res.status;
+
+            // Check for non-SSE error response (validation, auth, etc.)
+            const contentType = res.headers.get("Content-Type") || "";
+            if (!contentType.includes("text/event-stream")) {
+              // Try to parse as JSON error
+              let rawBody = "";
+              try {
+                rawBody = await res.text();
+                const envelope = JSON.parse(rawBody);
+                if (envelope.error) {
+                  const code = envelope.error.code || "unknown";
+                  const msg = envelope.error.message || "Unknown error";
+                  emitRpcError(service, method, code, msg);
+                  throw new ServerError(code, msg, httpStatus, envelope.error.details);
+                }
+              } catch (e) {
+                if (e instanceof ServerError) throw e;
+                const msg = res.statusText || "Failed to establish stream";
+                emitRpcError(service, method, "transport_error", msg);
+                throw new TransportError(msg, httpStatus, undefined, rawBody.slice(0, 1000));
+              }
+            }
+
+            if (!res.body) {
+              throw new TransportError("Response body is null", httpStatus);
+            }
+
+            reader = res.body.getReader();
+          }
+
+          if (done) {
+            return { done: true, value: undefined as any };
+          }
+
+          const decoder = new TextDecoder();
+
+          // Read and parse SSE events
+          while (true) {
+            // Check for complete events in buffer
+            const eventEnd = buffer.indexOf("\n\n");
+            if (eventEnd !== -1) {
+              const eventText = buffer.slice(0, eventEnd);
+              buffer = buffer.slice(eventEnd + 2);
+
+              // Parse SSE event
+              const lines = eventText.split("\n");
+              for (const line of lines) {
+                if (line.startsWith("data: ")) {
+                  const data = line.slice(6);
+                  try {
+                    const envelope = JSON.parse(data) as Response<T>;
+
+                    // Check for error event
+                    if (envelope.error) {
+                      done = true;
+                      const code = envelope.error.code || "unknown";
+                      const msg = envelope.error.message || "Unknown error";
+                      emitRpcError(service, method, code, msg);
+                      throw new ServerError(code, msg, httpStatus, envelope.error.details);
+                    }
+
+                    // Response validation
+                    if (validateResponse && schemas?.[opId]?.response) {
+                      const schema = schemas[opId].response;
+                      const result = await schema["~standard"].validate(envelope.result);
+                      if (result.issues) {
+                        const err = new ValidationError(opId, "response", result.issues);
+                        emitRpcError(service, method, "validation_error", err.message);
+                        throw err;
+                      }
+                    }
+
+                    return { done: false, value: envelope.result as T };
+                  } catch (e) {
+                    if (e instanceof ServerError || e instanceof ValidationError) throw e;
+                    emitRpcError(service, method, "transport_error", "Failed to parse SSE event");
+                    throw new TransportError("Failed to parse SSE event", httpStatus, e, data);
+                  }
+                }
+              }
+            }
+
+            // Read more data
+            const { value, done: streamDone } = await reader.read();
+            if (streamDone) {
+              done = true;
+              return { done: true, value: undefined as any };
+            }
+
+            buffer += decoder.decode(value, { stream: true });
+          }
+        },
+
+        async return(): Promise<IteratorResult<T>> {
+          done = true;
+          if (reader) {
+            await reader.cancel();
+            reader = null;
+          }
+          return { done: true, value: undefined as any };
+        },
+      };
+    },
+  };
+}
+
 // Type helpers to transform the flat Manifest into a nested Client structure
 type ServiceName<K> = K extends `${infer S}.${string}` ? S : never;
-type MethodName<K> = K extends `${string}.${infer M}` ? M : never;
 
 type ServiceMethods<M, S extends string> = {
   [K in keyof M as K extends `${S}.${infer Method}` ? Method : never]: M[K] extends {
     req: infer Req;
     res: infer Res;
+    primitive: "stream";
   }
-    ? (req: Req) => Promise<Res>
-    : never;
+    ? (req: Req, options?: StreamOptions) => AsyncIterable<Res>
+    : M[K] extends {
+          req: infer Req;
+          res: infer Res;
+        }
+      ? (req: Req) => Promise<Res>
+      : never;
 };
 
 export type Client<M> = {

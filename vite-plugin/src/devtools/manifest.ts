@@ -18,9 +18,9 @@ export interface Manifest {
 }
 
 const metadata = {
-  "Devtools.Info": { method: "GET", path: "/Devtools/Info" },
-  "Devtools.Ping": { method: "GET", path: "/Devtools/Ping" },
-  "Devtools.Status": { method: "GET", path: "/Devtools/Status" },
+  "Devtools.Info": { path: "/Devtools/Info", primitive: "query" },
+  "Devtools.Ping": { path: "/Devtools/Ping", primitive: "query" },
+  "Devtools.Status": { path: "/Devtools/Status", primitive: "query" },
 } as const;
 
 export const registry = {

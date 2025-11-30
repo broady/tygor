@@ -188,8 +188,8 @@ func TestGenerate_WithHandlers(t *testing.T) {
 	if !strings.Contains(manifestStr, `"Users.Create"`) {
 		t.Error("manifest.ts missing Users.Create route")
 	}
-	if !strings.Contains(manifestStr, `method: "POST"`) {
-		t.Error("manifest.ts missing POST method")
+	if !strings.Contains(manifestStr, `primitive: "exec"`) {
+		t.Error("manifest.ts missing exec primitive")
 	}
 	if !strings.Contains(manifestStr, `path: "/Users/Create"`) {
 		t.Error("manifest.ts missing correct path")

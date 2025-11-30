@@ -165,21 +165,21 @@ func (f FieldDescriptor) MarshalJSON() ([]byte, error) {
 // MarshalJSON implements json.Marshaler for EndpointDescriptor.
 func (e EndpointDescriptor) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&struct {
-		Name       string         `json:"name"`
-		FullName   string         `json:"fullName"`
-		HTTPMethod string         `json:"httpMethod"`
-		Path       string         `json:"path"`
-		Request    TypeDescriptor `json:"request,omitempty"`
-		Response   TypeDescriptor `json:"response,omitempty"`
-		Doc        string         `json:"doc,omitempty"`
+		Name      string         `json:"name"`
+		FullName  string         `json:"fullName"`
+		Primitive string         `json:"primitive"`
+		Path      string         `json:"path"`
+		Request   TypeDescriptor `json:"request,omitempty"`
+		Response  TypeDescriptor `json:"response,omitempty"`
+		Doc       string         `json:"doc,omitempty"`
 	}{
-		Name:       e.Name,
-		FullName:   e.FullName,
-		HTTPMethod: e.HTTPMethod,
-		Path:       e.Path,
-		Request:    e.Request,
-		Response:   e.Response,
-		Doc:        e.Documentation.Summary,
+		Name:      e.Name,
+		FullName:  e.FullName,
+		Primitive: e.Primitive,
+		Path:      e.Path,
+		Request:   e.Request,
+		Response:  e.Response,
+		Doc:       e.Documentation.Summary,
 	})
 }
 

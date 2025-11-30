@@ -35,8 +35,8 @@ func TestExec(t *testing.T) {
 	if handler == nil {
 		t.Fatal("expected non-nil handler")
 	}
-	if handler.metadata().HTTPMethod != "POST" {
-		t.Errorf("expected default method POST, got %s", handler.metadata().HTTPMethod)
+	if handler.metadata().Primitive != "exec" {
+		t.Errorf("expected Primitive exec, got %s", handler.metadata().Primitive)
 	}
 }
 
@@ -46,8 +46,8 @@ func TestHandler_Method(t *testing.T) {
 	}
 
 	handler := Query(fn)
-	if handler.metadata().HTTPMethod != "GET" {
-		t.Errorf("expected method GET, got %s", handler.metadata().HTTPMethod)
+	if handler.metadata().Primitive != "query" {
+		t.Errorf("expected Primitive query, got %s", handler.metadata().Primitive)
 	}
 }
 
@@ -89,8 +89,8 @@ func TestHandler_Metadata(t *testing.T) {
 	handler := Query(fn).CacheControl(CacheConfig{MaxAge: 1 * time.Minute})
 	meta := handler.metadata()
 
-	if meta.HTTPMethod != "GET" {
-		t.Errorf("expected method GET, got %s", meta.HTTPMethod)
+	if meta.Primitive != "query" {
+		t.Errorf("expected Primitive query, got %s", meta.Primitive)
 	}
 	if handler.cacheConfig.MaxAge != 1*time.Minute {
 		t.Errorf("expected cache MaxAge 1m, got %v", handler.cacheConfig.MaxAge)

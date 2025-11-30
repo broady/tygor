@@ -7,6 +7,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/broady/tygor/internal"
 )
@@ -15,20 +16,48 @@ import (
 // It manages route registration, middleware, interceptors, and error handling.
 // Use Handler() to get an http.Handler for use with http.ListenAndServe.
 type App struct {
-	mu                 sync.RWMutex
-	routes             map[string]Endpoint
-	errorTransformer   ErrorTransformer
-	maskInternalErrors bool
-	interceptors       []UnaryInterceptor
-	middlewares        []func(http.Handler) http.Handler
-	logger             *slog.Logger
-	maxRequestBodySize uint64
+	mu                      sync.RWMutex
+	routes                  map[string]Endpoint
+	errorTransformer        ErrorTransformer
+	maskInternalErrors      bool
+	interceptors            []UnaryInterceptor
+	middlewares             []func(http.Handler) http.Handler
+	logger                  *slog.Logger
+	maxRequestBodySize      uint64
+	streamWriteTimeout      time.Duration
+	streamWriteTimeoutIsSet bool // distinguishes zero (disabled) from unset (use default)
+	streamHeartbeat         time.Duration
+	streamHeartbeatIsSet    bool // distinguishes zero (disabled) from unset (use default)
+}
+
+const (
+	// defaultStreamWriteTimeout is the default timeout for writing SSE events.
+	// If a write takes longer than this, the stream is closed to prevent
+	// goroutine leaks from stuck or slow clients.
+	defaultStreamWriteTimeout = 30 * time.Second
+
+	// defaultStreamHeartbeat is the default interval for sending SSE heartbeat comments.
+	// This keeps connections alive through proxies that have idle timeouts (typically 60s).
+	defaultStreamHeartbeat = 30 * time.Second
+)
+
+// primitiveToHTTPMethod maps tygor primitives to HTTP methods.
+func primitiveToHTTPMethod(primitive string) string {
+	switch primitive {
+	case "query":
+		return "GET"
+	case "exec", "stream":
+		return "POST"
+	default:
+		return "POST" // safe default
+	}
 }
 
 func NewApp() *App {
 	return &App{
 		routes:             make(map[string]Endpoint),
 		maxRequestBodySize: 1 << 20, // 1MB default
+		// streamWriteTimeout uses DefaultStreamWriteTimeout when not explicitly set
 	}
 }
 
@@ -82,6 +111,44 @@ func (a *App) WithLogger(logger *slog.Logger) *App {
 func (a *App) WithMaxRequestBodySize(size uint64) *App {
 	a.maxRequestBodySize = size
 	return a
+}
+
+// WithStreamWriteTimeout sets the default timeout for writing SSE events.
+// If a single event write takes longer than this, the stream is closed.
+// Individual handlers can override this with StreamHandler.WithWriteTimeout.
+//
+// Default is 30 seconds. Use 0 to disable (not recommended - risks goroutine leaks).
+func (a *App) WithStreamWriteTimeout(d time.Duration) *App {
+	a.streamWriteTimeout = d
+	a.streamWriteTimeoutIsSet = true
+	return a
+}
+
+// getStreamWriteTimeout returns the effective stream write timeout.
+func (a *App) getStreamWriteTimeout() time.Duration {
+	if a.streamWriteTimeoutIsSet {
+		return a.streamWriteTimeout
+	}
+	return defaultStreamWriteTimeout
+}
+
+// WithStreamHeartbeat sets the default interval for sending SSE heartbeat comments.
+// Heartbeats keep connections alive through proxies with idle timeouts.
+// Individual handlers can override this with StreamHandler.WithHeartbeat.
+//
+// Default is 30 seconds. Use 0 to disable heartbeats.
+func (a *App) WithStreamHeartbeat(d time.Duration) *App {
+	a.streamHeartbeat = d
+	a.streamHeartbeatIsSet = true
+	return a
+}
+
+// getStreamHeartbeat returns the effective stream heartbeat interval.
+func (a *App) getStreamHeartbeat() time.Duration {
+	if a.streamHeartbeatIsSet {
+		return a.streamHeartbeat
+	}
+	return defaultStreamHeartbeat
 }
 
 // Handler returns an http.Handler for use with http.ListenAndServe or other
@@ -156,10 +223,11 @@ func (a *App) serveHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Check HTTP Method
+	// Check HTTP Method based on primitive
 	meta := h.metadata()
-	if req.Method != meta.HTTPMethod {
-		writeError(w, Errorf(CodeMethodNotAllowed, "method %s not allowed, expected %s", req.Method, meta.HTTPMethod), a.logger)
+	expectedMethod := primitiveToHTTPMethod(meta.Primitive)
+	if req.Method != expectedMethod {
+		writeError(w, Errorf(CodeMethodNotAllowed, "method %s not allowed, expected %s", req.Method, expectedMethod), a.logger)
 		return
 	}
 
@@ -170,6 +238,8 @@ func (a *App) serveHTTP(w http.ResponseWriter, req *http.Request) {
 	ctx.interceptors = a.interceptors
 	ctx.logger = a.logger
 	ctx.maxRequestBodySize = a.maxRequestBodySize
+	ctx.streamWriteTimeout = a.getStreamWriteTimeout()
+	ctx.streamHeartbeat = a.getStreamHeartbeat()
 
 	// Execute handler
 	h.serveHTTP(ctx)
@@ -196,7 +266,7 @@ func (s *Service) Register(name string, handler Endpoint) {
 	// Type assert to internal handler interface
 	h, ok := handler.(endpointHandler)
 	if !ok {
-		panic("tygor: handler must be created with Exec() or Query()")
+		panic("tygor: handler must be created with Exec(), Query(), or Stream()")
 	}
 
 	key := s.name + "." + name

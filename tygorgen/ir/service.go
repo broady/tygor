@@ -20,8 +20,11 @@ type EndpointDescriptor struct {
 	// FullName is the qualified name: "ServiceName.EndpointName" (e.g., "Users.Create").
 	FullName string
 
-	// HTTPMethod is the HTTP verb: "GET", "POST", "PUT", "DELETE", "PATCH", "HEAD".
-	HTTPMethod string
+	// Primitive is the tygor communication primitive: "query", "exec", or "stream".
+	//   - "query": cacheable read (HTTP GET)
+	//   - "exec": mutation (HTTP POST)
+	//   - "stream": server-sent events (HTTP POST + SSE response)
+	Primitive string
 
 	// Path is the URL path: "/{ServiceName}/{EndpointName}".
 	// Example: "/Users/Create", "/News/List"
@@ -29,12 +32,13 @@ type EndpointDescriptor struct {
 
 	// Request describes the request payload type.
 	// Typically a ReferenceDescriptor pointing to a type in Schema.Types.
-	// For GET endpoints, fields become query parameters.
-	// For POST/PUT/PATCH endpoints, this is the JSON request body.
+	// For query endpoints, fields become query parameters.
+	// For exec/stream endpoints, this is the JSON request body.
 	// May be nil for endpoints with no request parameters.
 	Request TypeDescriptor
 
 	// Response describes the response payload type.
+	// For stream endpoints, this is the type of each streamed event.
 	// May be a ReferenceDescriptor, ArrayDescriptor, MapDescriptor, etc.
 	Response TypeDescriptor
 

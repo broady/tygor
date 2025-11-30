@@ -106,8 +106,8 @@ export interface Manifest {
 
 /** Runtime metadata for all RPC operations */
 const metadata = {
-  "News.List": { method: "GET", path: "/News/List" },
-  "News.Create": { method: "POST", path: "/News/Create" },
+  "News.List": { path: "/News/List", primitive: "query" },
+  "News.Create": { path: "/News/Create", primitive: "exec" },
 } as const;
 
 /** Registry combining type manifest and runtime metadata */
@@ -119,7 +119,8 @@ export const registry: ServiceRegistry<Manifest> = {
 
 **Requirements:**
 - `Manifest` interface MUST map operation IDs to their request/response types
-- `metadata` constant MUST provide runtime access to HTTP method and path
+- `metadata` constant MUST provide runtime access to path and primitive type
+- `primitive` field indicates the communication pattern: `"query"`, `"exec"`, or `"stream"`
 - `registry` object MUST combine the manifest type and metadata for client construction
 - Operation IDs MUST follow the format `"{Service}.{Method}"`
 
@@ -896,7 +897,7 @@ export interface Manifest {
 }
 
 const metadata = {
-  "News.List": { method: "GET", path: "/News/List" },
+  "News.List": { path: "/News/List", primitive: "query" },
 } as const;
 
 export const registry: ServiceRegistry<Manifest> = {

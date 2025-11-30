@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/broady/tygor/internal/tgrcontext"
 )
@@ -20,9 +21,9 @@ import (
 //	    context.Context
 //	    service, method string
 //	}
-//	func (c *testContext) Service() string              { return c.service }
-//	func (c *testContext) EndpointID() string           { return c.service + "." + c.method }
-//	func (c *testContext) HTTPRequest() *http.Request   { return nil }
+//	func (c *testContext) Service() string                 { return c.service }
+//	func (c *testContext) EndpointID() string              { return c.service + "." + c.method }
+//	func (c *testContext) HTTPRequest() *http.Request      { return nil }
 //	func (c *testContext) HTTPWriter() http.ResponseWriter { return nil }
 type Context interface {
 	context.Context
@@ -56,6 +57,8 @@ type rpcContext struct {
 	interceptors       []UnaryInterceptor
 	logger             *slog.Logger
 	maxRequestBodySize uint64
+	streamWriteTimeout time.Duration
+	streamHeartbeat    time.Duration
 }
 
 func (c *rpcContext) Service() string                 { return c.service }

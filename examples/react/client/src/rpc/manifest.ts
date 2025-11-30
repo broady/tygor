@@ -22,10 +22,10 @@ export interface Manifest {
 }
 
 const metadata = {
-  "System.Info": { method: "GET", path: "/System/Info" },
-  "Tasks.Create": { method: "POST", path: "/Tasks/Create" },
-  "Tasks.List": { method: "GET", path: "/Tasks/List" },
-  "Tasks.Toggle": { method: "POST", path: "/Tasks/Toggle" },
+  "System.Info": { path: "/System/Info", primitive: "query" },
+  "Tasks.Create": { path: "/Tasks/Create", primitive: "exec" },
+  "Tasks.List": { path: "/Tasks/List", primitive: "query" },
+  "Tasks.Toggle": { path: "/Tasks/Toggle", primitive: "exec" },
 } as const;
 
 export const registry = {

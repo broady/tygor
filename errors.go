@@ -115,6 +115,14 @@ func DefaultErrorTransformer(err error) *Error {
 		return NewError(CodeCanceled, "context canceled")
 	}
 
+	if errors.Is(err, ErrStreamClosed) {
+		return NewError(CodeCanceled, "stream closed")
+	}
+
+	if errors.Is(err, ErrWriteTimeout) {
+		return NewError(CodeDeadlineExceeded, "write timeout")
+	}
+
 	var valErrs validator.ValidationErrors
 	if errors.As(err, &valErrs) {
 		details := make(map[string]any)

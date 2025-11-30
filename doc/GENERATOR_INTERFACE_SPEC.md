@@ -1175,8 +1175,11 @@ type EndpointDescriptor struct {
     // FullName is the qualified name: "ServiceName.EndpointName" (e.g., "Users.Create").
     FullName string
 
-    // HTTPMethod is the HTTP verb: "GET", "POST", "PUT", "DELETE", "PATCH", "HEAD".
-    HTTPMethod string
+    // Primitive is the tygor communication primitive: "query", "exec", or "stream".
+    //   - "query": cacheable read (HTTP GET)
+    //   - "exec": mutation (HTTP POST)
+    //   - "stream": server-sent events (HTTP POST + SSE response)
+    Primitive string
 
     // Path is the URL path: "/{ServiceName}/{EndpointName}".
     // Example: "/Users/Create", "/News/List"
@@ -1184,11 +1187,12 @@ type EndpointDescriptor struct {
 
     // Request describes the request payload type.
     // Typically a ReferenceDescriptor pointing to a type in Schema.Types.
-    // For GET endpoints, fields become query parameters.
-    // For POST/PUT/PATCH endpoints, this is the JSON request body.
+    // For query endpoints, fields become query parameters.
+    // For exec/stream endpoints, this is the JSON request body.
     Request TypeDescriptor
 
     // Response describes the response payload type.
+    // For stream endpoints, this is the type of each streamed event.
     // May be a ReferenceDescriptor, ArrayDescriptor, MapDescriptor, etc.
     Response TypeDescriptor
 
@@ -1204,10 +1208,10 @@ type EndpointDescriptor struct {
 ```go
 // Example: An endpoint returning a User type
 endpoint := EndpointDescriptor{
-    Name:       "Get",
-    FullName:   "Users.Get",
-    HTTPMethod: "GET",
-    Path:       "/Users/Get",
+    Name:      "Get",
+    FullName:  "Users.Get",
+    Primitive: "query",
+    Path:      "/Users/Get",
     Request: &ReferenceDescriptor{
         Target: GoIdentifier{Name: "GetUserRequest", Package: "example.com/api"},
     },
@@ -1218,10 +1222,10 @@ endpoint := EndpointDescriptor{
 
 // For array responses, wrap in ArrayDescriptor:
 listEndpoint := EndpointDescriptor{
-    Name:       "List",
-    FullName:   "Users.List",
-    HTTPMethod: "GET",
-    Path:       "/Users/List",
+    Name:      "List",
+    FullName:  "Users.List",
+    Primitive: "query",
+    Path:      "/Users/List",
     Request: &ReferenceDescriptor{
         Target: GoIdentifier{Name: "ListUsersRequest", Package: "example.com/api"},
     },
@@ -1933,17 +1937,22 @@ Services without declared errors would continue using the generic protocol error
 
 ### C.2 Streaming Endpoints
 
-**Status**: Planned for future version
+**Status**: Implemented
 
-**Current State**: The specification supports request/response (Query/Exec) patterns only. The `HTTPMethod` field and type descriptor system are designed for single request/response exchanges.
+The `Primitive` field in `EndpointDescriptor` supports streaming via Server-Sent Events:
 
-**Future Extension**: A future version MAY add streaming support via:
+- `"query"`: Cacheable read (HTTP GET, single response)
+- `"exec"`: Mutation (HTTP POST, single response)
+- `"stream"`: Server-push events (HTTP POST request, SSE response stream)
 
-1. **New descriptor kinds**: `StreamDescriptor`, `ChannelDescriptor`, `ObservableDescriptor`
-2. **Operation type field**: `OperationType` ("query", "exec", "stream", "channel", "observable") alongside `HTTPMethod`
-3. **Transport protocol field**: `Transport` ("http", "websocket", "sse") to separate semantic patterns from wire protocols
+For stream endpoints, the `Response` type describes each individual event in the stream, not the stream itself. The client runtime handles the SSE protocol and exposes streams as `AsyncIterable<T>`.
 
-See the separate streaming extensions proposal for detailed design.
+**Future Extension**: Additional primitives may be added:
+
+- `"atom"`: Synchronized values (last-write-wins state sync)
+- `"channel"`: Bidirectional communication (WebSocket)
+
+These would follow the same pattern: `Primitive` indicates the semantic communication pattern, and the client/server derive the appropriate transport protocol.
 
 ## Appendix D: Design Rationale
 

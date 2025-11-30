@@ -33,6 +33,7 @@ func init() {
 // Implementations:
 //   - [*ExecHandler] - for POST requests (created with [Exec])
 //   - [*QueryHandler] - for GET requests (created with [Query])
+//   - [*StreamHandler] - for SSE streaming (created with [Stream])
 type Endpoint interface {
 	// Metadata returns route metadata for code generation.
 	// The return type is internal; this method is for use by tygorgen only.
@@ -234,9 +235,9 @@ func (h *ExecHandler[Req, Res]) Metadata() *internal.MethodMetadata {
 	var req Req
 	var res Res
 	return &internal.MethodMetadata{
-		HTTPMethod: "POST",
-		Request:    reflect.TypeOf(req),
-		Response:   reflect.TypeOf(res),
+		Primitive: "exec",
+		Request:   reflect.TypeOf(req),
+		Response:  reflect.TypeOf(res),
 	}
 }
 
@@ -245,31 +246,31 @@ func (h *QueryHandler[Req, Res]) Metadata() *internal.MethodMetadata {
 	var req Req
 	var res Res
 	return &internal.MethodMetadata{
-		HTTPMethod: "GET",
-		Request:    reflect.TypeOf(req),
-		Response:   reflect.TypeOf(res),
+		Primitive: "query",
+		Request:   reflect.TypeOf(req),
+		Response:  reflect.TypeOf(res),
 	}
 }
 
-// metadata returns the runtime metadata for the POST handler.
+// metadata returns the runtime metadata for the exec handler.
 func (h *ExecHandler[Req, Res]) metadata() *internal.MethodMetadata {
 	var req Req
 	var res Res
 	return &internal.MethodMetadata{
-		HTTPMethod: "POST",
-		Request:    reflect.TypeOf(req),
-		Response:   reflect.TypeOf(res),
+		Primitive: "exec",
+		Request:   reflect.TypeOf(req),
+		Response:  reflect.TypeOf(res),
 	}
 }
 
-// metadata returns the runtime metadata for the GET handler.
+// metadata returns the runtime metadata for the query handler.
 func (h *QueryHandler[Req, Res]) metadata() *internal.MethodMetadata {
 	var req Req
 	var res Res
 	return &internal.MethodMetadata{
-		HTTPMethod: "GET",
-		Request:    reflect.TypeOf(req),
-		Response:   reflect.TypeOf(res),
+		Primitive: "query",
+		Request:   reflect.TypeOf(req),
+		Response:  reflect.TypeOf(res),
 	}
 }
 

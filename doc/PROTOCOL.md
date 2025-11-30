@@ -317,8 +317,8 @@ export interface Manifest {
 }
 
 const metadata = {
-  "ServiceName.MethodName": { method: "GET", path: "/ServiceName/MethodName" },
-  "ServiceName.OtherMethod": { method: "POST", path: "/ServiceName/OtherMethod" },
+  "ServiceName.MethodName": { path: "/ServiceName/MethodName", primitive: "query" },
+  "ServiceName.OtherMethod": { path: "/ServiceName/OtherMethod", primitive: "exec" },
   // ... additional operations
 } as const;
 
