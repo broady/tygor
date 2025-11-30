@@ -24,6 +24,7 @@ export default defineConfig({
       start: (port) => ({
         cmd: `./tmp/server -addr=:${port}`,
       }),
+      rpcDir: "./client/src/rpc",
     }),
   ],
 });
