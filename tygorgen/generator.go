@@ -2,6 +2,7 @@ package tygorgen
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"sort"
@@ -98,6 +99,11 @@ type Config struct {
 	// Default (nil/true): generate types.ts. Set to false to only emit flavor outputs.
 	// When false with Zod flavor, types are exported via z.infer<typeof Schema>.
 	EmitTypes *bool
+
+	// EmitDiscovery controls whether discovery.json is generated.
+	// When true, outputs a JSON file containing the full IR schema for runtime introspection.
+	// This enables API browsers and tooling to introspect services and types.
+	EmitDiscovery bool
 }
 
 // GenerateTypes generates TypeScript types from Go types without a tygor app.
@@ -390,6 +396,17 @@ func Generate(app *tygor.App, cfg *Config) (*GenerateResult, error) {
 	// Collect generator warnings
 	for _, w := range tsResult.Warnings {
 		warnings = append(warnings, Warning{Code: w.Code, Message: w.Message})
+	}
+
+	// 7. Generate discovery.json if enabled
+	if cfg.EmitDiscovery {
+		discoveryJSON, err := json.MarshalIndent(schema, "", "  ")
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal discovery schema: %w", err)
+		}
+		if err := outputSink.WriteFile(ctx, "discovery.json", discoveryJSON); err != nil {
+			return nil, fmt.Errorf("failed to write discovery.json: %w", err)
+		}
 	}
 
 	// Build result

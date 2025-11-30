@@ -136,6 +136,13 @@ func (g *Generator) Packages(pkgs ...string) *Generator {
 	return g
 }
 
+// WithDiscovery enables discovery.json output.
+// The discovery document contains the full API schema for runtime introspection.
+func (g *Generator) WithDiscovery() *Generator {
+	g.cfg.EmitDiscovery = true
+	return g
+}
+
 // ToDir generates files to the specified directory.
 // This is a terminal operation that writes files to disk.
 func (g *Generator) ToDir(dir string) (*GenerateResult, error) {

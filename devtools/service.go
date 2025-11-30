@@ -93,32 +93,23 @@ type StatusRequest struct {
 	Initial bool `json:"initial,omitempty"`
 }
 
-// StatusResponse provides server status and service discovery.
+// StatusResponse provides server status.
+// For service discovery with type schemas, use Discovery.Describe instead.
 type StatusResponse struct {
 	// OK indicates the server is healthy.
 	OK bool `json:"ok"`
 	// Port is the server's listening port.
 	Port int `json:"port"`
-	// Services maps service names to their method names.
-	Services map[string][]string `json:"services"`
-	// RawrData contains encoded data blobs.
+	// RawrData contains encoded data blobs (sent on initial request).
 	RawrData []string `json:"rawrData,omitempty"`
 }
 
-// Status returns server status and registered services.
+// Status returns server status.
+// For service discovery, use Discovery.Describe instead.
 func (s *Service) Status(ctx context.Context, req *StatusRequest) (*StatusResponse, error) {
-	routes := s.app.Routes()
-	services := make(map[string][]string)
-	for key := range routes {
-		parts := strings.SplitN(key, ".", 2)
-		if len(parts) == 2 {
-			services[parts[0]] = append(services[parts[0]], parts[1])
-		}
-	}
 	resp := &StatusResponse{
-		OK:       true,
-		Port:     s.port,
-		Services: services,
+		OK:   true,
+		Port: s.port,
 	}
 	if req.Initial {
 		resp.RawrData = loadRawrData()

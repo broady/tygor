@@ -116,6 +116,9 @@ func main() {
 	// Register devtools service for vite plugin integration
 	devtools.New(app, parsePort(serverPort)).Register()
 
+	// Note: Discovery is served by Vite as a static file (./client/src/rpc/discovery.json)
+	// No need for a Go discovery service in fullstack apps!
+
 	system := app.Service("System")
 	system.Register("Kill", tygor.Exec(Kill))
 
@@ -133,6 +136,7 @@ func main() {
 		_, err := tygorgen.FromApp(app).
 			EnumStyle("union").
 			OptionalType("undefined").
+			WithDiscovery().
 			ToDir(*outDir)
 		if err != nil {
 			log.Fatalf("Generation failed: %v", err)
