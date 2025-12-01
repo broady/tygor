@@ -76,9 +76,9 @@ func TestCORS_SpecificOrigin(t *testing.T) {
 	})
 
 	cfg := &CORSConfig{
-		AllowedOrigins: []string{"http://example.com", "http://test.com"},
-		AllowedMethods: []string{"GET", "POST"},
-		AllowedHeaders: []string{"Content-Type"},
+		AllowOrigins: []string{"http://example.com", "http://test.com"},
+		AllowMethods: []string{"GET", "POST"},
+		AllowHeaders: []string{"Content-Type"},
 	}
 
 	corsHandler := CORS(cfg)(handler)
@@ -115,9 +115,9 @@ func TestCORS_NoOrigin(t *testing.T) {
 	})
 
 	cfg := &CORSConfig{
-		AllowedOrigins: []string{"http://example.com"},
-		AllowedMethods: []string{"GET"},
-		AllowedHeaders: []string{"Content-Type"},
+		AllowOrigins: []string{"http://example.com"},
+		AllowMethods: []string{"GET"},
+		AllowHeaders: []string{"Content-Type"},
 	}
 
 	corsHandler := CORS(cfg)(handler)
@@ -139,9 +139,9 @@ func TestCORS_Credentials(t *testing.T) {
 	})
 
 	cfg := &CORSConfig{
-		AllowedOrigins:   []string{"*"},
-		AllowedMethods:   []string{"GET"},
-		AllowedHeaders:   []string{"Content-Type"},
+		AllowOrigins:     []string{"*"},
+		AllowMethods:     []string{"GET"},
+		AllowHeaders:     []string{"Content-Type"},
 		AllowCredentials: true,
 	}
 
@@ -164,10 +164,10 @@ func TestCORS_MaxAge(t *testing.T) {
 	})
 
 	cfg := &CORSConfig{
-		AllowedOrigins: []string{"*"},
-		AllowedMethods: []string{"GET"},
-		AllowedHeaders: []string{"Content-Type"},
-		MaxAge:         3600,
+		AllowOrigins: []string{"*"},
+		AllowMethods: []string{"GET"},
+		AllowHeaders: []string{"Content-Type"},
+		MaxAge:       3600,
 	}
 
 	corsHandler := CORS(cfg)(handler)
@@ -183,16 +183,16 @@ func TestCORS_MaxAge(t *testing.T) {
 	}
 }
 
-func TestCORS_ExposedHeaders(t *testing.T) {
+func TestCORS_ExposeHeaders(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
 	cfg := &CORSConfig{
-		AllowedOrigins: []string{"*"},
-		AllowedMethods: []string{"GET"},
-		AllowedHeaders: []string{"Content-Type"},
-		ExposedHeaders: []string{"X-Custom-Header", "X-Another-Header"},
+		AllowOrigins:  []string{"*"},
+		AllowMethods:  []string{"GET"},
+		AllowHeaders:  []string{"Content-Type"},
+		ExposeHeaders: []string{"X-Custom-Header", "X-Another-Header"},
 	}
 
 	corsHandler := CORS(cfg)(handler)
@@ -209,15 +209,15 @@ func TestCORS_ExposedHeaders(t *testing.T) {
 	}
 }
 
-func TestCORS_EmptyAllowedOrigins(t *testing.T) {
+func TestCORS_EmptyAllowOrigins(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
 	cfg := &CORSConfig{
-		AllowedOrigins: []string{}, // Empty, should default to *
-		AllowedMethods: []string{"GET"},
-		AllowedHeaders: []string{"Content-Type"},
+		AllowOrigins: []string{}, // Empty, should default to *
+		AllowMethods: []string{"GET"},
+		AllowHeaders: []string{"Content-Type"},
 	}
 
 	corsHandler := CORS(cfg)(handler)
@@ -233,15 +233,15 @@ func TestCORS_EmptyAllowedOrigins(t *testing.T) {
 	}
 }
 
-func TestCORS_EmptyAllowedMethods(t *testing.T) {
+func TestCORS_EmptyAllowMethods(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
 	cfg := &CORSConfig{
-		AllowedOrigins: []string{"*"},
-		AllowedMethods: []string{}, // Empty, should use default
-		AllowedHeaders: []string{"Content-Type"},
+		AllowOrigins: []string{"*"},
+		AllowMethods: []string{}, // Empty, should use default
+		AllowHeaders: []string{"Content-Type"},
 	}
 
 	corsHandler := CORS(cfg)(handler)
@@ -258,15 +258,15 @@ func TestCORS_EmptyAllowedMethods(t *testing.T) {
 	}
 }
 
-func TestCORS_EmptyAllowedHeaders(t *testing.T) {
+func TestCORS_EmptyAllowHeaders(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
 	cfg := &CORSConfig{
-		AllowedOrigins: []string{"*"},
-		AllowedMethods: []string{"GET"},
-		AllowedHeaders: []string{}, // Empty, should use default
+		AllowOrigins: []string{"*"},
+		AllowMethods: []string{"GET"},
+		AllowHeaders: []string{}, // Empty, should use default
 	}
 
 	corsHandler := CORS(cfg)(handler)
@@ -313,9 +313,9 @@ func TestCORS_AllowedOriginNotWildcard(t *testing.T) {
 	})
 
 	cfg := &CORSConfig{
-		AllowedOrigins:   []string{"http://example.com"},
-		AllowedMethods:   []string{"GET"},
-		AllowedHeaders:   []string{"Content-Type"},
+		AllowOrigins:     []string{"http://example.com"},
+		AllowMethods:     []string{"GET"},
+		AllowHeaders:     []string{"Content-Type"},
 		AllowCredentials: false,
 	}
 
@@ -334,7 +334,7 @@ func TestCORS_AllowedOriginNotWildcard(t *testing.T) {
 }
 
 func TestCORS_WildcardWithCredentials(t *testing.T) {
-	// This test verifies that when AllowedOrigins is ["*"] AND AllowCredentials is true,
+	// This test verifies that when AllowOrigins is ["*"] AND AllowCredentials is true,
 	// the middleware echoes back the specific requesting origin instead of "*".
 	// This is required by the CORS spec, which forbids using Access-Control-Allow-Origin: *
 	// with Access-Control-Allow-Credentials: true.
@@ -343,9 +343,9 @@ func TestCORS_WildcardWithCredentials(t *testing.T) {
 	})
 
 	cfg := &CORSConfig{
-		AllowedOrigins:   []string{"*"},
-		AllowedMethods:   []string{"GET", "POST"},
-		AllowedHeaders:   []string{"Content-Type", "Authorization"},
+		AllowOrigins:     []string{"*"},
+		AllowMethods:     []string{"GET", "POST"},
+		AllowHeaders:     []string{"Content-Type", "Authorization"},
 		AllowCredentials: true,
 	}
 

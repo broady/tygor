@@ -8,22 +8,22 @@ import (
 
 // CORSConfig holds the configuration for CORS middleware.
 type CORSConfig struct {
-	// AllowedOrigins is a list of origins a cross-domain request can be executed from.
+	// AllowOrigins is a list of origins a cross-domain request can be executed from.
 	// If the list contains "*", all origins are allowed.
 	// Default: ["*"]
-	AllowedOrigins []string
+	AllowOrigins []string
 
-	// AllowedMethods is a list of methods the client is allowed to use.
+	// AllowMethods is a list of methods the client is allowed to use.
 	// Default: ["GET", "POST", "OPTIONS"]
-	AllowedMethods []string
+	AllowMethods []string
 
-	// AllowedHeaders is a list of headers the client is allowed to use.
+	// AllowHeaders is a list of headers the client is allowed to use.
 	// Default: ["Content-Type", "Authorization"]
-	AllowedHeaders []string
+	AllowHeaders []string
 
-	// ExposedHeaders indicates which headers are safe to expose.
+	// ExposeHeaders indicates which headers are safe to expose.
 	// Default: []
-	ExposedHeaders []string
+	ExposeHeaders []string
 
 	// AllowCredentials indicates whether the request can include credentials.
 	// Default: false
@@ -44,30 +44,30 @@ var CORSAllowAll *CORSConfig = nil
 func CORS(cfg *CORSConfig) func(http.Handler) http.Handler {
 	if cfg == nil {
 		cfg = &CORSConfig{
-			AllowedOrigins: []string{"*"},
-			AllowedMethods: []string{"GET", "POST", "OPTIONS"},
-			AllowedHeaders: []string{"Content-Type", "Authorization"},
+			AllowOrigins: []string{"*"},
+			AllowMethods: []string{"GET", "POST", "OPTIONS"},
+			AllowHeaders: []string{"Content-Type", "Authorization"},
 		}
 	}
 
-	allowedOrigins := cfg.AllowedOrigins
+	allowedOrigins := cfg.AllowOrigins
 	if len(allowedOrigins) == 0 {
 		allowedOrigins = []string{"*"}
 	}
 
-	allowedMethods := cfg.AllowedMethods
+	allowedMethods := cfg.AllowMethods
 	if len(allowedMethods) == 0 {
 		allowedMethods = []string{"GET", "POST", "OPTIONS"}
 	}
 
-	allowedHeaders := cfg.AllowedHeaders
+	allowedHeaders := cfg.AllowHeaders
 	if len(allowedHeaders) == 0 {
 		allowedHeaders = []string{"Content-Type", "Authorization"}
 	}
 
 	allowedMethodsStr := strings.Join(allowedMethods, ", ")
 	allowedHeadersStr := strings.Join(allowedHeaders, ", ")
-	exposedHeadersStr := strings.Join(cfg.ExposedHeaders, ", ")
+	exposedHeadersStr := strings.Join(cfg.ExposeHeaders, ", ")
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
