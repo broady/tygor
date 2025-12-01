@@ -223,8 +223,9 @@ func execImport(opts Options) (output []byte, err error) {
 	}
 
 	// Build with overlay, targeting the virtual runner directory
+	// Use -mod=mod to allow updating go.mod/go.sum if needed
 	binaryPath := filepath.Join(tmpDir, "runner")
-	buildCmd := exec.Command("go", "build", "-overlay", overlayFile, "-o", binaryPath, virtualRunnerDir)
+	buildCmd := exec.Command("go", "build", "-mod=mod", "-overlay", overlayFile, "-o", binaryPath, virtualRunnerDir)
 	buildCmd.Dir = opts.ModuleDir
 	buildCmd.Env = append(os.Environ(), "GOWORK=off")
 	if buildOut, err := buildCmd.CombinedOutput(); err != nil {
