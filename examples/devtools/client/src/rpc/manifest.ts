@@ -3,6 +3,18 @@
 import * as types from './types';
 
 export interface Manifest {
+  "Devtools.Info": {
+    req: Record<string, never>;
+    res: types.InfoResponse;
+  };
+  "Devtools.Ping": {
+    req: Record<string, never>;
+    res: types.PingResponse;
+  };
+  "Devtools.Status": {
+    req: types.StatusRequest;
+    res: types.StatusResponse;
+  };
   "System.Kill": {
     req: Record<string, never>;
     res: Record<string, never>;
@@ -26,6 +38,9 @@ export interface Manifest {
 }
 
 const metadata = {
+  "Devtools.Info": { path: "/Devtools/Info", primitive: "query" },
+  "Devtools.Ping": { path: "/Devtools/Ping", primitive: "query" },
+  "Devtools.Status": { path: "/Devtools/Status", primitive: "query" },
   "System.Kill": { path: "/System/Kill", primitive: "exec" },
   "Tasks.Create": { path: "/Tasks/Create", primitive: "exec" },
   "Tasks.List": { path: "/Tasks/List", primitive: "query" },

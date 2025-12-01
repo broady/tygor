@@ -12,7 +12,7 @@ export interface Manifest {
     res: types.GetSourceResponse;
   };
   "Devtools.GetStatus": {
-    req: Record<string, never>;
+    req: types.GetStatusRequest;
     res: types.GetStatusResponse;
   };
   "Devtools.Reload": {

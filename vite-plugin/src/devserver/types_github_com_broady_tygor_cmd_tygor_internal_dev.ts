@@ -35,11 +35,15 @@ export interface GetSourceResponse {
 }
 /** GetStatusRequest is the request for Devtools.GetStatus. */
 export interface GetStatusRequest {
+  /** Initial should be true on first request to receive one-time data. */
+  initial?: boolean;
 }
 /** GetStatusResponse returns the combined devtools status. */
 export interface GetStatusResponse {
   devtools: DevtoolsStatus;
   app?: AppStatus;
+  /** RawrData contains encoded data blobs (sent on initial request). */
+  rawrData?: string[];
 }
 /** ReloadRequest triggers a reload of discovery.json. */
 export interface ReloadRequest {

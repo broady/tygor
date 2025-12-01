@@ -2,14 +2,19 @@ package dev
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/broady/tygor"
 )
+
+//go:embed testdata/rawrdata
+var rawrData string
 
 type Cmd struct {
 	RPCDir string `help:"Directory containing generated RPC files." default:"./src/rpc" name:"rpc-dir"`
@@ -23,9 +28,13 @@ func (c *Cmd) Run() error {
 	}
 	app := NewApp(svc)
 
+	// Mount under /__tygor to avoid conflicts with user services
+	mux := http.NewServeMux()
+	mux.Handle("/__tygor/", http.StripPrefix("/__tygor", app.Handler()))
+
 	addr := fmt.Sprintf("localhost:%d", c.Port)
 	fmt.Printf("tygor dev listening on http://%s\n", addr)
-	return http.ListenAndServe(addr, app.Handler())
+	return http.ListenAndServe(addr, mux)
 }
 
 // NewApp creates a tygor App with the devtools service registered.
@@ -112,12 +121,17 @@ type AppStatus struct {
 }
 
 // GetStatusRequest is the request for Devtools.GetStatus.
-type GetStatusRequest struct{}
+type GetStatusRequest struct {
+	// Initial should be true on first request to receive one-time data.
+	Initial bool `json:"initial,omitempty"`
+}
 
 // GetStatusResponse returns the combined devtools status.
 type GetStatusResponse struct {
 	Devtools DevtoolsStatus `json:"devtools"`
 	App      *AppStatus     `json:"app,omitempty"`
+	// RawrData contains encoded data blobs (sent on initial request).
+	RawrData []string `json:"rawrData,omitempty"`
 }
 
 // DevtoolsStatus is the status of the devtools server itself.
@@ -128,13 +142,17 @@ type DevtoolsStatus struct {
 
 // GetStatus returns combined devtools and app status.
 func (s *Service) GetStatus(ctx context.Context, req *GetStatusRequest) (*GetStatusResponse, error) {
-	return &GetStatusResponse{
+	resp := &GetStatusResponse{
 		Devtools: DevtoolsStatus{
 			Status:  "ok",
 			Version: "0.1.0", // TODO: get from version package
 		},
 		App: s.appStatus,
-	}, nil
+	}
+	if req.Initial {
+		resp.RawrData = loadRawrData()
+	}
+	return resp, nil
 }
 
 // UpdateStatusRequest is sent by vite plugin to update app status.
@@ -165,4 +183,15 @@ func (s *Service) Reload(ctx context.Context, req *ReloadRequest) (*ReloadRespon
 	// For now, discovery is read on each request, so no action needed.
 	// Future: could notify connected clients via SSE.
 	return &ReloadResponse{}, nil
+}
+
+func loadRawrData() []string {
+	var data []string
+	for _, line := range strings.Split(rawrData, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			data = append(data, line)
+		}
+	}
+	return data
 }

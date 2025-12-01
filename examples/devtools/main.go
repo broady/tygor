@@ -8,21 +8,14 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 	"sync"
 	"time"
 
 	"github.com/broady/tygor"
-	"github.com/broady/tygor/devtools"
 	"github.com/broady/tygor/tygorgen"
 
 	"github.com/broady/tygor/examples/devtools/api"
 )
-
-func parsePort(s string) int {
-	p, _ := strconv.Atoi(s)
-	return p
-}
 
 // In-memory task store
 var (
@@ -114,11 +107,8 @@ func main() {
 	// No CORS needed - Vite proxies API requests in dev, same-origin in prod
 	app := tygor.NewApp()
 
-	// Register devtools service for vite plugin integration
-	devtools.New(app, parsePort(serverPort)).Register()
-
-	// Note: Discovery is served by Vite as a static file (./src/rpc/discovery.json)
-	// No need for a Go discovery service in fullstack apps!
+	// Note: Devtools functionality is now provided by `tygor dev` - no need to
+	// register anything in the user's app! Discovery is served by tygor dev.
 
 	system := app.Service("System")
 	system.Register("Kill", tygor.Exec(Kill))

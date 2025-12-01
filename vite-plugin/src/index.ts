@@ -8,7 +8,7 @@ import type { Plugin, ViteDevServer } from "vite";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import pc from "picocolors";
 import { createClient } from "@tygor/client";
-import { registry as devtoolsRegistry } from "./devtools/manifest.js";
+import { registry as devserverRegistry } from "./devserver/manifest.js";
 import { clientBundle } from "./generated/client-bundle.js";
 
 export interface TygorDevOptions {
@@ -38,9 +38,17 @@ export interface TygorDevOptions {
   workdir?: string;
   /** Proxy path prefixes to route to Go server (auto-derived from discovery.json if not specified) */
   proxy?: string[];
+  /** Override the tygor command (default: auto-detected local or 'go run ...@latest') */
+  tygorCommand?: string | string[];
 }
 
 interface ServerState {
+  process: ChildProcess | null;
+  port: number;
+  ready: boolean;
+}
+
+interface DevServerState {
   process: ChildProcess | null;
   port: number;
   ready: boolean;
@@ -67,22 +75,126 @@ async function findPort(startPort: number): Promise<number> {
   });
 }
 
+/** Get the tygor command - uses option, local during development, or go run for published */
+function getTygorCommand(override?: string | string[]): string[] {
+  // Use explicit override if provided
+  if (override) {
+    return Array.isArray(override) ? override : override.split(" ");
+  }
+  // Check if we're in the tygor repo (development mode)
+  // Walk up from cwd looking for cmd/tygor (handles examples/ subdirs)
+  let dir = process.cwd();
+  for (let i = 0; i < 5; i++) {
+    const tygorCmd = resolve(dir, "cmd/tygor");
+    if (existsSync(tygorCmd)) {
+      return ["go", "run", tygorCmd];
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break; // reached root
+    dir = parent;
+  }
+  // Published mode - use go run with version
+  // TODO: inject version at build time
+  return ["go", "run", "github.com/broady/tygor/cmd/tygor@latest"];
+}
+
 export function tygorDev(options: TygorDevOptions): Plugin {
   const opts = { ...DEFAULT_OPTIONS, ...options };
   const workdir = resolve(process.cwd(), opts.workdir ?? ".");
 
   let currentServer: ServerState = { process: null, port: opts.port, ready: false };
   let nextServer: ServerState | null = null;
+  let devServer: DevServerState = { process: null, port: 9000, ready: false };
   let buildError: string | null = null;
   let errorPhase: "prebuild" | "build" | "runtime" | null = null;
   let errorCommand: string | null = null;
   let errorExitCode: number | null = null;
   let currentPhase: "idle" | "prebuild" | "building" | "starting" = "idle";
   let isReloading = false;
-  let cachedRawrData: string[] | null = null;
 
   const log = (msg: string) => console.log(pc.cyan("[tygor]"), msg);
   const logError = (msg: string) => console.log(pc.cyan("[tygor]"), pc.red(msg));
+
+  /** Start the tygor dev server */
+  async function startDevServer(port: number): Promise<DevServerState> {
+    const tygorCmd = getTygorCommand(opts.tygorCommand);
+    const rpcDir = resolve(process.cwd(), opts.rpcDir!);
+    const args = [...tygorCmd.slice(1), "dev", "--rpc-dir", rpcDir, "--port", String(port)];
+    const command = tygorCmd[0];
+
+    log(`Starting tygor dev on port ${port}: ${command} ${args.join(" ")}`);
+
+    return new Promise((resolve) => {
+      const proc = spawn(command, args, {
+        cwd: workdir,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+
+      let resolved = false;
+
+      proc.stdout?.on("data", (data) => {
+        const output = data.toString();
+        process.stdout.write(pc.dim(`[tygor dev] ${output}`));
+        // Check for ready message
+        if (!resolved && output.includes("listening on")) {
+          resolved = true;
+          log(pc.green(`tygor dev ready on port ${port}`));
+          resolve({ process: proc, port, ready: true });
+        }
+      });
+
+      proc.stderr?.on("data", (data) => {
+        process.stderr.write(pc.dim(`[tygor dev] ${data.toString()}`));
+      });
+
+      proc.on("error", (err) => {
+        if (!resolved) {
+          resolved = true;
+          logError(`Failed to start tygor dev: ${err.message}`);
+          resolve({ process: null, port, ready: false });
+        }
+      });
+
+      proc.on("exit", (code) => {
+        if (!resolved) {
+          resolved = true;
+          logError(`tygor dev exited with code ${code}`);
+          resolve({ process: null, port, ready: false });
+        }
+      });
+
+      // Timeout after 30 seconds
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          logError("tygor dev startup timed out");
+          proc.kill();
+          resolve({ process: null, port, ready: false });
+        }
+      }, 30000);
+    });
+  }
+
+  /** Send status update to tygor dev */
+  async function updateDevServerStatus(status: "running" | "building" | "error" | "starting", error?: string, phase?: string) {
+    if (!devServer.ready) return;
+
+    try {
+      const client = createClient(devserverRegistry, {
+        baseUrl: `http://localhost:${devServer.port}/__tygor`,
+      });
+      await client.Devtools.UpdateStatus({
+        app: {
+          status,
+          port: currentServer.port,
+          error,
+          phase,
+        },
+      });
+    } catch (e) {
+      log(`Failed to update devserver status: ${e instanceof Error ? e.message : e}`);
+    }
+  }
 
   async function runPrebuild(): Promise<boolean> {
     if (!opts.prebuild) return true;
@@ -302,10 +414,12 @@ export function tygorDev(options: TygorDevOptions): Plugin {
     isReloading = true;
 
     log("Detected changes, reloading...");
+    await updateDevServerStatus("building", undefined, "prebuild");
 
     // Run prebuild
     const prebuildOk = await runPrebuild();
     if (!prebuildOk) {
+      await updateDevServerStatus("error", buildError ?? "Prebuild failed", "prebuild");
       isReloading = false;
       return;
     }
@@ -314,13 +428,16 @@ export function tygorDev(options: TygorDevOptions): Plugin {
     proxyPaths = loadProxyPaths();
 
     // Run build (separate from start so we can distinguish build vs runtime errors)
+    await updateDevServerStatus("building", undefined, "build");
     const buildOk = await runBuild();
     if (!buildOk) {
+      await updateDevServerStatus("error", buildError ?? "Build failed", "build");
       isReloading = false;
       return;
     }
 
     // Start new server on a different port (skip current server's port)
+    await updateDevServerStatus("starting", undefined, "runtime");
     nextServer = await startServerWithRetry(currentServer.port);
 
     if (nextServer.ready) {
@@ -332,6 +449,7 @@ export function tygorDev(options: TygorDevOptions): Plugin {
       buildError = null;
 
       log(pc.green(`Switched to port ${currentServer.port}`));
+      await updateDevServerStatus("running");
 
       // Give the proxy time to route to new server before killing old one
       setTimeout(() => {
@@ -340,6 +458,7 @@ export function tygorDev(options: TygorDevOptions): Plugin {
       }, 500);
     } else {
       // Keep old server, clean up failed new one
+      await updateDevServerStatus("error", buildError ?? "Server start failed", "runtime");
       if (nextServer.process) {
         killServer(nextServer);
       }
@@ -383,19 +502,37 @@ export function tygorDev(options: TygorDevOptions): Plugin {
 
   let proxyPaths = loadProxyPaths();
 
-  // Call Devtools.Ping for heartbeat using generated client
+  // Simple heartbeat - just check if server responds
   async function heartbeat(): Promise<boolean> {
     if (!currentServer.ready) return false;
+    return checkHealth(currentServer.port);
+  }
 
-    try {
-      const client = createClient(devtoolsRegistry, {
-        baseUrl: `http://localhost:${currentServer.port}`,
-      });
-      const res = await client.Devtools.Ping();
-      return res?.ok ?? false;
-    } catch {
-      return false;
-    }
+  // Proxy to tygor dev server
+  function proxyToDevServer(req: IncomingMessage, res: ServerResponse, path?: string) {
+    const targetPath = path ?? req.url;
+    log(`Proxying ${req.url} -> tygor dev:${devServer.port}${targetPath}`);
+
+    const proxyReq = httpRequest(
+      {
+        hostname: "localhost",
+        port: devServer.port,
+        path: targetPath,
+        method: req.method,
+        headers: req.headers,
+      },
+      (proxyRes) => {
+        res.writeHead(proxyRes.statusCode ?? 500, proxyRes.headers);
+        proxyRes.pipe(res);
+      }
+    );
+
+    proxyReq.on("error", () => {
+      res.writeHead(503, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: { code: "devserver_unavailable", message: "tygor dev is starting..." } }));
+    });
+
+    req.pipe(proxyReq);
   }
 
   // Simple proxy function using Node's http module
@@ -434,68 +571,27 @@ export function tygorDev(options: TygorDevOptions): Plugin {
       const rpcDir = resolve(process.cwd(), opts.rpcDir!);
       const discoveryPath = resolve(rpcDir, "discovery.json");
 
-      // Status and discovery endpoints
+      // Route handling
       server.middlewares.use((req, res, next) => {
-        // Handle tygor status endpoint
-        if (req.url === "/__tygor/status") {
-          (async () => {
-            res.writeHead(200, { "Content-Type": "application/json" });
-
-            let status;
-            if (buildError) {
-              status = { status: "error", error: buildError, phase: errorPhase ?? "build", command: errorCommand, cwd: workdir, exitCode: errorExitCode };
-            } else if (isReloading) {
-              status = { status: "reloading" };
-            } else if (!currentServer.ready) {
-              status = { status: "starting" };
-            } else {
-              // Get status from Go server
-              try {
-                const client = createClient(devtoolsRegistry, {
-                  baseUrl: `http://localhost:${currentServer.port}`,
-                });
-                const needsInitial = cachedRawrData === null;
-                const serverStatus = await client.Devtools.Status({ initial: needsInitial });
-                if (serverStatus) {
-                  if (serverStatus.rawrData) {
-                    cachedRawrData = serverStatus.rawrData;
-                  }
-                  status = {
-                    status: "ok",
-                    port: serverStatus.port,
-                    rawrData: cachedRawrData ?? undefined,
-                  };
-                } else {
-                  status = { status: "disconnected" };
-                }
-              } catch {
-                status = { status: "disconnected" };
-              }
-            }
-            res.end(JSON.stringify(status));
-          })();
-          return;
-        }
-
-        // Handle tygor discovery endpoint - serve discovery.json from rpcDir
-        if (req.url === "/__tygor/discovery") {
-          try {
-            if (existsSync(discoveryPath)) {
-              const content = readFileSync(discoveryPath, "utf-8");
-              res.writeHead(200, { "Content-Type": "application/json" });
-              res.end(content);
-            } else {
-              res.writeHead(404, { "Content-Type": "application/json" });
-              res.end(JSON.stringify({ error: "discovery.json not found. Run tygorgen with WithDiscovery()." }));
-            }
-          } catch (err) {
-            res.writeHead(500, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ error: String(err) }));
+        // Proxy /__tygor/* to tygor dev (served at /__tygor/Devtools/*)
+        if (req.url?.startsWith("/__tygor/")) {
+          if (!devServer.ready) {
+            res.writeHead(503, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "tygor dev is starting..." }));
+            return;
           }
+          // Legacy path rewrites for backwards compatibility
+          let targetPath = req.url;
+          if (req.url === "/__tygor/status") {
+            targetPath = "/__tygor/Devtools/GetStatus?initial=true";
+          } else if (req.url === "/__tygor/discovery") {
+            targetPath = "/__tygor/Devtools/GetDiscovery";
+          }
+          proxyToDevServer(req, res as ServerResponse, targetPath);
           return;
         }
 
-        // Proxy API requests to Go server
+        // Proxy API requests to user's Go server
         if (proxyPaths.some((prefix) => req.url?.startsWith(prefix))) {
           proxyRequest(req, res as ServerResponse);
           return;
@@ -527,14 +623,27 @@ export function tygorDev(options: TygorDevOptions): Plugin {
         scheduleReload();
       });
 
+      // Start tygor dev server first
+      const devPort = await findPort(9000);
+      devServer = await startDevServer(devPort);
+      if (!devServer.ready) {
+        logError("tygor dev failed to start");
+      }
+
       // Initial build and server start
+      await updateDevServerStatus("building", undefined, "build");
       const buildOk = await runBuild();
       if (buildOk) {
+        await updateDevServerStatus("starting", undefined, "runtime");
         currentServer = await startServerWithRetry();
-        if (!currentServer.ready) {
+        if (currentServer.ready) {
+          await updateDevServerStatus("running");
+        } else {
+          await updateDevServerStatus("error", buildError ?? "Server start failed", "runtime");
           logError("Server start failed - fix errors and save to retry");
         }
       } else {
+        await updateDevServerStatus("error", buildError ?? "Build failed", "build");
         logError("Build failed - fix errors and save to retry");
       }
 
@@ -582,6 +691,10 @@ export function tygorDev(options: TygorDevOptions): Plugin {
         watcher.close();
         killServer(currentServer);
         if (nextServer) killServer(nextServer);
+        // Kill tygor dev
+        if (devServer.process && devServer.process.exitCode === null) {
+          devServer.process.kill("SIGTERM");
+        }
       };
 
       // Cleanup when Vite's server closes
