@@ -138,7 +138,7 @@ func main() {
 	tasksvc := app.Service("Tasks")
 	tasksvc.Register("List", tygor.Query(ListTasks))
 	tasksvc.Register("SyncedList", tasksAtom.Handler())
-	tasksvc.Register("Time", tygor.StreamEmit(CurrentTime))
+	tasksvc.Register("Time", tygor.Stream(CurrentTime))
 	tasksvc.Register("Create", tygor.Exec(CreateTask))
 	tasksvc.Register("Toggle", tygor.Exec(ToggleTask))
 	tasksvc.Register("MakeError", tygor.Exec(MakeError))

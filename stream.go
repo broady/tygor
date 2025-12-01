@@ -133,23 +133,16 @@ type StreamHandler[Req any, Res any] struct {
 	heartbeatInterval  time.Duration
 }
 
-// Stream creates a new SSE streaming handler from an iterator function.
-//
-// The handler function returns an iterator that yields events.
-// Each yielded value is sent to the client as an SSE event.
-// Requests are decoded from JSON body (always POST).
-//
-// For most use cases, prefer [StreamEmit] which provides a simpler callback-based API.
-// Use Stream when you need iterator composition or advanced control flow.
-//
-// For single request/response, use Exec or Query instead.
-func Stream[Req any, Res any](fn func(context.Context, Req) iter.Seq2[Res, error]) *StreamHandler[Req, Res] {
+// streamIter2 creates a new SSE streaming handler from an iterator function.
+// This is an internal API preserved for potential future use with iterator composition.
+// For public use, prefer [Stream] which provides a simpler callback-based API.
+func streamIter2[Req any, Res any](fn func(context.Context, Req) iter.Seq2[Res, error]) *StreamHandler[Req, Res] {
 	return &StreamHandler[Req, Res]{
 		fn: fn,
 	}
 }
 
-// StreamEmit creates a new SSE streaming handler from a callback function.
+// Stream creates a new SSE streaming handler from a callback function.
 //
 // The handler receives an [Emitter] to send events to the client.
 // Emitter.Send returns an error when the stream should stop:
@@ -189,8 +182,8 @@ func Stream[Req any, Res any](fn func(context.Context, Req) iter.Seq2[Res, error
 //	    }
 //	}
 //
-//	feed.Register("Subscribe", tygor.StreamEmit(Subscribe))
-func StreamEmit[Req any, Res any](fn func(context.Context, Req, *Emitter[Res]) error) *StreamHandler[Req, Res] {
+//	feed.Register("Subscribe", tygor.Stream(Subscribe))
+func Stream[Req any, Res any](fn func(context.Context, Req, *Emitter[Res]) error) *StreamHandler[Req, Res] {
 	// Use fnAny to allow yielding sseEvent wrappers with event IDs
 	iterFn := func(ctx context.Context, req Req) iter.Seq2[any, error] {
 		return func(yield func(any, error) bool) {

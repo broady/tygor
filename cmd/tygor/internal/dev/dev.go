@@ -45,7 +45,7 @@ func NewApp(svc *Service) *tygor.App {
 	devtools := app.Service("Devtools")
 	devtools.Register("GetDiscovery", tygor.Query(svc.GetDiscovery))
 	devtools.Register("GetSource", tygor.Query(svc.GetSource))
-	devtools.Register("GetStatus", tygor.StreamEmit(svc.GetStatus))
+	devtools.Register("GetStatus", tygor.Stream(svc.GetStatus))
 	devtools.Register("UpdateStatus", tygor.Exec(svc.UpdateStatus))
 	devtools.Register("Reload", tygor.Exec(svc.Reload))
 	return app

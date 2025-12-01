@@ -119,7 +119,7 @@ func main() {
 
 	system := app.Service("System")
 	system.Register("Info", tygor.Query(GetRuntimeInfo))
-	system.Register("InfoStream", tygor.StreamEmit(StreamRuntimeInfo))
+	system.Register("InfoStream", tygor.Stream(StreamRuntimeInfo))
 
 	tasks := app.Service("Tasks")
 	tasks.Register("List", tygor.Query(ListTasks))
