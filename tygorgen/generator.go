@@ -502,15 +502,64 @@ func buildServiceDescriptors(routes internal.RouteMap) []ir.ServiceDescriptor {
 }
 
 // reflectTypeToIRRef converts a reflect.Type to an IR TypeDescriptor reference.
-// This handles the basic mapping from Go types to IR type expressions,
-// preserving pointer semantics to match encoding/json behavior.
+// This handles the basic mapping from Go types to IR type expressions.
+//
+// For endpoint Request/Response types, pointers are stripped because they're
+// a Go idiom for efficiency, not an indication of nullability. Clients always
+// send valid request objects, and handlers return valid responses (or errors).
+//
+// For nested types (slice elements, map values), pointers ARE preserved because
+// they indicate nullability in the JSON output (e.g., []*User can have null elements).
 func reflectTypeToIRRef(t reflect.Type) ir.TypeDescriptor {
 	if t == nil {
 		return ir.Any()
 	}
 
-	// Handle pointers: track if we have at least one level of indirection.
-	// Multiple pointer levels collapse to the same JSON semantics (nullable).
+	// Strip top-level pointers - they're a Go idiom for endpoint types
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+
+	switch {
+	// Handle slices/arrays - preserve pointer semantics for elements
+	case t.Kind() == reflect.Slice || t.Kind() == reflect.Array:
+		elem := reflectTypeToIRRefPreservePtr(t.Elem())
+		if t.Kind() == reflect.Slice {
+			return ir.Slice(elem)
+		}
+		return ir.Array(elem, t.Len())
+
+	// Handle maps - preserve pointer semantics for values
+	case t.Kind() == reflect.Map:
+		key := reflectTypeToIRRefPreservePtr(t.Key())
+		value := reflectTypeToIRRefPreservePtr(t.Elem())
+		return ir.Map(key, value)
+
+	// Handle empty struct (struct{})
+	case t.Kind() == reflect.Struct && t.NumField() == 0:
+		return ir.Empty()
+
+	// For named types (structs, aliases), create a reference
+	case t.Name() != "":
+		// Sanitize generic type names to match what the reflection provider generates
+		name := sanitizeTypeName(t.Name())
+		return ir.Ref(name, t.PkgPath())
+
+	// Fallback for primitives and unnamed types
+	default:
+		return ir.Any()
+	}
+}
+
+// reflectTypeToIRRefPreservePtr converts a reflect.Type to an IR TypeDescriptor,
+// preserving pointer semantics. Used for nested types (slice elements, map values)
+// where pointers indicate nullability in JSON.
+func reflectTypeToIRRefPreservePtr(t reflect.Type) ir.TypeDescriptor {
+	if t == nil {
+		return ir.Any()
+	}
+
+	// Track if we have pointer indirection (collapse multiple levels)
 	isPointer := false
 	for t.Kind() == reflect.Pointer {
 		isPointer = true
@@ -521,32 +570,26 @@ func reflectTypeToIRRef(t reflect.Type) ir.TypeDescriptor {
 	var base ir.TypeDescriptor
 
 	switch {
-	// Handle slices/arrays
 	case t.Kind() == reflect.Slice || t.Kind() == reflect.Array:
-		elem := reflectTypeToIRRef(t.Elem())
+		elem := reflectTypeToIRRefPreservePtr(t.Elem())
 		if t.Kind() == reflect.Slice {
 			base = ir.Slice(elem)
 		} else {
 			base = ir.Array(elem, t.Len())
 		}
 
-	// Handle maps
 	case t.Kind() == reflect.Map:
-		key := reflectTypeToIRRef(t.Key())
-		value := reflectTypeToIRRef(t.Elem())
+		key := reflectTypeToIRRefPreservePtr(t.Key())
+		value := reflectTypeToIRRefPreservePtr(t.Elem())
 		base = ir.Map(key, value)
 
-	// Handle empty struct (struct{})
 	case t.Kind() == reflect.Struct && t.NumField() == 0:
 		base = ir.Empty()
 
-	// For named types (structs, aliases), create a reference
 	case t.Name() != "":
-		// Sanitize generic type names to match what the reflection provider generates
 		name := sanitizeTypeName(t.Name())
 		base = ir.Ref(name, t.PkgPath())
 
-	// Fallback for primitives and unnamed types
 	default:
 		base = ir.Any()
 	}

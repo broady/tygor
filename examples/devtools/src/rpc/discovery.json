@@ -8,6 +8,40 @@
     {
       "kind": "struct",
       "Name": {
+        "name": "ListTasksParams",
+        "package": "github.com/broady/tygor/examples/devtools/api"
+      },
+      "TypeParameters": null,
+      "Fields": [
+        {
+          "name": "ShowDone",
+          "type": {
+            "kind": "ptr",
+            "element": {
+              "kind": "primitive",
+              "primitiveKind": "Bool"
+            }
+          },
+          "jsonName": "show_done",
+          "optional": true,
+          "doc": "ShowDone filters to show completed tasks."
+        }
+      ],
+      "Extends": [],
+      "Documentation": {
+        "Summary": "ListTasksParams contains parameters for listing tasks.",
+        "Body": "ListTasksParams contains parameters for listing tasks.",
+        "Deprecated": null
+      },
+      "Source": {
+        "File": "/home/cbro/tygor/examples/devtools/api/types.go",
+        "Line": 16,
+        "Column": 6
+      }
+    },
+    {
+      "kind": "struct",
+      "Name": {
         "name": "CreateTaskParams",
         "package": "github.com/broady/tygor/examples/devtools/api"
       },
@@ -386,40 +420,6 @@
         "Line": 98,
         "Column": 6
       }
-    },
-    {
-      "kind": "struct",
-      "Name": {
-        "name": "ListTasksParams",
-        "package": "github.com/broady/tygor/examples/devtools/api"
-      },
-      "TypeParameters": null,
-      "Fields": [
-        {
-          "name": "ShowDone",
-          "type": {
-            "kind": "ptr",
-            "element": {
-              "kind": "primitive",
-              "primitiveKind": "Bool"
-            }
-          },
-          "jsonName": "show_done",
-          "optional": true,
-          "doc": "ShowDone filters to show completed tasks."
-        }
-      ],
-      "Extends": [],
-      "Documentation": {
-        "Summary": "ListTasksParams contains parameters for listing tasks.",
-        "Body": "ListTasksParams contains parameters for listing tasks.",
-        "Deprecated": null
-      },
-      "Source": {
-        "File": "/home/cbro/tygor/examples/devtools/api/types.go",
-        "Line": 16,
-        "Column": 6
-      }
     }
   ],
   "Services": [
@@ -431,11 +431,6 @@
           "fullName": "Devtools.Info",
           "primitive": "query",
           "path": "/Devtools/Info",
-          "request": {
-            "kind": "reference",
-            "name": "InfoRequest",
-            "package": "github.com/broady/tygor/devtools"
-          },
           "response": {
             "kind": "reference",
             "name": "InfoResponse",
@@ -447,11 +442,6 @@
           "fullName": "Devtools.Ping",
           "primitive": "query",
           "path": "/Devtools/Ping",
-          "request": {
-            "kind": "reference",
-            "name": "PingRequest",
-            "package": "github.com/broady/tygor/devtools"
-          },
           "response": {
             "kind": "reference",
             "name": "PingResponse",
@@ -484,13 +474,9 @@
           "fullName": "System.Kill",
           "primitive": "exec",
           "path": "/System/Kill",
-          "request": {
-            "kind": "primitive",
-            "primitiveKind": "Any"
-          },
           "response": {
             "kind": "primitive",
-            "primitiveKind": "Any"
+            "primitiveKind": "Empty"
           }
         }
       ]
@@ -527,9 +513,12 @@
           "response": {
             "kind": "array",
             "element": {
-              "kind": "reference",
-              "name": "Task",
-              "package": "github.com/broady/tygor/examples/devtools/api"
+              "kind": "ptr",
+              "element": {
+                "kind": "reference",
+                "name": "Task",
+                "package": "github.com/broady/tygor/examples/devtools/api"
+              }
             },
             "length": 0
           }
@@ -539,13 +528,9 @@
           "fullName": "Tasks.MakeError",
           "primitive": "exec",
           "path": "/Tasks/MakeError",
-          "request": {
-            "kind": "primitive",
-            "primitiveKind": "Any"
-          },
           "response": {
             "kind": "primitive",
-            "primitiveKind": "Any"
+            "primitiveKind": "Empty"
           }
         },
         {

@@ -5,24 +5,24 @@ import * as types from './types';
 export interface Manifest {
   "System.Info": {
     req: Record<string, never>;
-    res: (types.RuntimeInfo | null);
+    res: types.RuntimeInfo;
   };
   "System.InfoStream": {
     req: Record<string, never>;
-    res: (types.RuntimeInfo | null);
+    res: types.RuntimeInfo;
     primitive: "stream";
   };
   "Tasks.Create": {
-    req: (types.CreateTaskParams | null);
-    res: (types.Task | null);
+    req: types.CreateTaskParams;
+    res: types.Task;
   };
   "Tasks.List": {
-    req: (types.ListTasksParams | null);
+    req: types.ListTasksParams;
     res: (types.Task | null)[];
   };
   "Tasks.Toggle": {
-    req: (types.ToggleTaskParams | null);
-    res: (types.Task | null);
+    req: types.ToggleTaskParams;
+    res: types.Task;
   };
 }
 

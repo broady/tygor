@@ -4,11 +4,11 @@ import * as types from './types';
 
 export interface Manifest {
   "Devtools.Info": {
-    req: types.InfoRequest;
+    req: Record<string, never>;
     res: types.InfoResponse;
   };
   "Devtools.Ping": {
-    req: types.PingRequest;
+    req: Record<string, never>;
     res: types.PingResponse;
   };
   "Devtools.Status": {
@@ -16,8 +16,8 @@ export interface Manifest {
     res: types.StatusResponse;
   };
   "System.Kill": {
-    req: unknown;
-    res: unknown;
+    req: Record<string, never>;
+    res: Record<string, never>;
   };
   "Tasks.Create": {
     req: types.CreateTaskParams;
@@ -25,11 +25,11 @@ export interface Manifest {
   };
   "Tasks.List": {
     req: types.ListTasksParams;
-    res: types.Task[];
+    res: (types.Task | null)[];
   };
   "Tasks.MakeError": {
-    req: unknown;
-    res: unknown;
+    req: Record<string, never>;
+    res: Record<string, never>;
   };
   "Tasks.Toggle": {
     req: types.ToggleTaskParams;
