@@ -3,7 +3,9 @@ package tygor
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"reflect"
@@ -382,7 +384,10 @@ func (h *ExecHandler[Req, Res]) serveHTTP(ctx *rpcContext) {
 			}
 
 			if err := json.NewDecoder(ctx.request.Body).Decode(&req); err != nil {
-				return req, Errorf(CodeInvalidArgument, "failed to decode body: %v", err)
+				// Empty body (EOF) is OK - treat as empty request ({})
+				if !errors.Is(err, io.EOF) {
+					return req, Errorf(CodeInvalidArgument, "failed to decode body: %v", err)
+				}
 			}
 		}
 		return req, nil

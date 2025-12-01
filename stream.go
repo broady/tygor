@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"iter"
 	"log/slog"
 	"net/http"
@@ -338,7 +339,10 @@ func (h *StreamHandler[Req, Res]) decodeRequest(ctx *rpcContext) (Req, error) {
 			ctx.request.Body = http.MaxBytesReader(ctx.writer, ctx.request.Body, int64(effectiveLimit))
 		}
 		if err := json.NewDecoder(ctx.request.Body).Decode(&req); err != nil {
-			return req, Errorf(CodeInvalidArgument, "failed to decode body: %v", err)
+			// Empty body (EOF) is OK - treat as empty request ({})
+			if !errors.Is(err, io.EOF) {
+				return req, Errorf(CodeInvalidArgument, "failed to decode body: %v", err)
+			}
 		}
 	}
 

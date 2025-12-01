@@ -380,6 +380,15 @@ type ListParams struct {
 
 For POST requests, the library MUST decode JSON bodies using `encoding/json`.
 
+**Empty Body Handling:**
+An empty request body (EOF) MUST be treated as an empty JSON object `{}`. This allows clients to call endpoints with empty request types without explicitly sending `{}`:
+
+```bash
+# Both are valid for endpoints with empty request types:
+curl -X POST http://localhost:8080/Tasks/Kill
+curl -X POST http://localhost:8080/Tasks/Kill -d '{}'
+```
+
 **Pointer Field Handling:**
 Pointer fields SHOULD support `omitempty` to distinguish between "not provided" and "explicitly null":
 

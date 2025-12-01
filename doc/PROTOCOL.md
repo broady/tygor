@@ -85,6 +85,7 @@ GET /News/List?limit=10&offset=0&tags=tech&tags=go
 **Request Encoding:**
 - Request parameters MUST be encoded as JSON in the request body
 - Content-Type header MUST be `application/json`
+- An empty request body MUST be treated as equivalent to `{}` (empty object)
 
 **Example:**
 ```
