@@ -45,7 +45,7 @@ func NewApp(svc *Service) *tygor.App {
 	devtools := app.Service("Devtools")
 	devtools.Register("GetDiscovery", tygor.Query(svc.GetDiscovery))
 	devtools.Register("GetSource", tygor.Query(svc.GetSource))
-	devtools.Register("GetStatus", tygor.StreamFunc(svc.GetStatus))
+	devtools.Register("GetStatus", tygor.Stream(svc.GetStatus))
 	devtools.Register("UpdateStatus", tygor.Exec(svc.UpdateStatus))
 	devtools.Register("Reload", tygor.Exec(svc.Reload))
 	return app
@@ -151,7 +151,7 @@ type GetStatusResponse struct {
 // GetStatus streams status updates for devtools UI consumption.
 // The first message always includes RawrData. Subsequent messages are sent
 // when UpdateStatus is called.
-func (s *Service) GetStatus(ctx context.Context, req *GetStatusRequest, stream tygor.Stream[*GetStatusResponse]) error {
+func (s *Service) GetStatus(ctx context.Context, req *GetStatusRequest, stream tygor.StreamWriter[*GetStatusResponse]) error {
 	// Send initial status with RawrData
 	resp := s.buildStatusResponse()
 	resp.RawrData = loadRawrData()

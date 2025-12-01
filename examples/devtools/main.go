@@ -85,7 +85,7 @@ func ToggleTask(ctx context.Context, req *api.ToggleTaskParams) (*api.Task, erro
 }
 
 // CurrentTime streams the current time every second
-func CurrentTime(_ context.Context, req tygor.Empty, stream tygor.Stream[*api.TimeUpdate]) error {
+func CurrentTime(_ context.Context, req tygor.Empty, stream tygor.StreamWriter[*api.TimeUpdate]) error {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
@@ -134,7 +134,7 @@ func main() {
 	tasksvc := app.Service("Tasks")
 	tasksvc.Register("List", tygor.Query(ListTasks))
 	tasksvc.Register("SyncedList", tasksAtom.Handler())
-	tasksvc.Register("Time", tygor.StreamFunc(CurrentTime))
+	tasksvc.Register("Time", tygor.Stream(CurrentTime))
 	tasksvc.Register("Create", tygor.Exec(CreateTask))
 	tasksvc.Register("Toggle", tygor.Exec(ToggleTask))
 	tasksvc.Register("MakeError", tygor.Exec(MakeError))

@@ -16,27 +16,27 @@ import (
 	"github.com/broady/tygor/internal"
 )
 
-// ErrStreamClosed is returned by Stream.Send when the client has disconnected
+// ErrStreamClosed is returned by StreamWriter.Send when the client has disconnected
 // or the stream has been closed. Handlers should return when they receive this error.
 var ErrStreamClosed = errors.New("stream closed")
 
-// ErrWriteTimeout is returned by Stream.Send when a write to the client timed out.
+// ErrWriteTimeout is returned by StreamWriter.Send when a write to the client timed out.
 // This typically indicates a slow or unresponsive client.
 var ErrWriteTimeout = errors.New("write timeout")
 
-// Stream sends events to a streaming client.
+// StreamWriter sends events to a streaming client.
 // It provides methods for sending events with optional SSE event IDs
 // and for checking the client's last received event ID on reconnection.
 //
 // This interface enables testing stream handlers without a real HTTP connection:
 //
-//	type mockStream[T any] struct {
+//	type mockStreamWriter[T any] struct {
 //	    events []T
 //	}
-//	func (m *mockStream[T]) Send(event T) error { m.events = append(m.events, event); return nil }
-//	func (m *mockStream[T]) SendWithID(id string, event T) error { return m.Send(event) }
-//	func (m *mockStream[T]) LastEventID() string { return "" }
-type Stream[T any] interface {
+//	func (m *mockStreamWriter[T]) Send(event T) error { m.events = append(m.events, event); return nil }
+//	func (m *mockStreamWriter[T]) SendWithID(id string, event T) error { return m.Send(event) }
+//	func (m *mockStreamWriter[T]) LastEventID() string { return "" }
+type StreamWriter[T any] interface {
 	// Send sends an event to the client.
 	// Returns an error if the client has disconnected or the context is canceled.
 	// All disconnect-related errors satisfy errors.Is(err, [ErrStreamClosed]).
@@ -160,10 +160,10 @@ func streamIter2[Req any, Res any](fn func(context.Context, Req) iter.Seq2[Res, 
 	}
 }
 
-// StreamFunc creates a new SSE streaming handler from a callback function.
+// Stream creates a new SSE streaming handler from a callback function.
 //
-// The handler receives a [Stream] to send events to the client.
-// Stream.Send returns an error when the stream should stop:
+// The handler receives a [StreamWriter] to send events to the client.
+// StreamWriter.Send returns an error when the stream should stop:
 //   - Client disconnects
 //   - Context is canceled or times out
 //   - Write fails
@@ -177,7 +177,7 @@ func streamIter2[Req any, Res any](fn func(context.Context, Req) iter.Seq2[Res, 
 //
 // Example:
 //
-//	func Subscribe(ctx context.Context, req *SubscribeRequest, stream tygor.Stream[*FeedEvent]) error {
+//	func Subscribe(ctx context.Context, req *SubscribeRequest, stream tygor.StreamWriter[*FeedEvent]) error {
 //	    // Check for reconnection
 //	    if lastID := stream.LastEventID(); lastID != "" {
 //	        // Resume from lastID
@@ -200,8 +200,8 @@ func streamIter2[Req any, Res any](fn func(context.Context, Req) iter.Seq2[Res, 
 //	    }
 //	}
 //
-//	feed.Register("Subscribe", tygor.StreamFunc(Subscribe))
-func StreamFunc[Req any, Res any](fn func(context.Context, Req, Stream[Res]) error) *StreamHandler[Req, Res] {
+//	feed.Register("Subscribe", tygor.Stream(Subscribe))
+func Stream[Req any, Res any](fn func(context.Context, Req, StreamWriter[Res]) error) *StreamHandler[Req, Res] {
 	// Use fnAny to allow yielding sseEvent wrappers with event IDs
 	iterFn := func(ctx context.Context, req Req) iter.Seq2[any, error] {
 		return func(yield func(any, error) bool) {
