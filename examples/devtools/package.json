@@ -1,10 +1,26 @@
 {
   "name": "tygor-devtools-example",
+  "version": "0.0.0",
   "private": true,
-  "workspaces": ["client"],
+  "type": "module",
   "scripts": {
-    "postinstall": "go run . -gen -out ./client/src/rpc",
-    "dev": "cd client && bun run dev",
-    "build": "cd client && bun run build"
+    "postinstall": "go run . -gen -out ./src/rpc",
+    "dev": "vite --clearScreen false",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tygor/client": "^0.7.3",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@tygor/vite-plugin": "^0.7.3",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "typescript": "^5.0.0",
+    "vite": "^6.0.0"
   }
 }

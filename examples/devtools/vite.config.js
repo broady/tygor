@@ -6,14 +6,13 @@ export default defineConfig({
   plugins: [
     react(),
     tygorDev({
-      prebuild: "go run . -gen -out ./client/src/rpc",
+      prebuild: "go run . -gen -out ./src/rpc",
       build: "go build -o ./tmp/server .",
       buildOutput: "./tmp/server",
       start: (port) => ({
         cmd: ["./tmp/server"],
         env: { PORT: String(port) },
       }),
-      workdir: "..",
       rpcDir: "./src/rpc",
     }),
   ],
