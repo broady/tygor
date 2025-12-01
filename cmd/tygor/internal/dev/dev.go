@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/broady/tygor"
 )
@@ -44,7 +45,7 @@ func NewApp(svc *Service) *tygor.App {
 	devtools := app.Service("Devtools")
 	devtools.Register("GetDiscovery", tygor.Query(svc.GetDiscovery))
 	devtools.Register("GetSource", tygor.Query(svc.GetSource))
-	devtools.Register("GetStatus", tygor.Query(svc.GetStatus))
+	devtools.Register("GetStatus", tygor.StreamEmit(svc.GetStatus))
 	devtools.Register("UpdateStatus", tygor.Exec(svc.UpdateStatus))
 	devtools.Register("Reload", tygor.Exec(svc.Reload))
 	return app
@@ -60,6 +61,13 @@ func SetupApp() *tygor.App {
 type Service struct {
 	rpcDir    string
 	appStatus *AppStatus // status reported by vite plugin
+
+	// Subscriber management for streaming status updates.
+	// We use channels instead of emitters because Emitter.Send()
+	// is not thread-safe (uses Go iterator yield function).
+	statusMu   sync.Mutex
+	statusSubs map[int64]chan *GetStatusResponse
+	nextSubID  int64
 }
 
 // GetDiscoveryRequest is the request for Devtools.GetDiscovery.
@@ -67,8 +75,8 @@ type GetDiscoveryRequest struct{}
 
 // GetDiscoveryResponse returns the discovery.json content.
 type GetDiscoveryResponse struct {
-	// Discovery is the raw discovery.json content as a JSON object.
-	Discovery json.RawMessage `json:"discovery"`
+	// Discovery is the parsed discovery schema.
+	Discovery DiscoverySchema `json:"discovery"`
 }
 
 // GetDiscovery returns the discovery.json from the rpc-dir.
@@ -81,7 +89,11 @@ func (s *Service) GetDiscovery(ctx context.Context, req *GetDiscoveryRequest) (*
 		}
 		return nil, err
 	}
-	return &GetDiscoveryResponse{Discovery: data}, nil
+	var schema DiscoverySchema
+	if err := json.Unmarshal(data, &schema); err != nil {
+		return nil, tygor.NewError(tygor.CodeInternal, "failed to parse discovery.json: "+err.Error())
+	}
+	return &GetDiscoveryResponse{Discovery: schema}, nil
 }
 
 // GetSourceRequest is the request for Devtools.GetSource.
@@ -121,10 +133,7 @@ type AppStatus struct {
 }
 
 // GetStatusRequest is the request for Devtools.GetStatus.
-type GetStatusRequest struct {
-	// Initial should be true on first request to receive one-time data.
-	Initial bool `json:"initial,omitempty"`
-}
+type GetStatusRequest struct{}
 
 // GetStatusResponse returns the combined status in flat format for the devtools UI.
 // Status is a discriminated union: "ok", "error", "reloading", "starting", "disconnected".
@@ -139,8 +148,37 @@ type GetStatusResponse struct {
 	RawrData []string `json:"rawrData,omitempty"` // sent on initial request
 }
 
-// GetStatus returns status for devtools UI consumption.
-func (s *Service) GetStatus(ctx context.Context, req *GetStatusRequest) (*GetStatusResponse, error) {
+// GetStatus streams status updates for devtools UI consumption.
+// The first message always includes RawrData. Subsequent messages are sent
+// when UpdateStatus is called.
+func (s *Service) GetStatus(ctx context.Context, req *GetStatusRequest, emit *tygor.Emitter[*GetStatusResponse]) error {
+	// Send initial status with RawrData
+	resp := s.buildStatusResponse()
+	resp.RawrData = loadRawrData()
+	if err := emit.Send(resp); err != nil {
+		return err
+	}
+
+	// Create channel for receiving updates from other goroutines
+	ch := make(chan *GetStatusResponse, 1)
+	subID := s.addSubscriber(ch)
+	defer s.removeSubscriber(subID)
+
+	// Listen for updates until client disconnects
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case update := <-ch:
+			if err := emit.Send(update); err != nil {
+				return err
+			}
+		}
+	}
+}
+
+// buildStatusResponse creates a status response from current state.
+func (s *Service) buildStatusResponse() *GetStatusResponse {
 	resp := &GetStatusResponse{}
 
 	if s.appStatus == nil {
@@ -161,10 +199,48 @@ func (s *Service) GetStatus(ctx context.Context, req *GetStatusRequest) (*GetSta
 		}
 	}
 
-	if req.Initial {
-		resp.RawrData = loadRawrData()
+	return resp
+}
+
+// addSubscriber adds a channel to the subscriber list.
+func (s *Service) addSubscriber(ch chan *GetStatusResponse) int64 {
+	s.statusMu.Lock()
+	defer s.statusMu.Unlock()
+
+	if s.statusSubs == nil {
+		s.statusSubs = make(map[int64]chan *GetStatusResponse)
 	}
-	return resp, nil
+
+	id := s.nextSubID
+	s.nextSubID++
+	s.statusSubs[id] = ch
+	return id
+}
+
+// removeSubscriber removes a channel from the subscriber list.
+func (s *Service) removeSubscriber(id int64) {
+	s.statusMu.Lock()
+	defer s.statusMu.Unlock()
+	delete(s.statusSubs, id)
+}
+
+// notifySubscribers sends the current status to all subscribers.
+func (s *Service) notifySubscribers() {
+	s.statusMu.Lock()
+	subs := make([]chan *GetStatusResponse, 0, len(s.statusSubs))
+	for _, ch := range s.statusSubs {
+		subs = append(subs, ch)
+	}
+	s.statusMu.Unlock()
+
+	resp := s.buildStatusResponse()
+	for _, ch := range subs {
+		// Non-blocking send - if channel is full, subscriber will get next update
+		select {
+		case ch <- resp:
+		default:
+		}
+	}
 }
 
 // UpdateStatusRequest is sent by vite plugin to update app status.
@@ -176,8 +252,10 @@ type UpdateStatusRequest struct {
 type UpdateStatusResponse struct{}
 
 // UpdateStatus updates the app status (called by vite plugin).
+// Notifies all connected GetStatus subscribers of the change.
 func (s *Service) UpdateStatus(ctx context.Context, req *UpdateStatusRequest) (*UpdateStatusResponse, error) {
 	s.appStatus = &req.App
+	s.notifySubscribers()
 	return &UpdateStatusResponse{}, nil
 }
 

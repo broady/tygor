@@ -7,13 +7,53 @@ export interface AppStatus {
   error?: string;
   phase?: string;
 }
+/** DiscoverySchema is the top-level discovery.json structure. */
+export interface DiscoverySchema {
+  Package: PackageInfo;
+  Types?: TypeDescriptor[];
+  Services?: ServiceDescriptor[];
+  Warnings?: Warning[];
+}
+/** Documentation holds doc comments. */
+export interface Documentation {
+  Summary?: string;
+  Body?: string;
+  Deprecated?: string;
+}
+/** EndpointDescriptor describes an RPC endpoint. */
+export interface EndpointDescriptor {
+  name: string;
+  fullName: string;
+  primitive: string;
+  path: string;
+  request?: TypeRef;
+  response?: TypeRef;
+  doc?: string;
+}
+/** EnumMember describes a single enum constant. */
+export interface EnumMember {
+  name: string;
+  value: unknown;
+  doc?: string;
+}
+/** FieldDescriptor describes a struct field. */
+export interface FieldDescriptor {
+  name: string;
+  "type": TypeRef;
+  jsonName: string;
+  optional?: boolean;
+  stringEncoded?: boolean;
+  skip?: boolean;
+  validateTag?: string;
+  doc?: string;
+}
 /** GetDiscoveryRequest is the request for Devtools.GetDiscovery. */
 export interface GetDiscoveryRequest {
 }
 /** GetDiscoveryResponse returns the discovery.json content. */
 export interface GetDiscoveryResponse {
-  /** Discovery is the raw discovery.json content as a JSON object. */
-  discovery: unknown;
+  /** Discovery is the parsed discovery schema. */
+  discovery: DiscoverySchema;
 }
 /** GetSourceRequest is the request for Devtools.GetSource. */
 export interface GetSourceRequest {
@@ -30,8 +70,6 @@ export interface GetSourceResponse {
 }
 /** GetStatusRequest is the request for Devtools.GetStatus. */
 export interface GetStatusRequest {
-  /** Initial should be true on first request to receive one-time data. */
-  initial?: boolean;
 }
 /**
  * GetStatusResponse returns the combined status in flat format for the devtools UI.
@@ -47,6 +85,17 @@ export interface GetStatusResponse {
   exitCode?: number /* int */;
   rawrData?: string[];
 }
+/** GoIdentifier is a fully-qualified Go type name. */
+export interface GoIdentifier {
+  name: string;
+  "package"?: string;
+}
+/** PackageInfo describes the source Go package. */
+export interface PackageInfo {
+  Path: string;
+  Name: string;
+  Dir: string;
+}
 /** ReloadRequest triggers a reload of discovery.json. */
 export interface ReloadRequest {
   files?: string[];
@@ -55,11 +104,62 @@ export interface ReloadRequest {
 /** ReloadResponse is the response for Reload. */
 export interface ReloadResponse {
 }
+/** ServiceDescriptor describes a service and its endpoints. */
+export interface ServiceDescriptor {
+  name: string;
+  endpoints?: EndpointDescriptor[];
+  doc?: string;
+}
 /** SourceLine represents a single line of source code. */
 export interface SourceLine {
   num: number /* int */;
   content: string;
   highlight?: boolean;
+}
+/** SourceLocation points to a position in source code. */
+export interface SourceLocation {
+  File: string;
+  Line: number /* int */;
+  Column: number /* int */;
+}
+/**
+ * TypeDescriptor is a named type (struct, enum, or alias).
+ * Uses kind discriminator for polymorphism.
+ */
+export interface TypeDescriptor {
+  kind: string;
+  Name: GoIdentifier;
+  TypeParameters?: TypeParameter[];
+  Fields?: FieldDescriptor[];
+  Members?: EnumMember[];
+  Underlying?: TypeRef;
+  Extends?: GoIdentifier[];
+  Documentation?: Documentation;
+  Source?: SourceLocation;
+}
+/** TypeParameter describes a generic type parameter. */
+export interface TypeParameter {
+  kind: string;
+  paramName: string;
+  constraint?: TypeRef;
+}
+/**
+ * TypeRef is a reference to a type (used in fields, requests, responses).
+ * Uses kind discriminator for the various type expression forms.
+ */
+export interface TypeRef {
+  kind: string;
+  primitiveKind?: string;
+  bitSize?: number /* int */;
+  name?: string;
+  "package"?: string;
+  element?: TypeRef;
+  length?: number /* int */;
+  key?: TypeRef;
+  value?: TypeRef;
+  types?: TypeRef[];
+  paramName?: string;
+  constraint?: TypeRef;
 }
 /** UpdateStatusRequest is sent by vite plugin to update app status. */
 export interface UpdateStatusRequest {
@@ -67,4 +167,9 @@ export interface UpdateStatusRequest {
 }
 /** UpdateStatusResponse is the response for UpdateStatus. */
 export interface UpdateStatusResponse {
+}
+/** Warning represents a non-fatal issue during schema generation. */
+export interface Warning {
+  code: string;
+  message: string;
 }

@@ -680,9 +680,7 @@ if (import.meta.hot) {
           }
           // Legacy path rewrites for backwards compatibility
           let targetPath = req.url;
-          if (req.url === "/__tygor/status") {
-            targetPath = "/__tygor/Devtools/GetStatus?initial=true";
-          } else if (req.url === "/__tygor/discovery") {
+          if (req.url === "/__tygor/discovery") {
             targetPath = "/__tygor/Devtools/GetDiscovery";
           }
           proxyToDevServer(req, res as ServerResponse, targetPath);

@@ -377,6 +377,13 @@
   font-variant-numeric: tabular-nums;
 }
 
+.tygor-sidebar-status-port {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--tygor-text-hint);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Error Panel */
 .tygor-sidebar-error,
 .tygor-sidebar-rpc-error {

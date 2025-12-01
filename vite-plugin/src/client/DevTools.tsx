@@ -69,18 +69,10 @@ export function DevTools() {
   // Create client for tygor dev API
   const devClient = createClient(devserverRegistry, { baseUrl: "/__tygor" });
 
-  // Poll status from server
+  // Subscribe to status stream from server
   createEffect(() => {
-    let mounted = true;
-    let isInitial = true;
-
-    async function poll() {
-      if (!mounted) return;
-
-      try {
-        const data = await devClient.Devtools.GetStatus({ initial: isInitial });
-        isInitial = false;
-
+    const unsubscribe = devClient.Devtools.GetStatus({}).subscribe(
+      (data) => {
         setState((prev) => {
           const next = { ...prev, status: data };
 
@@ -100,24 +92,18 @@ export function DevTools() {
 
           return next;
         });
-      } catch {
+      },
+      () => {
+        // Error handler - server disconnected
         setState((prev) => ({
           ...prev,
           status: { status: "vite_disconnected" },
           disconnectedSince: prev.disconnectedSince ?? Date.now(),
         }));
       }
+    );
 
-      if (mounted) {
-        setTimeout(poll, 1000);
-      }
-    }
-
-    poll();
-
-    onCleanup(() => {
-      mounted = false;
-    });
+    onCleanup(unsubscribe);
   });
 
   // Listen for RPC errors

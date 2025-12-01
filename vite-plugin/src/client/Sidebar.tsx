@@ -1,13 +1,13 @@
 import { Show, For, createSignal, createEffect, onCleanup, onMount, createResource } from "solid-js";
 import type { GetStatusResponse } from "../devserver/types";
-import type { TygorRpcError, DiscoverySchema, IRTypeRef, IRType } from "./types";
+import type { TygorRpcError, DiscoverySchema, TypeRef, TypeDescriptor } from "./types";
 import type { SidebarSide } from "./DevTools";
 import { Pane, type DropPosition } from "./Pane";
 
 declare const __TYGOR_VERSION__: string;
 
 // Check if a type reference is "empty" (tygor.Empty or Any primitive)
-function isEmptyType(ref: IRTypeRef | undefined): boolean {
+function isEmptyType(ref: TypeRef | undefined): boolean {
   if (!ref) return true;
   if (ref.kind === "primitive" && ref.primitiveKind === "Any") return true;
   if (ref.kind === "reference" && ref.name === "Empty") return true;
@@ -15,7 +15,7 @@ function isEmptyType(ref: IRTypeRef | undefined): boolean {
 }
 
 // Format a type reference for display
-function formatTypeRef(ref: IRTypeRef | undefined): string {
+function formatTypeRef(ref: TypeRef | undefined): string {
   if (!ref || isEmptyType(ref)) return "";
   switch (ref.kind) {
     case "reference": return ref.name || "unknown";
@@ -27,7 +27,7 @@ function formatTypeRef(ref: IRTypeRef | undefined): string {
 }
 
 // Format request parameters as field names
-function formatRequestParams(ref: IRTypeRef | undefined, types: IRType[] | undefined): string {
+function formatRequestParams(ref: TypeRef | undefined, types: TypeDescriptor[] | undefined): string {
   if (!ref || isEmptyType(ref) || ref.kind !== "reference" || !types) return "";
   const typeDef = types.find(t => t.Name.name === ref.name);
   if (!typeDef?.Fields?.length) return "";
@@ -367,6 +367,9 @@ export function Sidebar(props: SidebarProps) {
                       <Show when={duration() && viteStatus().state === "ok" && apiStatus().state !== "ok"}>
                         <span class="tygor-sidebar-status-duration">{duration()}</span>
                       </Show>
+                      <Show when={props.state.status?.status === "ok" && props.state.status?.port}>
+                        <span class="tygor-sidebar-status-port">port {props.state.status?.port}</span>
+                      </Show>
                     </div>
                   </div>
                   <Show when={errorStatus()}>
@@ -432,7 +435,7 @@ export function Sidebar(props: SidebarProps) {
                               <ul class="tygor-sidebar-endpoints">
                                 <For each={svc.endpoints}>
                                   {(ep) => {
-                                    const isQuery = ep.httpMethod === "GET";
+                                    const isQuery = ep.primitive === "query";
                                     const params = formatRequestParams(ep.request, discovery()?.Types);
                                     const res = formatTypeRef(ep.response);
                                     return (

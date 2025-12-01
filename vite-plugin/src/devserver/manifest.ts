@@ -12,8 +12,9 @@ export interface Manifest {
     res: types.GetSourceResponse;
   };
   "Devtools.GetStatus": {
-    req: types.GetStatusRequest;
+    req: Record<string, never>;
     res: types.GetStatusResponse;
+    primitive: "stream";
   };
   "Devtools.Reload": {
     req: types.ReloadRequest;
@@ -28,7 +29,7 @@ export interface Manifest {
 const metadata = {
   "Devtools.GetDiscovery": { path: "/Devtools/GetDiscovery", primitive: "query" },
   "Devtools.GetSource": { path: "/Devtools/GetSource", primitive: "query" },
-  "Devtools.GetStatus": { path: "/Devtools/GetStatus", primitive: "query" },
+  "Devtools.GetStatus": { path: "/Devtools/GetStatus", primitive: "stream" },
   "Devtools.Reload": { path: "/Devtools/Reload", primitive: "exec" },
   "Devtools.UpdateStatus": { path: "/Devtools/UpdateStatus", primitive: "exec" },
 } as const;
