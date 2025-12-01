@@ -6,23 +6,29 @@ import { Pane, type DropPosition } from "./Pane";
 
 declare const __TYGOR_VERSION__: string;
 
-// Check if a type reference is "empty" (tygor.Empty or Any primitive)
+// Check if a type reference is "empty" (tygor.Empty, Any, or Empty primitive)
 function isEmptyType(ref: TypeRef | undefined): boolean {
   if (!ref) return true;
-  if (ref.kind === "primitive" && ref.primitiveKind === "Any") return true;
+  if (ref.kind === "primitive") {
+    const pk = ref.primitiveKind?.toLowerCase();
+    return pk === "any" || pk === "empty";
+  }
   if (ref.kind === "reference" && ref.name === "Empty") return true;
   return false;
 }
 
-// Format a type reference for display
+// Format a type reference for display (simplified: elide nullability and empty)
 function formatTypeRef(ref: TypeRef | undefined): string {
   if (!ref || isEmptyType(ref)) return "";
   switch (ref.kind) {
-    case "reference": return ref.name || "unknown";
-    case "primitive": return ref.primitiveKind?.toLowerCase() || "any";
-    case "array": return `${formatTypeRef(ref.element)}[]`;
-    case "ptr": return `${formatTypeRef(ref.element)} | null`;
-    default: return ref.kind;
+    case "reference": return ref.name || "";
+    case "primitive": return ref.primitiveKind?.toLowerCase() || "";
+    case "array": {
+      const el = formatTypeRef(ref.element);
+      return el ? `${el}[]` : "";
+    }
+    case "ptr": return formatTypeRef(ref.element); // unwrap nullable
+    default: return "";
   }
 }
 
