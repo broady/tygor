@@ -109,7 +109,7 @@ func ToggleTask(ctx context.Context, req *api.ToggleTaskParams) (*api.Task, erro
 func main() {
 	port := flag.String("port", "8080", "Server port")
 	genFlag := flag.Bool("gen", false, "Generate TypeScript types")
-	outDir := flag.String("out", "./client/src/rpc", "Output directory")
+	outDir := flag.String("out", "./src/rpc", "Output directory")
 	flag.Parse()
 
 	// [snippet:app-setup]

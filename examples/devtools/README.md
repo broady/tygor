@@ -5,10 +5,20 @@ A React + Vite application demonstrating tygor's vite plugin with full hot-reloa
 ## Quick Start
 
 ```bash
-bun dev (or make dev)
+bun install
+bun dev
 ```
 
 Open http://localhost:5173
+
+## Scripts
+
+- `npm run dev` - Start Go + Vite dev servers with hot-reload
+- `npm run gen` - Regenerate TypeScript types from Go
+- `npm run build` - Production build
+- `npm run typecheck` - Type-check TypeScript
+
+## How `bun dev` Works
 
 This single command:
 - Starts Go server with hot-reload (via `@tygor/vite-plugin`)
@@ -52,18 +62,17 @@ import { registry } from "./src/rpc/manifest";
 
 ## Configuration
 
-See `client/vite.config.js` for the plugin configuration:
+See `vite.config.js` for the plugin configuration:
 
 ```javascript
 tygorDev({
   manifest: registry,
-  prebuild: "go run . -gen -out ./client/src/rpc",
+  prebuild: "go run . -gen -out ./src/rpc",
   build: "go build -o ./tmp/server .",
   buildOutput: "./tmp/server",
   start: (port) => ({
     cmd: ["./tmp/server"],
     env: { PORT: String(port) },
   }),
-  workdir: "..",
 })
 ```

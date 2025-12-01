@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "postinstall": "go run . -gen -out ./src/rpc",
+    "gen": "go run . -gen -out ./src/rpc",
+    "postinstall": "npm run gen",
     "dev": "vite --clearScreen false",
     "build": "vite build",
     "preview": "vite preview",

@@ -6,14 +6,14 @@ tmp_dir = "tmp"
 
 [build]
   # Run tygorgen before rebuilding - keeps TS types in sync
-  pre_cmd = ["go run . -gen -out ./client/src/rpc"]
+  pre_cmd = ["go run . -gen -out ./src/rpc"]
   cmd = "go build -o ./tmp/main ."
   entrypoint = "./tmp/main"
 
   # Watch Go files only
   include_ext = ["go"]
   include_dir = [".", "api"]
-  exclude_dir = ["tmp", "client", "node_modules"]
+  exclude_dir = ["tmp", "src", "node_modules"]
 
   # Delay to batch rapid changes
   delay = 500

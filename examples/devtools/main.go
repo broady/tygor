@@ -94,7 +94,7 @@ func ToggleTask(ctx context.Context, req *api.ToggleTaskParams) (*api.Task, erro
 func main() {
 	portFlag := flag.String("port", "8080", "Server port")
 	genFlag := flag.Bool("gen", false, "Generate TypeScript types")
-	outDir := flag.String("out", "./client/src/rpc", "Output directory")
+	outDir := flag.String("out", "./src/rpc", "Output directory")
 	flag.Parse()
 
 	serverPort = *portFlag
@@ -117,7 +117,7 @@ func main() {
 	// Register devtools service for vite plugin integration
 	devtools.New(app, parsePort(serverPort)).Register()
 
-	// Note: Discovery is served by Vite as a static file (./client/src/rpc/discovery.json)
+	// Note: Discovery is served by Vite as a static file (./src/rpc/discovery.json)
 	// No need for a Go discovery service in fullstack apps!
 
 	system := app.Service("System")

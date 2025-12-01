@@ -1,6 +1,6 @@
 package api
 
-//go:generate go run ../ -gen -out ../client/src/rpc
+//go:generate go run ../ -gen -out ../src/rpc
 
 // Task represents a todo item.
 type Task struct {

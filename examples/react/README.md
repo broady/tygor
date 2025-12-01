@@ -11,6 +11,13 @@ bun dev
 
 Open http://localhost:5173
 
+## Scripts
+
+- `npm run dev` - Start Go + Vite dev servers with hot-reload
+- `npm run gen` - Regenerate TypeScript types from Go
+- `npm run build` - Production build
+- `npm run typecheck` - Type-check TypeScript
+
 This single command:
 - Starts Go server with hot-reload (via [air](https://github.com/air-verse/air))
 - Starts Vite dev server with HMR
