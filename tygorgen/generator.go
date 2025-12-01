@@ -697,7 +697,13 @@ func collectPackagesFromRoutes(routes internal.RouteMap) []string {
 			for t.Kind() == reflect.Pointer {
 				t = t.Elem()
 			}
-			if pkg := t.PkgPath(); pkg != "" && !seen[pkg] {
+			pkg := t.PkgPath()
+			// "main" is returned by reflect for types in package main,
+			// but packages.Load("main") looks in stdlib. Use "." instead.
+			if pkg == "main" {
+				pkg = "."
+			}
+			if pkg != "" && !seen[pkg] {
 				seen[pkg] = true
 				pkgs = append(pkgs, pkg)
 			}
@@ -708,7 +714,11 @@ func collectPackagesFromRoutes(routes internal.RouteMap) []string {
 			for t.Kind() == reflect.Pointer {
 				t = t.Elem()
 			}
-			if pkg := t.PkgPath(); pkg != "" && !seen[pkg] {
+			pkg := t.PkgPath()
+			if pkg == "main" {
+				pkg = "."
+			}
+			if pkg != "" && !seen[pkg] {
 				seen[pkg] = true
 				pkgs = append(pkgs, pkg)
 			}

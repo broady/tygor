@@ -1,32 +1,32 @@
-// Package runner generates and executes temporary Go files for tygor code generation.
+// Package runner executes tygor code generation by building and running
+// a modified version of the user's package.
 //
-// The generated runner file has a build tag so it doesn't interfere with
-// normal builds. It calls the user's export function and writes output
-// to the specified directory.
+// It uses Go's -overlay flag to replace the user's main() with a runner
+// that calls the export function and generates output.
 package runner
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/format"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"text/template"
 
-	"github.com/broady/tygor/internal/directive"
+	"github.com/broady/tygor/internal/discover"
 )
 
-// Options configures the generated runner.
+// Options configures the runner.
 type Options struct {
-	// Export is the export directive to use.
-	Export directive.Export
+	// Export is the function to call.
+	Export discover.Export
 
-	// Config is the optional config directive.
-	// Only used when Export.Type is ExportTypeApp.
-	Config *directive.Config
-
-	// OutDir is the output directory (passed as command line arg).
-	// This is embedded in the generated code.
+	// OutDir is the output directory for generated files.
 	OutDir string
 
 	// Flavor is the optional flavor flag (e.g., "zod").
@@ -37,62 +37,191 @@ type Options struct {
 	// Only used when Export.Type is ExportTypeApp.
 	Discovery bool
 
-	// NoConfig skips calling the config function even if present.
+	// ConfigFunc is the optional config function name.
+	// Only used when Export.Type is ExportTypeApp.
+	ConfigFunc string
+
+	// NoConfig disables the config function even if one exists.
 	NoConfig bool
+
+	// PkgDir is the directory containing the package.
+	PkgDir string
 }
 
-// Generate creates the runner source code.
-func Generate(opts Options) ([]byte, error) {
-	var tmpl *template.Template
-	var err error
+// Exec builds and runs the generator.
+//
+// It creates an overlay that:
+// 1. Replaces files containing func main() with versions that have main() removed
+// 2. Adds a runner file with our own main()
+//
+// The overlay approach lets us work with package main and unexported functions.
+func Exec(opts Options) (output []byte, err error) {
+	// Create temp directory for overlay files
+	tmpDir, err := os.MkdirTemp("", "tygor-gen-*")
+	if err != nil {
+		return nil, fmt.Errorf("create temp dir: %w", err)
+	}
+	defer os.RemoveAll(tmpDir)
 
+	// Find and process files with main()
+	overlay := make(map[string]string)
+
+	files, err := filepath.Glob(filepath.Join(opts.PkgDir, "*.go"))
+	if err != nil {
+		return nil, fmt.Errorf("glob: %w", err)
+	}
+
+	for _, file := range files {
+		// Skip test files
+		if filepath.Base(file) == "_test.go" || len(file) > 8 && file[len(file)-8:] == "_test.go" {
+			continue
+		}
+
+		hasMain, modified, err := removeMain(file)
+		if err != nil {
+			return nil, fmt.Errorf("process %s: %w", file, err)
+		}
+
+		if hasMain {
+			// Write modified file to temp dir
+			tmpFile := filepath.Join(tmpDir, filepath.Base(file))
+			if err := os.WriteFile(tmpFile, modified, 0644); err != nil {
+				return nil, fmt.Errorf("write modified %s: %w", file, err)
+			}
+			overlay[file] = tmpFile
+		}
+	}
+
+	// Generate runner
+	runnerSrc, err := generateRunner(opts)
+	if err != nil {
+		return nil, fmt.Errorf("generate runner: %w", err)
+	}
+
+	runnerFile := filepath.Join(tmpDir, "tygor_runner_main_.go")
+	if err := os.WriteFile(runnerFile, runnerSrc, 0644); err != nil {
+		return nil, fmt.Errorf("write runner: %w", err)
+	}
+
+	// Add runner to overlay (maps to a "new" file in the package)
+	overlay[filepath.Join(opts.PkgDir, "tygor_runner_main_.go")] = runnerFile
+
+	// Write overlay JSON
+	overlayData := struct {
+		Replace map[string]string `json:"Replace"`
+	}{Replace: overlay}
+
+	overlayJSON, err := json.Marshal(overlayData)
+	if err != nil {
+		return nil, fmt.Errorf("marshal overlay: %w", err)
+	}
+
+	overlayFile := filepath.Join(tmpDir, "overlay.json")
+	if err := os.WriteFile(overlayFile, overlayJSON, 0644); err != nil {
+		return nil, fmt.Errorf("write overlay: %w", err)
+	}
+
+	// Build with overlay
+	// Use -mod=mod to allow updating go.mod/go.sum if needed
+	binaryPath := filepath.Join(tmpDir, "runner")
+	buildCmd := exec.Command("go", "build", "-mod=mod", "-overlay", overlayFile, "-o", binaryPath, ".")
+	buildCmd.Dir = opts.PkgDir
+	buildCmd.Env = append(os.Environ(), "GOWORK=off")
+	if buildOut, err := buildCmd.CombinedOutput(); err != nil {
+		return buildOut, fmt.Errorf("build: %w\n%s", err, buildOut)
+	}
+
+	// Run the binary
+	runCmd := exec.Command(binaryPath)
+	runCmd.Dir = opts.PkgDir
+	output, err = runCmd.CombinedOutput()
+	if err != nil {
+		return output, fmt.Errorf("run: %w\n%s", err, output)
+	}
+
+	return output, nil
+}
+
+// removeMain parses a Go file and returns a version with func main() removed.
+// Returns (hasMain, modifiedSource, error).
+func removeMain(filename string) (bool, []byte, error) {
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+	if err != nil {
+		return false, nil, err
+	}
+
+	// Find and remove main function
+	hasMain := false
+	var newDecls []ast.Decl
+	for _, decl := range f.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if ok && fn.Name.Name == "main" && fn.Recv == nil {
+			hasMain = true
+			continue // skip main()
+		}
+		newDecls = append(newDecls, decl)
+	}
+
+	if !hasMain {
+		return false, nil, nil
+	}
+
+	f.Decls = newDecls
+
+	var buf bytes.Buffer
+	if err := format.Node(&buf, fset, f); err != nil {
+		return false, nil, err
+	}
+
+	return true, buf.Bytes(), nil
+}
+
+// generateRunner creates the runner main() source.
+func generateRunner(opts Options) ([]byte, error) {
+	var tmplStr string
 	switch opts.Export.Type {
-	case directive.ExportTypeApp:
-		tmpl, err = template.New("runner").Parse(appRunnerTemplate)
-	case directive.ExportTypeGenerator:
-		tmpl, err = template.New("runner").Parse(generatorRunnerTemplate)
+	case discover.ExportTypeApp:
+		tmplStr = appRunnerTemplate
+	case discover.ExportTypeGenerator:
+		tmplStr = generatorRunnerTemplate
 	default:
 		return nil, fmt.Errorf("unknown export type: %v", opts.Export.Type)
 	}
 
+	tmpl, err := template.New("runner").Parse(tmplStr)
 	if err != nil {
-		return nil, fmt.Errorf("parse template: %w", err)
+		return nil, err
 	}
 
-	data := templateData{
-		ExportFunc: opts.Export.FuncName,
+	configFunc := ""
+	if opts.ConfigFunc != "" && !opts.NoConfig {
+		configFunc = opts.ConfigFunc
+	}
+
+	data := struct {
+		ExportFunc string
+		OutDir     string
+		Flavor     string
+		Discovery  bool
+		ConfigFunc string
+	}{
+		ExportFunc: opts.Export.Name,
 		OutDir:     opts.OutDir,
 		Flavor:     opts.Flavor,
 		Discovery:  opts.Discovery,
-		HasConfig:  opts.Config != nil && !opts.NoConfig,
-		ConfigFunc: "",
-	}
-	if opts.Config != nil {
-		data.ConfigFunc = opts.Config.FuncName
+		ConfigFunc: configFunc,
 	}
 
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {
-		return nil, fmt.Errorf("execute template: %w", err)
+		return nil, err
 	}
 
 	return buf.Bytes(), nil
 }
 
-type templateData struct {
-	ExportFunc string
-	OutDir     string
-	Flavor     string
-	Discovery  bool
-	HasConfig  bool
-	ConfigFunc string
-}
-
-// appRunnerTemplate is used when the export returns *tygor.App.
-// It creates a generator from the app, applies flags, optionally calls config.
-const appRunnerTemplate = `//go:build tygor_gen_runner
-
-package main
+const appRunnerTemplate = `package main
 
 import (
 	"fmt"
@@ -109,7 +238,7 @@ func main() {
 {{if .Discovery}}
 	g = g.WithDiscovery()
 {{end}}
-{{if .HasConfig}}
+{{if .ConfigFunc}}
 	g = {{.ConfigFunc}}(g)
 {{end}}
 	result, err := g.ToDir("{{.OutDir}}")
@@ -123,11 +252,7 @@ func main() {
 }
 `
 
-// generatorRunnerTemplate is used when the export returns *tygorgen.Generator.
-// The user has full control over the generator, so no flags are applied.
-const generatorRunnerTemplate = `//go:build tygor_gen_runner
-
-package main
+const generatorRunnerTemplate = `package main
 
 import (
 	"fmt"
@@ -136,182 +261,6 @@ import (
 
 func main() {
 	g := {{.ExportFunc}}()
-	result, err := g.ToDir("{{.OutDir}}")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "tygor gen: %v\n", err)
-		os.Exit(1)
-	}
-	for _, w := range result.Warnings {
-		fmt.Fprintf(os.Stderr, "warning: %s: %s\n", w.Code, w.Message)
-	}
-}
-`
-
-// ExecOptions configures the runner execution.
-type ExecOptions struct {
-	Options
-
-	// ModuleDir is the directory containing the go.mod file.
-	ModuleDir string
-
-	// ModulePath is the module path from go.mod.
-	ModulePath string
-
-	// PkgPath is the full import path of the package containing the export.
-	PkgPath string
-}
-
-// Exec generates a runner in a temporary directory, executes it, and cleans up.
-//
-// The runner is created as a separate package that imports the user's package.
-// This avoids conflicts with the user's main function.
-//
-// Returns the combined stdout/stderr output and any error.
-func Exec(opts ExecOptions) (output []byte, err error) {
-	// Create a temporary directory for the runner
-	tmpDir, err := os.MkdirTemp("", "tygor-gen-*")
-	if err != nil {
-		return nil, fmt.Errorf("create temp dir: %w", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	// Generate the runner source (with import)
-	src, err := GenerateWithImport(opts.Options, opts.PkgPath)
-	if err != nil {
-		return nil, fmt.Errorf("generate runner: %w", err)
-	}
-
-	// Write go.mod that requires the user's module
-	goMod := fmt.Sprintf(`module tygor_gen_runner
-
-go 1.21
-
-require %s v0.0.0
-
-replace %s => %s
-`, opts.ModulePath, opts.ModulePath, opts.ModuleDir)
-
-	if err := os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte(goMod), 0644); err != nil {
-		return nil, fmt.Errorf("write go.mod: %w", err)
-	}
-
-	// Write the runner file
-	if err := os.WriteFile(filepath.Join(tmpDir, "main.go"), src, 0644); err != nil {
-		return nil, fmt.Errorf("write runner: %w", err)
-	}
-
-	// Run go mod tidy to resolve dependencies
-	tidyCmd := exec.Command("go", "mod", "tidy")
-	tidyCmd.Dir = tmpDir
-	tidyCmd.Env = append(os.Environ(), "GOWORK=off")
-	if tidyOut, err := tidyCmd.CombinedOutput(); err != nil {
-		return tidyOut, fmt.Errorf("go mod tidy: %w\n%s", err, tidyOut)
-	}
-
-	// Run the generated code
-	cmd := exec.Command("go", "run", ".")
-	cmd.Dir = tmpDir
-	cmd.Env = append(os.Environ(), "GOWORK=off")
-	output, err = cmd.CombinedOutput()
-	if err != nil {
-		return output, fmt.Errorf("run generator: %w\n%s", err, output)
-	}
-
-	return output, nil
-}
-
-// GenerateWithImport creates runner source that imports the user's package.
-func GenerateWithImport(opts Options, pkgPath string) ([]byte, error) {
-	var tmpl *template.Template
-	var err error
-
-	switch opts.Export.Type {
-	case directive.ExportTypeApp:
-		tmpl, err = template.New("runner").Parse(appRunnerWithImportTemplate)
-	case directive.ExportTypeGenerator:
-		tmpl, err = template.New("runner").Parse(generatorRunnerWithImportTemplate)
-	default:
-		return nil, fmt.Errorf("unknown export type: %v", opts.Export.Type)
-	}
-
-	if err != nil {
-		return nil, fmt.Errorf("parse template: %w", err)
-	}
-
-	data := templateDataWithImport{
-		PkgPath:    pkgPath,
-		ExportFunc: opts.Export.FuncName,
-		OutDir:     opts.OutDir,
-		Flavor:     opts.Flavor,
-		Discovery:  opts.Discovery,
-		HasConfig:  opts.Config != nil && !opts.NoConfig,
-		ConfigFunc: "",
-	}
-	if opts.Config != nil {
-		data.ConfigFunc = opts.Config.FuncName
-	}
-
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
-		return nil, fmt.Errorf("execute template: %w", err)
-	}
-
-	return buf.Bytes(), nil
-}
-
-type templateDataWithImport struct {
-	PkgPath    string
-	ExportFunc string
-	OutDir     string
-	Flavor     string
-	Discovery  bool
-	HasConfig  bool
-	ConfigFunc string
-}
-
-const appRunnerWithImportTemplate = `package main
-
-import (
-	"fmt"
-	"os"
-
-	"github.com/broady/tygor/tygorgen"
-	pkg "{{.PkgPath}}"
-)
-
-func main() {
-	g := tygorgen.FromApp(pkg.{{.ExportFunc}}())
-{{if .Flavor}}
-	g = g.WithFlavor(tygorgen.Flavor("{{.Flavor}}"))
-{{end}}
-{{if .Discovery}}
-	g = g.WithDiscovery()
-{{end}}
-{{if .HasConfig}}
-	g = pkg.{{.ConfigFunc}}(g)
-{{end}}
-	result, err := g.ToDir("{{.OutDir}}")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "tygor gen: %v\n", err)
-		os.Exit(1)
-	}
-	for _, w := range result.Warnings {
-		fmt.Fprintf(os.Stderr, "warning: %s: %s\n", w.Code, w.Message)
-	}
-}
-`
-
-const generatorRunnerWithImportTemplate = `package main
-
-import (
-	"fmt"
-	"os"
-
-	pkg "{{.PkgPath}}"
-)
-
-func main() {
-	g := pkg.{{.ExportFunc}}()
 	result, err := g.ToDir("{{.OutDir}}")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "tygor gen: %v\n", err)

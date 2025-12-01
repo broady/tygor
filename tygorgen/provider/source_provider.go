@@ -19,6 +19,19 @@ import (
 // SourceProvider extracts types by analyzing Go source code.
 type SourceProvider struct{}
 
+// normalizePkgPath normalizes a package path for consistency with reflect.
+// For "package main", reflect.Type.PkgPath() returns "main", but go/types
+// returns the actual module path. This normalizes to "main" for consistency.
+func normalizePkgPath(pkg *types.Package) string {
+	if pkg == nil {
+		return ""
+	}
+	if pkg.Name() == "main" {
+		return "main"
+	}
+	return pkg.Path()
+}
+
 // RootType identifies a type to extract with its package context.
 type RootType struct {
 	// Name is the type name (e.g., "User", "Page").
@@ -88,14 +101,24 @@ func (p *SourceProvider) BuildSchema(ctx context.Context, opts SourceInputOption
 	// Populate package info from first INPUT package (not first loaded package)
 	// packages.Load returns packages in dependency order, not input order
 	var mainPkg *packages.Package
+	firstInput := opts.Packages[0]
 	for _, pkg := range pkgs {
-		if pkg.PkgPath == opts.Packages[0] {
+		// "." is special: packages.Load(".") returns the package with its real path,
+		// not ".". So we match on "." by finding a package whose directory matches cwd,
+		// or just take the first non-dependency package.
+		if firstInput == "." {
+			// For ".", use the first package that was explicitly requested
+			// packages.Load returns requested packages first, then dependencies
+			mainPkg = pkg
+			break
+		}
+		if pkg.PkgPath == firstInput {
 			mainPkg = pkg
 			break
 		}
 	}
 	if mainPkg == nil {
-		return nil, fmt.Errorf("input package %s not found in loaded packages", opts.Packages[0])
+		return nil, fmt.Errorf("input package %s not found in loaded packages", firstInput)
 	}
 	// Get the actual directory from the package's files
 	pkgDir := mainPkg.PkgPath // fallback to package path
@@ -147,8 +170,15 @@ type enumConstant struct {
 func (b *schemaBuilder) extractRootType(root RootType) error {
 	for _, pkg := range b.pkgs {
 		// If package is specified, only look in that package
-		if root.Package != "" && pkg.PkgPath != root.Package {
-			continue
+		// Special case: "main" from reflect matches any package named "main"
+		if root.Package != "" {
+			if root.Package == "main" {
+				if pkg.Name != "main" {
+					continue
+				}
+			} else if pkg.PkgPath != root.Package {
+				continue
+			}
 		}
 
 		obj := pkg.Types.Scope().Lookup(root.Name)
@@ -212,7 +242,7 @@ func (b *schemaBuilder) extractNamedType(tn *types.TypeName) error {
 	name := tn.Name()
 	pkg := ""
 	if named.Obj() != nil && named.Obj().Pkg() != nil {
-		pkg = named.Obj().Pkg().Path()
+		pkg = normalizePkgPath(named.Obj().Pkg())
 	}
 	fullName := pkg + "." + name
 	if b.typeNames[fullName] {
@@ -231,7 +261,7 @@ func (b *schemaBuilder) extractNamedType(tn *types.TypeName) error {
 	if consts, isEnum := b.enumCandidates[named]; isEnum && len(consts) > 0 {
 		pkgPath := ""
 		if named.Obj() != nil && named.Obj().Pkg() != nil {
-			pkgPath = named.Obj().Pkg().Path()
+			pkgPath = normalizePkgPath(named.Obj().Pkg())
 		}
 		enumDesc := b.buildEnumDescriptor(tn.Name(), pkgPath, consts, doc, src)
 		b.namedTypes[key] = enumDesc
@@ -243,7 +273,7 @@ func (b *schemaBuilder) extractNamedType(tn *types.TypeName) error {
 	if b.hasCustomMarshaler(named) {
 		pkgPath := ""
 		if named.Obj() != nil && named.Obj().Pkg() != nil {
-			pkgPath = named.Obj().Pkg().Path()
+			pkgPath = normalizePkgPath(named.Obj().Pkg())
 		}
 		b.schema.AddWarning(ir.Warning{
 			Code:     "CUSTOM_MARSHALER",
@@ -276,7 +306,7 @@ func (b *schemaBuilder) extractNamedType(tn *types.TypeName) error {
 		// Interfaces are emitted as PrimitiveAny with a warning
 		pkgPath := ""
 		if named.Obj() != nil && named.Obj().Pkg() != nil {
-			pkgPath = named.Obj().Pkg().Path()
+			pkgPath = normalizePkgPath(named.Obj().Pkg())
 		}
 		b.schema.AddWarning(ir.Warning{
 			Code:     "INTERFACE_TYPE",
@@ -301,7 +331,7 @@ func (b *schemaBuilder) extractNamedType(tn *types.TypeName) error {
 		}
 		pkgPath := ""
 		if named.Obj() != nil && named.Obj().Pkg() != nil {
-			pkgPath = named.Obj().Pkg().Path()
+			pkgPath = normalizePkgPath(named.Obj().Pkg())
 		}
 		aliasDesc := &ir.AliasDescriptor{
 			Name:          ir.GoIdentifier{Name: tn.Name(), Package: pkgPath},
@@ -322,7 +352,7 @@ func (b *schemaBuilder) typeKey(named *types.Named) string {
 	if obj == nil || obj.Pkg() == nil {
 		return named.String()
 	}
-	return obj.Pkg().Path() + "." + obj.Name()
+	return normalizePkgPath(obj.Pkg()) + "." + obj.Name()
 }
 
 // convertType converts a Go type to an IR TypeDescriptor.
@@ -341,7 +371,7 @@ func (b *schemaBuilder) convertType(t types.Type) (ir.TypeDescriptor, error) {
 		obj := typ.Obj()
 		pkgPath := ""
 		if obj.Pkg() != nil {
-			pkgPath = obj.Pkg().Path()
+			pkgPath = normalizePkgPath(obj.Pkg())
 		}
 		// Extract the named type if not already processed or being processed
 		// (handles recursive types like type Node struct { Next *Node })
@@ -445,7 +475,7 @@ func (b *schemaBuilder) handleSpecialType(t types.Type) ir.TypeDescriptor {
 			return nil
 		}
 
-		pkgPath := obj.Pkg().Path()
+		pkgPath := normalizePkgPath(obj.Pkg())
 		name := obj.Name()
 
 		// time.Time
@@ -910,7 +940,7 @@ func (b *schemaBuilder) buildStructDescriptor(named *types.Named, name string, d
 
 	pkgPath := ""
 	if named.Obj() != nil && named.Obj().Pkg() != nil {
-		pkgPath = named.Obj().Pkg().Path()
+		pkgPath = normalizePkgPath(named.Obj().Pkg())
 	}
 
 	// Extract type parameters for generic types
@@ -973,7 +1003,7 @@ func (b *schemaBuilder) buildStructDescriptor(named *types.Named, name string, d
 					obj := named.Obj()
 					embeddedPkgPath := ""
 					if obj != nil && obj.Pkg() != nil {
-						embeddedPkgPath = obj.Pkg().Path()
+						embeddedPkgPath = normalizePkgPath(obj.Pkg())
 					}
 					descriptor.Extends = append(descriptor.Extends, ir.GoIdentifier{
 						Name:    obj.Name(),
@@ -1106,7 +1136,7 @@ func (b *schemaBuilder) convertTypeParamConstraint(constraint types.Type) ir.Typ
 				obj := named.Obj()
 				pkgPath := ""
 				if obj != nil && obj.Pkg() != nil {
-					pkgPath = obj.Pkg().Path()
+					pkgPath = normalizePkgPath(obj.Pkg())
 				}
 				return ir.Ref(obj.Name(), pkgPath)
 			}
@@ -1269,13 +1299,13 @@ func (b *schemaBuilder) handleAnonymousStruct(structType *types.Struct, parentNa
 				}
 				if named, ok := fieldType.(*types.Named); ok {
 					obj := named.Obj()
-					pkgPath := ""
+					embeddedPkgPath := ""
 					if obj != nil && obj.Pkg() != nil {
-						pkgPath = obj.Pkg().Path()
+						embeddedPkgPath = normalizePkgPath(obj.Pkg())
 					}
 					descriptor.Extends = append(descriptor.Extends, ir.GoIdentifier{
 						Name:    obj.Name(),
-						Package: pkgPath,
+						Package: embeddedPkgPath,
 					})
 				}
 				continue
