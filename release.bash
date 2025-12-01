@@ -29,35 +29,39 @@ if [[ -n "$(git status --porcelain)" ]]; then
   exit 1
 fi
 
-# Show current versions
-CLIENT_VERSION=$(jq -r .version client/package.json)
-VITE_PLUGIN_VERSION=$(jq -r .version vite-plugin/package.json)
-echo "Current versions:"
-echo "  @tygor/client:      ${CLIENT_VERSION}"
-echo "  @tygor/vite-plugin: ${VITE_PLUGIN_VERSION}"
+# Read current version from VERSION file (single source of truth)
+CURRENT_VERSION=$(tr -d '[:space:]' < VERSION)
+echo "Current version: ${CURRENT_VERSION}"
 
-if [[ "${CLIENT_VERSION}" != "${VITE_PLUGIN_VERSION}" ]]; then
-  echo ""
-  echo "Warning: Versions are out of sync. They will be synchronized."
-fi
-
-# Bump version in client (this is the source of truth)
-cd client
-bun version "${VERSION_TYPE}" --no-git-tag-version
-NEW_VERSION=$(jq -r .version package.json)
-cd ..
+# Calculate new version
+IFS='.' read -r MAJOR MINOR PATCH <<< "${CURRENT_VERSION}"
+case "${VERSION_TYPE}" in
+  major) NEW_VERSION="$((MAJOR + 1)).0.0" ;;
+  minor) NEW_VERSION="${MAJOR}.$((MINOR + 1)).0" ;;
+  patch) NEW_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))" ;;
+esac
 
 TAG="v${NEW_VERSION}"
-echo ""
 echo "New version: ${NEW_VERSION}"
 
-# Update vite-plugin version and @tygor/client dependency
+# Update VERSION file
+echo "${NEW_VERSION}" > VERSION
+
+# Update all package.json files
 echo ""
-echo "Updating vite-plugin/package.json..."
-jq --arg v "${NEW_VERSION}" --arg dep "^${NEW_VERSION}" \
-  '.version = $v | .dependencies["@tygor/client"] = $dep' \
+echo "Updating package versions..."
+
+# client/package.json
+jq --arg v "${NEW_VERSION}" '.version = $v' \
+  client/package.json > client/package.json.tmp
+mv client/package.json.tmp client/package.json
+echo "  Updated client/package.json"
+
+# vite-plugin/package.json (version only, keep workspace:* for local dev)
+jq --arg v "${NEW_VERSION}" '.version = $v' \
   vite-plugin/package.json > vite-plugin/package.json.tmp
 mv vite-plugin/package.json.tmp vite-plugin/package.json
+echo "  Updated vite-plugin/package.json"
 
 # Update example package.json files
 echo "Updating example package.json files..."
@@ -96,7 +100,7 @@ read -p "Ready to release ${TAG}? (y/N) " -n 1 -r
 echo
 if [[ ! ${REPLY} =~ ^[Yy]$ ]]; then
   echo "Aborted. Restoring changes..."
-  git checkout client/package.json vite-plugin/package.json examples/
+  git checkout VERSION client/package.json vite-plugin/package.json examples/
   exit 1
 fi
 
