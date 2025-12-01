@@ -105,7 +105,7 @@ typecheck-vite-plugin:
 	@cd vite-plugin && bun run --silent typecheck
 
 # Precommit sub-targets (for parallel execution, all depend on fmt-check)
-.PHONY: precommit-test precommit-lint precommit-check precommit-examples precommit-typecheck precommit-vite-plugin precommit-devserver
+.PHONY: precommit-test precommit-lint precommit-check precommit-examples precommit-typecheck precommit-vite-plugin precommit-devserver precommit-client-bundle
 precommit-test: fmt-check ; @$(MAKE) --no-print-directory test-quiet
 precommit-lint: fmt-check ; @$(MAKE) --no-print-directory lint-quiet
 precommit-check: fmt-check ; @$(MAKE) --no-print-directory check-quiet
@@ -113,19 +113,25 @@ precommit-examples: fmt-check ; @$(MAKE) --no-print-directory -C examples precom
 precommit-typecheck: fmt-check ; @$(MAKE) --no-print-directory typecheck-docs
 precommit-vite-plugin: fmt-check ; @$(MAKE) --no-print-directory typecheck-vite-plugin
 precommit-devserver: fmt-check
-	@go run ./cmd/tygor gen -p ./cmd/tygor/internal/dev ./vite-plugin/src/devserver
-	@if [ -n "$$(git diff --name-only vite-plugin/src/devserver 2>/dev/null)" ]; then \
+	@go run ./cmd/tygor gen --check -p ./cmd/tygor/internal/dev ./vite-plugin/src/devserver
+precommit-client-bundle: fmt-check
+	@cd vite-plugin && bun run --silent build:client
+	@# Check for changes using jj (preferred) or git as fallback
+	@if [ -d .jj ]; then \
+		changes=$$(jj diff --name-only vite-plugin/src/generated/client-bundle.ts 2>/dev/null | grep -v '^$$' || true); \
+	else \
+		changes=$$(git diff --name-only vite-plugin/src/generated/client-bundle.ts 2>/dev/null || true); \
+	fi; \
+	if [ -n "$$changes" ]; then \
 		echo ""; \
-		echo "ERROR: Generated devserver types out of sync with cmd/tygor/internal/dev."; \
-		echo "The files have been updated. Please commit the changes:"; \
-		echo ""; \
-		git --no-pager diff --stat vite-plugin/src/devserver; \
+		echo "ERROR: Client bundle out of sync with vite-plugin/src/client/ sources."; \
+		echo "Run 'cd vite-plugin && bun run build' to update."; \
 		echo ""; \
 		exit 1; \
 	fi
 
 # Run all precommit checks in parallel (fmt-check runs first)
-precommit: precommit-test precommit-lint precommit-check precommit-examples precommit-typecheck precommit-vite-plugin precommit-devserver
+precommit: precommit-test precommit-lint precommit-check precommit-examples precommit-typecheck precommit-vite-plugin precommit-devserver precommit-client-bundle
 	@echo "All precommit checks passed."
 
 # Run CI locally using act (https://github.com/nektos/act)
