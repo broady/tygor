@@ -105,7 +105,7 @@ typecheck-vite-plugin:
 	@cd vite-plugin && bun run --silent typecheck
 
 # Precommit sub-targets (for parallel execution, all depend on fmt-check)
-.PHONY: precommit-test precommit-lint precommit-check precommit-examples precommit-typecheck precommit-vite-plugin precommit-devserver precommit-client-bundle
+.PHONY: precommit-test precommit-lint precommit-check precommit-examples precommit-typecheck precommit-vite-plugin precommit-devserver precommit-client-bundle precommit-readme-version
 precommit-test: fmt-check ; @$(MAKE) --no-print-directory test-quiet
 precommit-lint: fmt-check ; @$(MAKE) --no-print-directory lint-quiet
 precommit-check: fmt-check ; @$(MAKE) --no-print-directory check-quiet
@@ -114,6 +114,13 @@ precommit-typecheck: fmt-check ; @$(MAKE) --no-print-directory typecheck-docs
 precommit-vite-plugin: fmt-check ; @$(MAKE) --no-print-directory typecheck-vite-plugin
 precommit-devserver: fmt-check
 	@go run ./cmd/tygor gen --check -p ./cmd/tygor/internal/dev ./vite-plugin/src/devserver
+precommit-readme-version: fmt-check
+	@VERSION=$$(cat VERSION); \
+	if ! grep -q "broady/tygor/examples/react#v$$VERSION" README.md; then \
+		echo "ERROR: README degit version doesn't match VERSION file (v$$VERSION)"; \
+		echo "Update the degit command in README.md to use #v$$VERSION"; \
+		exit 1; \
+	fi
 precommit-client-bundle: fmt-check
 	@cd vite-plugin && bun run --silent build:client
 	@# Check for changes using jj (preferred) or git as fallback
@@ -131,7 +138,7 @@ precommit-client-bundle: fmt-check
 	fi
 
 # Run all precommit checks in parallel (fmt-check runs first)
-precommit: precommit-test precommit-lint precommit-check precommit-examples precommit-typecheck precommit-vite-plugin precommit-devserver precommit-client-bundle
+precommit: precommit-test precommit-lint precommit-check precommit-examples precommit-typecheck precommit-vite-plugin precommit-devserver precommit-client-bundle precommit-readme-version
 	@echo "All precommit checks passed."
 
 # Run CI locally using act (https://github.com/nektos/act)

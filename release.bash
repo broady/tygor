@@ -47,6 +47,10 @@ echo "New version: ${NEW_VERSION}"
 # Update VERSION file
 echo "${NEW_VERSION}" > VERSION
 
+# Update degit version in README.md
+sed -i "s|broady/tygor/examples/react#v[0-9.]*|broady/tygor/examples/react#v${NEW_VERSION}|g" README.md
+echo "  Updated README.md degit version"
+
 # Update all package.json files
 echo ""
 echo "Updating package versions..."

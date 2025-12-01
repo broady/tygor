@@ -23,16 +23,24 @@ func CreateUser(ctx context.Context, req *CreateUserRequest) (*User, error) {
 
 // [/snippet:handlers]
 
-func exampleRegistration() {
-	// [snippet:registration]
+// [snippet:setup-app]
+func SetupApp() *tygor.App {
 	app := tygor.NewApp()
 
 	users := app.Service("Users")
 	users.Register("Get", tygor.Query(GetUser))      // GET request
 	users.Register("Create", tygor.Exec(CreateUser)) // POST request
 
+	return app
+}
+
+// [/snippet:setup-app]
+
+func exampleMain() {
+	// [snippet:main]
+	app := SetupApp()
 	http.ListenAndServe(":8080", app.Handler())
-	// [/snippet:registration]
+	// [/snippet:main]
 }
 
 func exampleGeneration() {
@@ -57,7 +65,8 @@ func exampleClient() {
 var (
 	_ = context.Background
 	_ = log.Fatal
-	_ = exampleRegistration
+	_ = SetupApp
+	_ = exampleMain
 	_ = exampleGeneration
 	_ = exampleClient
 )
