@@ -45,7 +45,7 @@ func NewApp(svc *Service) *tygor.App {
 	devtools := app.Service("Devtools")
 	devtools.Register("GetDiscovery", tygor.Query(svc.GetDiscovery))
 	devtools.Register("GetSource", tygor.Query(svc.GetSource))
-	devtools.Register("GetStatus", tygor.Stream(svc.GetStatus))
+	devtools.Register("GetStatus", tygor.StreamFunc(svc.GetStatus))
 	devtools.Register("UpdateStatus", tygor.Exec(svc.UpdateStatus))
 	devtools.Register("Reload", tygor.Exec(svc.Reload))
 	return app
@@ -151,11 +151,11 @@ type GetStatusResponse struct {
 // GetStatus streams status updates for devtools UI consumption.
 // The first message always includes RawrData. Subsequent messages are sent
 // when UpdateStatus is called.
-func (s *Service) GetStatus(ctx context.Context, req *GetStatusRequest, emit tygor.Emitter[*GetStatusResponse]) error {
+func (s *Service) GetStatus(ctx context.Context, req *GetStatusRequest, stream tygor.Stream[*GetStatusResponse]) error {
 	// Send initial status with RawrData
 	resp := s.buildStatusResponse()
 	resp.RawrData = loadRawrData()
-	if err := emit.Send(resp); err != nil {
+	if err := stream.Send(resp); err != nil {
 		return err
 	}
 
@@ -170,7 +170,7 @@ func (s *Service) GetStatus(ctx context.Context, req *GetStatusRequest, emit tyg
 		case <-ctx.Done():
 			return nil
 		case update := <-ch:
-			if err := emit.Send(update); err != nil {
+			if err := stream.Send(update); err != nil {
 				return err
 			}
 		}

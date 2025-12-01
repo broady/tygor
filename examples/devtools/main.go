@@ -85,25 +85,21 @@ func ToggleTask(ctx context.Context, req *api.ToggleTaskParams) (*api.Task, erro
 }
 
 // CurrentTime streams the current time every second
-func CurrentTime(ctx context.Context, req tygor.Empty, emit tygor.Emitter[*api.TimeUpdate]) error {
+func CurrentTime(_ context.Context, req tygor.Empty, stream tygor.Stream[*api.TimeUpdate]) error {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
 	// Send immediately
-	if err := emit.Send(&api.TimeUpdate{Time: time.Now()}); err != nil {
+	if err := stream.Send(&api.TimeUpdate{Time: time.Now()}); err != nil {
 		return err
 	}
 
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case t := <-ticker.C:
-			if err := emit.Send(&api.TimeUpdate{Time: t}); err != nil {
-				return err
-			}
+	for t := range ticker.C {
+		if err := stream.Send(&api.TimeUpdate{Time: t}); err != nil {
+			return err
 		}
 	}
+	return nil
 }
 
 func main() {
@@ -138,7 +134,7 @@ func main() {
 	tasksvc := app.Service("Tasks")
 	tasksvc.Register("List", tygor.Query(ListTasks))
 	tasksvc.Register("SyncedList", tasksAtom.Handler())
-	tasksvc.Register("Time", tygor.Stream(CurrentTime))
+	tasksvc.Register("Time", tygor.StreamFunc(CurrentTime))
 	tasksvc.Register("Create", tygor.Exec(CreateTask))
 	tasksvc.Register("Toggle", tygor.Exec(ToggleTask))
 	tasksvc.Register("MakeError", tygor.Exec(MakeError))

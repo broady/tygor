@@ -40,7 +40,7 @@ func GetRuntimeInfo(ctx context.Context, req tygor.Empty) (*api.RuntimeInfo, err
 	}, nil
 }
 
-func StreamRuntimeInfo(ctx context.Context, req tygor.Empty, e tygor.Emitter[*api.RuntimeInfo]) error {
+func StreamRuntimeInfo(ctx context.Context, req tygor.Empty, stream tygor.Stream[*api.RuntimeInfo]) error {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
@@ -49,7 +49,7 @@ func StreamRuntimeInfo(ctx context.Context, req tygor.Empty, e tygor.Emitter[*ap
 		if err != nil {
 			return err
 		}
-		if err := e.Send(info); err != nil {
+		if err := stream.Send(info); err != nil {
 			return err
 		}
 	}
@@ -119,7 +119,7 @@ func main() {
 
 	system := app.Service("System")
 	system.Register("Info", tygor.Query(GetRuntimeInfo))
-	system.Register("InfoStream", tygor.Stream(StreamRuntimeInfo))
+	system.Register("InfoStream", tygor.StreamFunc(StreamRuntimeInfo))
 
 	tasks := app.Service("Tasks")
 	tasks.Register("List", tygor.Query(ListTasks))

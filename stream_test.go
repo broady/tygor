@@ -353,7 +353,7 @@ var _ = bytes.Buffer{}
 // =============================================================================
 
 func TestStreamEmit_BasicEvents(t *testing.T) {
-	fn := func(ctx context.Context, req StreamRequest, e Emitter[StreamEvent]) error {
+	fn := func(ctx context.Context, req StreamRequest, e Stream[StreamEvent]) error {
 		for i := 1; i <= 3; i++ {
 			if err := e.Send(StreamEvent{ID: i, Message: "event"}); err != nil {
 				return err
@@ -364,7 +364,7 @@ func TestStreamEmit_BasicEvents(t *testing.T) {
 
 	app := NewApp()
 	svc := app.Service("Feed")
-	svc.Register("Subscribe", Stream(fn))
+	svc.Register("Subscribe", StreamFunc(fn))
 
 	body := `{"topic":"news"}`
 	req := httptest.NewRequest("POST", "/Feed/Subscribe", strings.NewReader(body))
@@ -390,7 +390,7 @@ func TestStreamEmit_BasicEvents(t *testing.T) {
 }
 
 func TestStreamEmit_HandlerError(t *testing.T) {
-	fn := func(ctx context.Context, req StreamRequest, e Emitter[StreamEvent]) error {
+	fn := func(ctx context.Context, req StreamRequest, e Stream[StreamEvent]) error {
 		if err := e.Send(StreamEvent{ID: 1, Message: "ok"}); err != nil {
 			return err
 		}
@@ -399,7 +399,7 @@ func TestStreamEmit_HandlerError(t *testing.T) {
 
 	app := NewApp()
 	svc := app.Service("Feed")
-	svc.Register("Subscribe", Stream(fn))
+	svc.Register("Subscribe", StreamFunc(fn))
 
 	body := `{"topic":"news"}`
 	req := httptest.NewRequest("POST", "/Feed/Subscribe", strings.NewReader(body))
@@ -427,7 +427,7 @@ func TestStreamEmit_HandlerError(t *testing.T) {
 }
 
 func TestStreamEmit_ErrStreamClosedNotSentToClient(t *testing.T) {
-	fn := func(ctx context.Context, req StreamRequest, e Emitter[StreamEvent]) error {
+	fn := func(ctx context.Context, req StreamRequest, e Stream[StreamEvent]) error {
 		if err := e.Send(StreamEvent{ID: 1}); err != nil {
 			return err
 		}
@@ -438,7 +438,7 @@ func TestStreamEmit_ErrStreamClosedNotSentToClient(t *testing.T) {
 
 	app := NewApp()
 	svc := app.Service("Feed")
-	svc.Register("Subscribe", Stream(fn))
+	svc.Register("Subscribe", StreamFunc(fn))
 
 	body := `{"topic":"news"}`
 	req := httptest.NewRequest("POST", "/Feed/Subscribe", strings.NewReader(body))
@@ -467,7 +467,7 @@ func TestStreamEmit_ContextCancellation(t *testing.T) {
 	started := make(chan struct{})
 	handlerDone := make(chan struct{})
 
-	fn := func(ctx context.Context, req StreamRequest, e Emitter[StreamEvent]) error {
+	fn := func(ctx context.Context, req StreamRequest, e Stream[StreamEvent]) error {
 		close(started)
 		// Wait for context cancellation
 		<-ctx.Done()
@@ -477,7 +477,7 @@ func TestStreamEmit_ContextCancellation(t *testing.T) {
 
 	app := NewApp()
 	svc := app.Service("Feed")
-	svc.Register("Subscribe", Stream(fn))
+	svc.Register("Subscribe", StreamFunc(fn))
 
 	server := httptest.NewServer(app.Handler())
 	defer server.Close()
@@ -516,7 +516,7 @@ func TestStreamEmit_SendChecksContext(t *testing.T) {
 	started := make(chan struct{})
 	sendErr := make(chan error, 1)
 
-	fn := func(ctx context.Context, req StreamRequest, e Emitter[StreamEvent]) error {
+	fn := func(ctx context.Context, req StreamRequest, e Stream[StreamEvent]) error {
 		close(started)
 		// Wait for context to be canceled by client disconnect
 		<-ctx.Done()
@@ -528,7 +528,7 @@ func TestStreamEmit_SendChecksContext(t *testing.T) {
 
 	app := NewApp()
 	svc := app.Service("Feed")
-	svc.Register("Subscribe", Stream(fn))
+	svc.Register("Subscribe", StreamFunc(fn))
 
 	server := httptest.NewServer(app.Handler())
 	defer server.Close()
@@ -570,7 +570,7 @@ func TestStreamEmit_SendChecksContext(t *testing.T) {
 }
 
 func TestStreamEmit_WithOptions(t *testing.T) {
-	fn := func(ctx context.Context, req StreamRequest, e Emitter[StreamEvent]) error {
+	fn := func(ctx context.Context, req StreamRequest, e Stream[StreamEvent]) error {
 		return e.Send(StreamEvent{ID: 1})
 	}
 
@@ -581,7 +581,7 @@ func TestStreamEmit_WithOptions(t *testing.T) {
 
 	app := NewApp()
 	svc := app.Service("Feed")
-	svc.Register("Subscribe", Stream(fn).
+	svc.Register("Subscribe", StreamFunc(fn).
 		WithUnaryInterceptor(authInterceptor).
 		WithWriteTimeout(10*time.Second).
 		WithSkipValidation())
@@ -602,14 +602,14 @@ func TestStreamEmit_WithOptions(t *testing.T) {
 func TestStreamEmit_LastEventID(t *testing.T) {
 	var receivedLastEventID string
 
-	fn := func(ctx context.Context, req StreamRequest, e Emitter[StreamEvent]) error {
+	fn := func(ctx context.Context, req StreamRequest, e Stream[StreamEvent]) error {
 		receivedLastEventID = e.LastEventID()
 		return e.Send(StreamEvent{ID: 1, Message: "ok"})
 	}
 
 	app := NewApp()
 	svc := app.Service("Feed")
-	svc.Register("Subscribe", Stream(fn))
+	svc.Register("Subscribe", StreamFunc(fn))
 
 	body := `{"topic":"news"}`
 	req := httptest.NewRequest("POST", "/Feed/Subscribe", strings.NewReader(body))
@@ -629,7 +629,7 @@ func TestStreamEmit_LastEventID(t *testing.T) {
 }
 
 func TestStreamEmit_SendWithID(t *testing.T) {
-	fn := func(ctx context.Context, req StreamRequest, e Emitter[StreamEvent]) error {
+	fn := func(ctx context.Context, req StreamRequest, e Stream[StreamEvent]) error {
 		if err := e.SendWithID("event-1", StreamEvent{ID: 1, Message: "first"}); err != nil {
 			return err
 		}
@@ -641,7 +641,7 @@ func TestStreamEmit_SendWithID(t *testing.T) {
 
 	app := NewApp()
 	svc := app.Service("Feed")
-	svc.Register("Subscribe", Stream(fn))
+	svc.Register("Subscribe", StreamFunc(fn))
 
 	body := `{"topic":"news"}`
 	req := httptest.NewRequest("POST", "/Feed/Subscribe", strings.NewReader(body))
@@ -693,14 +693,14 @@ func TestStreamEmit_SendWithID(t *testing.T) {
 }
 
 func TestStreamEmit_WithMaxRequestBodySize(t *testing.T) {
-	fn := func(ctx context.Context, req StreamRequest, e Emitter[StreamEvent]) error {
+	fn := func(ctx context.Context, req StreamRequest, e Stream[StreamEvent]) error {
 		return e.Send(StreamEvent{ID: 1, Message: req.Topic})
 	}
 
 	app := NewApp()
 	svc := app.Service("Feed")
 	// Set a very small body size limit (10 bytes)
-	svc.Register("Subscribe", Stream(fn).WithMaxRequestBodySize(10))
+	svc.Register("Subscribe", StreamFunc(fn).WithMaxRequestBodySize(10))
 
 	// Send a body larger than the limit
 	body := `{"topic":"this is a very long topic that exceeds the limit"}`
@@ -720,7 +720,7 @@ func TestStreamEmit_WithHeartbeat(t *testing.T) {
 	eventSent := make(chan struct{})
 	handlerDone := make(chan struct{})
 
-	fn := func(ctx context.Context, req StreamRequest, e Emitter[StreamEvent]) error {
+	fn := func(ctx context.Context, req StreamRequest, e Stream[StreamEvent]) error {
 		// Send one event
 		if err := e.Send(StreamEvent{ID: 1, Message: "event"}); err != nil {
 			return err
@@ -736,7 +736,7 @@ func TestStreamEmit_WithHeartbeat(t *testing.T) {
 	app := NewApp()
 	svc := app.Service("Feed")
 	// Set heartbeat to 50ms for fast test
-	svc.Register("Subscribe", Stream(fn).WithHeartbeat(50*time.Millisecond))
+	svc.Register("Subscribe", StreamFunc(fn).WithHeartbeat(50*time.Millisecond))
 
 	server := httptest.NewServer(app.Handler())
 	defer server.Close()
@@ -886,13 +886,13 @@ func TestStreamEmit_SendWithID_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fn := func(ctx context.Context, req StreamRequest, e Emitter[StreamEvent]) error {
+			fn := func(ctx context.Context, req StreamRequest, e Stream[StreamEvent]) error {
 				return e.SendWithID(tt.id, StreamEvent{ID: 1, Message: "test"})
 			}
 
 			app := NewApp()
 			svc := app.Service("Feed")
-			svc.Register("Subscribe", Stream(fn))
+			svc.Register("Subscribe", StreamFunc(fn))
 
 			body := `{"topic":"news"}`
 			req := httptest.NewRequest("POST", "/Feed/Subscribe", strings.NewReader(body))
@@ -921,14 +921,14 @@ func TestStreamEmit_SendWithID_EdgeCases(t *testing.T) {
 func TestStreamEmit_LastEventID_Missing(t *testing.T) {
 	var receivedLastEventID string
 
-	fn := func(ctx context.Context, req StreamRequest, e Emitter[StreamEvent]) error {
+	fn := func(ctx context.Context, req StreamRequest, e Stream[StreamEvent]) error {
 		receivedLastEventID = e.LastEventID()
 		return e.Send(StreamEvent{ID: 1})
 	}
 
 	app := NewApp()
 	svc := app.Service("Feed")
-	svc.Register("Subscribe", Stream(fn))
+	svc.Register("Subscribe", StreamFunc(fn))
 
 	body := `{"topic":"news"}`
 	req := httptest.NewRequest("POST", "/Feed/Subscribe", strings.NewReader(body))
@@ -950,7 +950,7 @@ func TestStreamEmit_LastEventID_Missing(t *testing.T) {
 
 func TestStreamEmit_ErrorAfterEvents(t *testing.T) {
 	// Test that errors returned after sending events are properly sent to client
-	fn := func(ctx context.Context, req StreamRequest, e Emitter[StreamEvent]) error {
+	fn := func(ctx context.Context, req StreamRequest, e Stream[StreamEvent]) error {
 		if err := e.Send(StreamEvent{ID: 1, Message: "first"}); err != nil {
 			return err
 		}
@@ -963,7 +963,7 @@ func TestStreamEmit_ErrorAfterEvents(t *testing.T) {
 
 	app := NewApp()
 	svc := app.Service("Feed")
-	svc.Register("Subscribe", Stream(fn))
+	svc.Register("Subscribe", StreamFunc(fn))
 
 	body := `{"topic":"news"}`
 	req := httptest.NewRequest("POST", "/Feed/Subscribe", strings.NewReader(body))
