@@ -587,9 +587,37 @@ export function tygorDev(options: TygorDevOptions): Plugin {
     req.pipe(proxyReq);
   }
 
+  // HMR for devtools development (hot-swap, not true HMR - state is lost)
+  // For true state-preserving HMR, we'd need to serve source files through Vite's
+  // module graph with vite-plugin-solid. Options:
+  // 1. Run separate Vite dev server in vite-plugin/ with solid plugin, load from there
+  // 2. Inject solid transforms for /@tygor/* paths only within this plugin
+  // Current approach is good enough since devtools state is mostly ephemeral.
+  const VIRTUAL_HMR = "virtual:tygor-hmr";
+  const RESOLVED_VIRTUAL_HMR = "\0" + VIRTUAL_HMR;
+
   return {
     name: "tygor-dev",
     apply: "serve",
+
+    resolveId(id) {
+      if (id === VIRTUAL_HMR) return RESOLVED_VIRTUAL_HMR;
+    },
+
+    load(id) {
+      if (id === RESOLVED_VIRTUAL_HMR) {
+        return `
+if (import.meta.hot) {
+  import.meta.hot.on("tygor:devtools-update", async () => {
+    console.log("[tygor] HMR update received");
+    document.getElementById("tygor-devtools")?.remove();
+    await import("/@tygor/client.js?t=" + Date.now());
+  });
+  console.log("[tygor] HMR listener registered");
+}
+`;
+      }
+    },
 
     async configureServer(server: ViteDevServer) {
       // Resolve rpcDir path for discovery endpoint
@@ -597,25 +625,45 @@ export function tygorDev(options: TygorDevOptions): Plugin {
       const discoveryPath = resolve(rpcDir, "discovery.json");
 
       // Route handling
-      server.middlewares.use((req, res, next) => {
-        // Serve devtools client bundle
-        if (req.url === "/@tygor/client.js") {
+      server.middlewares.use(async (req, res, next) => {
+        // Serve HMR listener (processed by Vite for import.meta.hot)
+        if (req.url === "/@tygor/hmr.js") {
+          const result = await server.transformRequest(VIRTUAL_HMR);
+          if (result) {
+            res.writeHead(200, { "Content-Type": "application/javascript" });
+            res.end(result.code);
+            return;
+          }
+        }
+
+        // Serve devtools client bundle (match with any query params for HMR)
+        if (req.url?.startsWith("/@tygor/client.js")) {
           res.writeHead(200, {
             "Content-Type": "application/javascript",
             "Cache-Control": "no-cache",
           });
-          // In dev mode, read fresh from disk for hot reload
+          // In dev mode, compile on-the-fly from source
           if (devtoolsBundlePath) {
             try {
-              const source = readFileSync(devtoolsBundlePath, "utf-8");
-              // Extract the string from: export const clientBundle = "...";
-              const match = source.match(/export const clientBundle = "([\s\S]+)";?\s*$/);
-              if (match) {
-                // Unescape the JSON string
-                res.end(JSON.parse(`"${match[1]}"`));
+              const clientSrcDir = resolve(dirname(devtoolsBundlePath), "../client");
+              const entryPoint = resolve(clientSrcDir, "index.tsx");
+              if (existsSync(entryPoint)) {
+                const esbuild = await import("esbuild");
+                const { solidPlugin } = await import("esbuild-plugin-solid");
+                const result = await esbuild.build({
+                  entryPoints: [entryPoint],
+                  bundle: true,
+                  format: "esm",
+                  write: false,
+                  plugins: [solidPlugin()],
+                  loader: { ".css": "text" },
+                  define: { __TYGOR_VERSION__: '"dev"' },
+                });
+                res.end(result.outputFiles[0].text);
                 return;
               }
-            } catch {
+            } catch (e) {
+              log(`Dev bundle failed: ${e instanceof Error ? e.message : e}`);
               // Fall through to static bundle
             }
           }
@@ -654,6 +702,17 @@ export function tygorDev(options: TygorDevOptions): Plugin {
       log(`Watching ${opts.watch!.join(", ")} in ${workdir}`);
       if (devtoolsBundlePath) {
         log(`Devtools hot reload enabled`);
+        // Watch devtools source files for auto-reload
+        const clientSrcDir = resolve(dirname(devtoolsBundlePath), "../client");
+        log(`Watching devtools sources in ${clientSrcDir}`);
+        const clientWatcher = watch(["**/*.tsx", "**/*.ts", "**/*.css"], {
+          cwd: clientSrcDir,
+          ignoreInitial: true,
+        });
+        clientWatcher.on("change", (file) => {
+          log(`Devtools changed: ${file}`);
+          server.hot.send({ type: "custom", event: "tygor:devtools-update" });
+        });
       }
       const watcher = watch(opts.watch!, {
         cwd: workdir,
@@ -758,14 +817,16 @@ export function tygorDev(options: TygorDevOptions): Plugin {
     },
 
     transformIndexHtml(html) {
-      // Inject script tag pointing to our served bundle (cleaner than inlining)
-      const script = `<script type="module" src="/@tygor/client.js"></script>`;
+      // Inject devtools bundle + HMR listener (processed by Vite for import.meta.hot)
+      const scripts = `
+<script type="module" src="/@tygor/client.js"></script>
+<script type="module" src="/@tygor/hmr.js"></script>`;
       // Insert before the last </body> tag (case-insensitive)
       const lastBodyIdx = html.toLowerCase().lastIndexOf("</body>");
       if (lastBodyIdx === -1) {
-        return html + script;
+        return html + scripts;
       }
-      return html.slice(0, lastBodyIdx) + script + html.slice(lastBodyIdx);
+      return html.slice(0, lastBodyIdx) + scripts + html.slice(lastBodyIdx);
     },
   };
 }
