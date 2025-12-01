@@ -24,6 +24,9 @@ type GenerateResult struct {
 
 	// Warnings contains non-fatal issues encountered during generation.
 	Warnings []Warning
+
+	// Schema is the validated IR schema (available for inspection/check mode).
+	Schema *ir.Schema
 }
 
 // GeneratedFile represents a generated output file.
@@ -288,6 +291,7 @@ func GenerateTypes(types []any, cfg *Config) (*GenerateResult, error) {
 	// Build result
 	result := &GenerateResult{
 		Warnings: warnings,
+		Schema:   schema,
 	}
 
 	// Include files if using memory sink
@@ -412,6 +416,7 @@ func Generate(app *tygor.App, cfg *Config) (*GenerateResult, error) {
 	// Build result
 	result := &GenerateResult{
 		Warnings: warnings,
+		Schema:   schema,
 	}
 
 	// Include files if using memory sink

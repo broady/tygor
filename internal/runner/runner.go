@@ -46,6 +46,9 @@ type Options struct {
 
 	// PkgDir is the directory containing the package.
 	PkgDir string
+
+	// CheckMode runs validation only, outputs JSON stats instead of generating files.
+	CheckMode bool
 }
 
 // Exec builds and runs the generator.
@@ -180,13 +183,24 @@ func removeMain(filename string) (bool, []byte, error) {
 // generateRunner creates the runner main() source.
 func generateRunner(opts Options) ([]byte, error) {
 	var tmplStr string
-	switch opts.Export.Type {
-	case discover.ExportTypeApp:
-		tmplStr = appRunnerTemplate
-	case discover.ExportTypeGenerator:
-		tmplStr = generatorRunnerTemplate
-	default:
-		return nil, fmt.Errorf("unknown export type: %v", opts.Export.Type)
+	if opts.CheckMode {
+		switch opts.Export.Type {
+		case discover.ExportTypeApp:
+			tmplStr = appCheckTemplate
+		case discover.ExportTypeGenerator:
+			tmplStr = generatorCheckTemplate
+		default:
+			return nil, fmt.Errorf("unknown export type: %v", opts.Export.Type)
+		}
+	} else {
+		switch opts.Export.Type {
+		case discover.ExportTypeApp:
+			tmplStr = appRunnerTemplate
+		case discover.ExportTypeGenerator:
+			tmplStr = generatorRunnerTemplate
+		default:
+			return nil, fmt.Errorf("unknown export type: %v", opts.Export.Type)
+		}
 	}
 
 	tmpl, err := template.New("runner").Parse(tmplStr)
@@ -266,6 +280,69 @@ func main() {
 		fmt.Fprintf(os.Stderr, "tygor gen: %v\n", err)
 		os.Exit(1)
 	}
+	for _, w := range result.Warnings {
+		fmt.Fprintf(os.Stderr, "warning: %s: %s\n", w.Code, w.Message)
+	}
+}
+`
+
+const appCheckTemplate = `package main
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/broady/tygor/tygorgen"
+)
+
+func main() {
+	g := tygorgen.FromApp({{.ExportFunc}}())
+{{if .ConfigFunc}}
+	g = {{.ConfigFunc}}(g)
+{{end}}
+	result, err := g.Generate()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "tygor check: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Print stats
+	endpoints := 0
+	for _, svc := range result.Schema.Services {
+		endpoints += len(svc.Endpoints)
+	}
+	fmt.Printf("%d %d %d\n", len(result.Schema.Services), endpoints, len(result.Schema.Types))
+
+	// Print warnings to stderr
+	for _, w := range result.Warnings {
+		fmt.Fprintf(os.Stderr, "warning: %s: %s\n", w.Code, w.Message)
+	}
+}
+`
+
+const generatorCheckTemplate = `package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	g := {{.ExportFunc}}()
+	result, err := g.Generate()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "tygor check: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Print stats
+	endpoints := 0
+	for _, svc := range result.Schema.Services {
+		endpoints += len(svc.Endpoints)
+	}
+	fmt.Printf("%d %d %d\n", len(result.Schema.Services), endpoints, len(result.Schema.Types))
+
+	// Print warnings to stderr
 	for _, w := range result.Warnings {
 		fmt.Fprintf(os.Stderr, "warning: %s: %s\n", w.Code, w.Message)
 	}
