@@ -85,7 +85,7 @@ func ToggleTask(ctx context.Context, req *api.ToggleTaskParams) (*api.Task, erro
 }
 
 // CurrentTime streams the current time every second
-func CurrentTime(ctx context.Context, req tygor.Empty, emit *tygor.Emitter[*api.TimeUpdate]) error {
+func CurrentTime(ctx context.Context, req tygor.Empty, emit tygor.Emitter[*api.TimeUpdate]) error {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 

@@ -40,7 +40,7 @@ func GetRuntimeInfo(ctx context.Context, req tygor.Empty) (*api.RuntimeInfo, err
 	}, nil
 }
 
-func StreamRuntimeInfo(ctx context.Context, req tygor.Empty, e *tygor.Emitter[*api.RuntimeInfo]) error {
+func StreamRuntimeInfo(ctx context.Context, req tygor.Empty, e tygor.Emitter[*api.RuntimeInfo]) error {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 

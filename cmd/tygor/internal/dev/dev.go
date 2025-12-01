@@ -151,7 +151,7 @@ type GetStatusResponse struct {
 // GetStatus streams status updates for devtools UI consumption.
 // The first message always includes RawrData. Subsequent messages are sent
 // when UpdateStatus is called.
-func (s *Service) GetStatus(ctx context.Context, req *GetStatusRequest, emit *tygor.Emitter[*GetStatusResponse]) error {
+func (s *Service) GetStatus(ctx context.Context, req *GetStatusRequest, emit tygor.Emitter[*GetStatusResponse]) error {
 	// Send initial status with RawrData
 	resp := s.buildStatusResponse()
 	resp.RawrData = loadRawrData()

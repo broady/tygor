@@ -27,7 +27,34 @@ var ErrWriteTimeout = errors.New("write timeout")
 // Emitter sends events to a streaming client.
 // It provides methods for sending events with optional SSE event IDs
 // and for checking the client's last received event ID on reconnection.
-type Emitter[T any] struct {
+//
+// This interface enables testing stream handlers without a real HTTP connection:
+//
+//	type mockEmitter[T any] struct {
+//	    events []T
+//	}
+//	func (m *mockEmitter[T]) Send(event T) error { m.events = append(m.events, event); return nil }
+//	func (m *mockEmitter[T]) SendWithID(id string, event T) error { return m.Send(event) }
+//	func (m *mockEmitter[T]) LastEventID() string { return "" }
+type Emitter[T any] interface {
+	// Send sends an event to the client.
+	// Returns an error if the client has disconnected or the context is canceled.
+	// All disconnect-related errors satisfy errors.Is(err, [ErrStreamClosed]).
+	Send(event T) error
+
+	// SendWithID sends an event with an SSE event ID.
+	// The ID is sent as the "id:" field in the SSE stream, allowing clients
+	// to resume from this point on reconnection via the Last-Event-ID header.
+	SendWithID(id string, event T) error
+
+	// LastEventID returns the client's Last-Event-ID header value.
+	// This is set when the client reconnects after a disconnection.
+	// Returns empty string on first connection or if the client didn't send the header.
+	LastEventID() string
+}
+
+// emitter is the concrete implementation of Emitter used by the framework.
+type emitter[T any] struct {
 	yieldAny    func(any, error) bool
 	ctx         context.Context
 	lastEventID string
@@ -56,21 +83,15 @@ type sseEvent struct {
 	event any
 }
 
-// Send sends an event to the client.
-// Returns an error if the client has disconnected or the context is canceled.
-// All disconnect-related errors satisfy errors.Is(err, [ErrStreamClosed]).
-func (e *Emitter[T]) Send(event T) error {
+func (e *emitter[T]) Send(event T) error {
 	return e.sendWithOptionalID("", event)
 }
 
-// SendWithID sends an event with an SSE event ID.
-// The ID is sent as the "id:" field in the SSE stream, allowing clients
-// to resume from this point on reconnection via the Last-Event-ID header.
-func (e *Emitter[T]) SendWithID(id string, event T) error {
+func (e *emitter[T]) SendWithID(id string, event T) error {
 	return e.sendWithOptionalID(id, event)
 }
 
-func (e *Emitter[T]) sendWithOptionalID(id string, event T) error {
+func (e *emitter[T]) sendWithOptionalID(id string, event T) error {
 	select {
 	case <-e.ctx.Done():
 		return fmt.Errorf("%w: %w", ErrStreamClosed, e.ctx.Err())
@@ -89,10 +110,7 @@ func (e *Emitter[T]) sendWithOptionalID(id string, event T) error {
 	return nil
 }
 
-// LastEventID returns the client's Last-Event-ID header value.
-// This is set when the client reconnects after a disconnection.
-// Returns empty string on first connection or if the client didn't send the header.
-func (e *Emitter[T]) LastEventID() string {
+func (e *emitter[T]) LastEventID() string {
 	return e.lastEventID
 }
 
@@ -159,7 +177,7 @@ func streamIter2[Req any, Res any](fn func(context.Context, Req) iter.Seq2[Res, 
 //
 // Example:
 //
-//	func Subscribe(ctx context.Context, req *SubscribeRequest, e *tygor.Emitter[*FeedEvent]) error {
+//	func Subscribe(ctx context.Context, req *SubscribeRequest, e tygor.Emitter[*FeedEvent]) error {
 //	    // Check for reconnection
 //	    if lastID := e.LastEventID(); lastID != "" {
 //	        // Resume from lastID
@@ -183,17 +201,17 @@ func streamIter2[Req any, Res any](fn func(context.Context, Req) iter.Seq2[Res, 
 //	}
 //
 //	feed.Register("Subscribe", tygor.Stream(Subscribe))
-func Stream[Req any, Res any](fn func(context.Context, Req, *Emitter[Res]) error) *StreamHandler[Req, Res] {
+func Stream[Req any, Res any](fn func(context.Context, Req, Emitter[Res]) error) *StreamHandler[Req, Res] {
 	// Use fnAny to allow yielding sseEvent wrappers with event IDs
 	iterFn := func(ctx context.Context, req Req) iter.Seq2[any, error] {
 		return func(yield func(any, error) bool) {
-			emitter := &Emitter[Res]{
+			e := &emitter[Res]{
 				yieldAny:    yield,
 				ctx:         ctx,
 				lastEventID: getLastEventID(ctx),
 			}
 
-			err := fn(ctx, req, emitter)
+			err := fn(ctx, req, e)
 
 			// Don't send ErrStreamClosed as an error event - it's expected
 			if err != nil && !errors.Is(err, ErrStreamClosed) {
