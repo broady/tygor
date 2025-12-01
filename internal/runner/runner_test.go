@@ -2,6 +2,9 @@ package runner
 
 import (
 	"go/token"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -207,5 +210,146 @@ func TestGenerate(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestExec(t *testing.T) {
+	// Disable go.work so temp directories work as standalone modules
+	t.Setenv("GOWORK", "off")
+
+	// Create a temp directory with a simple tygor app
+	dir := t.TempDir()
+
+	// Write go.mod
+	tygorRoot, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	goMod := `module testapp
+
+go 1.21
+
+require github.com/broady/tygor v0.7.4
+
+replace github.com/broady/tygor => ` + tygorRoot + `
+`
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Write a simple app
+	mainGo := `package main
+
+import "github.com/broady/tygor"
+
+//tygor:export
+func setupApp() *tygor.App {
+	app := tygor.NewApp()
+	svc := app.Service("Test")
+	svc.Register("Hello", tygor.Query(func(_ context.Context, req struct{}) (string, error) {
+		return "hello", nil
+	}))
+	return app
+}
+
+func main() {
+	setupApp().Handler()
+}
+`
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(mainGo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Use a non-main package that can be imported
+	// The export function goes in an api package
+	apiDir := filepath.Join(dir, "api")
+	if err := os.MkdirAll(apiDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	apiGo := `package api
+
+import (
+	"context"
+	"github.com/broady/tygor"
+)
+
+type HelloRequest struct {
+	Name string
+}
+
+type HelloResponse struct {
+	Message string
+}
+
+//tygor:export
+func SetupApp() *tygor.App {
+	app := tygor.NewApp()
+	svc := app.Service("Test")
+	svc.Register("Hello", tygor.Query(func(_ context.Context, req HelloRequest) (HelloResponse, error) {
+		return HelloResponse{Message: "hello " + req.Name}, nil
+	}))
+	return app
+}
+`
+	if err := os.WriteFile(filepath.Join(apiDir, "api.go"), []byte(apiGo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Main package imports api
+	mainGo = `package main
+
+import "testapp/api"
+
+func main() {
+	api.SetupApp().Handler()
+}
+`
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(mainGo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run go mod tidy
+	cmd := exec.Command("go", "mod", "tidy")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GOWORK=off")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("go mod tidy: %v\n%s", err, out)
+	}
+
+	// Create output directory
+	outDir := filepath.Join(dir, "rpc")
+	if err := os.MkdirAll(outDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run Exec
+	output, err := Exec(ExecOptions{
+		Options: Options{
+			Export: directive.Export{
+				Directive: directive.Directive{
+					FuncName: "SetupApp",
+				},
+				Type: directive.ExportTypeApp,
+			},
+			OutDir: outDir,
+		},
+		ModuleDir:  dir,
+		ModulePath: "testapp",
+		PkgPath:    "testapp/api",
+	})
+	if err != nil {
+		t.Fatalf("Exec() error: %v\nOutput: %s", err, output)
+	}
+
+	// Verify output was generated
+	typesPath := filepath.Join(outDir, "types.ts")
+	if _, err := os.Stat(typesPath); os.IsNotExist(err) {
+		t.Errorf("types.ts was not generated")
+	}
+
+	manifestPath := filepath.Join(outDir, "manifest.ts")
+	if _, err := os.Stat(manifestPath); os.IsNotExist(err) {
+		t.Errorf("manifest.ts was not generated")
 	}
 }
