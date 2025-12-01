@@ -147,6 +147,5 @@ func (c *Cmd) compareFiles(genDir, outDir string) error {
 		return fmt.Errorf("generated files are stale")
 	}
 
-	fmt.Printf("Generated files in %s are up to date.\n", outDir)
 	return nil
 }

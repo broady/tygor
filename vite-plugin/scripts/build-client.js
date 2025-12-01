@@ -13,8 +13,17 @@ function writeBundle(code) {
 export const clientBundle = ${JSON.stringify(code)};
 `;
   mkdirSync(dirname(outPath), { recursive: true });
+  // Only log if content changed (or file is new)
+  let existing;
+  try {
+    existing = readFileSync(outPath, "utf-8");
+  } catch {
+    existing = null;
+  }
   writeFileSync(outPath, output);
-  console.log(`✓ Client bundle written to ${outPath} (${code.length} bytes)`);
+  if (existing !== output) {
+    console.log(`✓ Client bundle written to ${outPath} (${code.length} bytes)`);
+  }
 }
 
 const buildOptions = {
