@@ -1,5 +1,5 @@
 import { useState, useEffect, FormEvent, Component, ReactNode } from "react";
-import { createClient, ServerError, TransportError } from "@tygor/client";
+import { createClient, ServerError, TransportError, StreamState } from "@tygor/client";
 import { registry } from "./rpc/manifest";
 import type { Task, TimeUpdate } from "./rpc/types";
 
@@ -56,28 +56,20 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
 }
 
 export default function App() {
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasks, setTasks] = useState<(Task | null)[]>([]);
   const [newTask, setNewTask] = useState("");
   const [error, setError] = useState<AppError | null>(null);
   const [time, setTime] = useState<TimeUpdate | null>(null);
+  const [tasksState, setTasksState] = useState<StreamState | null>(null);
 
-  const fetchTasks = async () => {
-    try {
-      setTasks(await client.Tasks.List());
-      setError(null);
-    } catch (e) {
-      setError(toAppError(e));
-    }
-  };
-
-  useEffect(() => {
-    fetchTasks();
-  }, []);
+  // Subscribe to synced task list - automatically updates across all browser windows
+  const { data: tasksData, state: tasksStateAtom } = client.Tasks.SyncedList;
+  useEffect(() => tasksData.subscribe(setTasks), []);
+  useEffect(() => tasksStateAtom.subscribe(setTasksState), []);
 
   // Subscribe to time stream
-  useEffect(() => {
-    return client.Tasks.Time({}).subscribe(setTime);
-  }, []);
+  const timeStream = client.Tasks.Time({});
+  useEffect(() => timeStream.data.subscribe(setTime), []);
 
 
   const handleCreate = async (e: FormEvent) => {
@@ -87,7 +79,6 @@ export default function App() {
       await client.Tasks.Create({ title: newTask });
       setNewTask("");
       setError(null);
-      fetchTasks();
     } catch (e) {
       setError(toAppError(e));
     }
@@ -97,7 +88,6 @@ export default function App() {
     try {
       await client.Tasks.Toggle({ id });
       setError(null);
-      fetchTasks();
     } catch (e) {
       setError(toAppError(e));
     }
@@ -118,6 +108,11 @@ export default function App() {
         </button>
 
         <h1>Tasks</h1>
+        {tasksState && (
+          <div style={{ fontSize: "0.7rem", color: tasksState.status === "connected" ? "#16a34a" : "#ca8a04", marginBottom: 8 }}>
+            {tasksState.status === "connected" ? "●" : tasksState.status === "connecting" ? "○" : "◌"} {tasksState.status}
+          </div>
+        )}
         {time && (
           <div style={{ fontSize: "0.8rem", color: "#666", marginBottom: 12, fontVariantNumeric: "tabular-nums" }}>
             Server time: {new Date(time.time).toLocaleTimeString()}{" "}
@@ -133,7 +128,7 @@ export default function App() {
           <button type="submit">Add</button>
         </form>
         <ul>
-          {tasks.map((task) => (
+          {tasks.filter((t): t is Task => t !== null).map((task) => (
             <li
               key={task.id}
               className={task.done ? "done" : ""}

@@ -16,4 +16,9 @@ export default defineConfig({
       rpcDir: "./src/rpc",
     }),
   ],
+  optimizeDeps: {
+    // Exclude from pre-bundling so local file: linked changes are picked up immediately.
+    // This can be removed when using a published @tygor/client from npm.
+    exclude: ["@tygor/client"],
+  },
 });

@@ -137,7 +137,7 @@ func main() {
 
 	tasksvc := app.Service("Tasks")
 	tasksvc.Register("List", tygor.Query(ListTasks))
-	tasksvc.Register("Subscribe", tasksAtom.Handler())
+	tasksvc.Register("SyncedList", tasksAtom.Handler())
 	tasksvc.Register("Time", tygor.StreamEmit(CurrentTime))
 	tasksvc.Register("Create", tygor.Exec(CreateTask))
 	tasksvc.Register("Toggle", tygor.Exec(ToggleTask))

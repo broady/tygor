@@ -71,7 +71,7 @@ export function DevTools() {
 
   // Subscribe to status stream from server
   createEffect(() => {
-    const unsubscribe = devClient.Devtools.GetStatus({}).subscribe(
+    const unsubscribe = devClient.Devtools.GetStatus({}).data.subscribe(
       (data) => {
         setState((prev) => {
           const next = { ...prev, status: data };
