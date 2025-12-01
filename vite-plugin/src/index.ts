@@ -98,8 +98,26 @@ function getTygorCommand(override?: string | string[]): string[] {
   return ["go", "run", "github.com/broady/tygor/cmd/tygor@latest"];
 }
 
+/** Auto-detect devtools bundle path when in tygor repo */
+function getDevtoolsBundlePath(): string | undefined {
+  // Walk up from cwd looking for vite-plugin/src/generated/client-bundle.ts
+  let dir = process.cwd();
+  for (let i = 0; i < 5; i++) {
+    const bundlePath = resolve(dir, "vite-plugin/src/generated/client-bundle.ts");
+    if (existsSync(bundlePath)) {
+      return bundlePath;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return undefined;
+}
+
 export function tygorDev(options: TygorDevOptions): Plugin {
   const opts = { ...DEFAULT_OPTIONS, ...options };
+  // Auto-detect devtools bundle path when in tygor repo (for hot reload during development)
+  const devtoolsBundlePath = getDevtoolsBundlePath();
   const workdir = resolve(process.cwd(), opts.workdir ?? ".");
 
   let currentServer: ServerState = { process: null, port: opts.port, ready: false };
@@ -257,11 +275,16 @@ export function tygorDev(options: TygorDevOptions): Plugin {
 
     try {
       const res = await fetch(url);
-      log(`Health check ${port}: ${res.status}`);
       // Any response means server is up (even 404)
+      if (process.env.TYGOR_DEBUG) {
+        log(`Health check ${port}: ${res.status}`);
+      }
       return true;
     } catch (e) {
-      log(`Health check ${port}: ${e instanceof Error ? e.message : 'failed'}`);
+      // Only log failures
+      if (process.env.TYGOR_DEBUG) {
+        log(`Health check ${port}: ${e instanceof Error ? e.message : "failed"}`);
+      }
       return false;
     }
   }
@@ -511,7 +534,9 @@ export function tygorDev(options: TygorDevOptions): Plugin {
   // Proxy to tygor dev server
   function proxyToDevServer(req: IncomingMessage, res: ServerResponse, path?: string) {
     const targetPath = path ?? req.url;
-    log(`Proxying ${req.url} -> tygor dev:${devServer.port}${targetPath}`);
+    if (process.env.TYGOR_DEBUG) {
+      log(`Proxying ${req.url} -> tygor dev:${devServer.port}${targetPath}`);
+    }
 
     const proxyReq = httpRequest(
       {
@@ -573,6 +598,31 @@ export function tygorDev(options: TygorDevOptions): Plugin {
 
       // Route handling
       server.middlewares.use((req, res, next) => {
+        // Serve devtools client bundle
+        if (req.url === "/@tygor/client.js") {
+          res.writeHead(200, {
+            "Content-Type": "application/javascript",
+            "Cache-Control": "no-cache",
+          });
+          // In dev mode, read fresh from disk for hot reload
+          if (devtoolsBundlePath) {
+            try {
+              const source = readFileSync(devtoolsBundlePath, "utf-8");
+              // Extract the string from: export const clientBundle = "...";
+              const match = source.match(/export const clientBundle = "([\s\S]+)";?\s*$/);
+              if (match) {
+                // Unescape the JSON string
+                res.end(JSON.parse(`"${match[1]}"`));
+                return;
+              }
+            } catch {
+              // Fall through to static bundle
+            }
+          }
+          res.end(clientBundle);
+          return;
+        }
+
         // Proxy /__tygor/* to tygor dev (served at /__tygor/Devtools/*)
         if (req.url?.startsWith("/__tygor/")) {
           if (!devServer.ready) {
@@ -602,6 +652,9 @@ export function tygorDev(options: TygorDevOptions): Plugin {
 
       // Start watcher
       log(`Watching ${opts.watch!.join(", ")} in ${workdir}`);
+      if (devtoolsBundlePath) {
+        log(`Devtools hot reload enabled`);
+      }
       const watcher = watch(opts.watch!, {
         cwd: workdir,
         ignored: opts.ignore,
@@ -705,9 +758,14 @@ export function tygorDev(options: TygorDevOptions): Plugin {
     },
 
     transformIndexHtml(html) {
-      // Inject the devtools client inline (already bundled and minified)
-      const script = `<script type="module">${clientBundle}</script>`;
-      return html.replace("</body>", script + "</body>");
+      // Inject script tag pointing to our served bundle (cleaner than inlining)
+      const script = `<script type="module" src="/@tygor/client.js"></script>`;
+      // Insert before the last </body> tag (case-insensitive)
+      const lastBodyIdx = html.toLowerCase().lastIndexOf("</body>");
+      if (lastBodyIdx === -1) {
+        return html + script;
+      }
+      return html.slice(0, lastBodyIdx) + script + html.slice(lastBodyIdx);
     },
   };
 }

@@ -7,11 +7,6 @@ export interface AppStatus {
   error?: string;
   phase?: string;
 }
-/** DevtoolsStatus is the status of the devtools server itself. */
-export interface DevtoolsStatus {
-  status: string;
-  version: string;
-}
 /** GetDiscoveryRequest is the request for Devtools.GetDiscovery. */
 export interface GetDiscoveryRequest {
 }
@@ -38,11 +33,18 @@ export interface GetStatusRequest {
   /** Initial should be true on first request to receive one-time data. */
   initial?: boolean;
 }
-/** GetStatusResponse returns the combined devtools status. */
+/**
+ * GetStatusResponse returns the combined status in flat format for the devtools UI.
+ * Status is a discriminated union: "ok", "error", "reloading", "starting", "disconnected".
+ */
 export interface GetStatusResponse {
-  devtools: DevtoolsStatus;
-  app?: AppStatus;
-  /** RawrData contains encoded data blobs (sent on initial request). */
+  status: string;
+  port?: number /* int */;
+  error?: string;
+  phase?: string;
+  command?: string;
+  cwd?: string;
+  exitCode?: number /* int */;
   rawrData?: string[];
 }
 /** ReloadRequest triggers a reload of discovery.json. */

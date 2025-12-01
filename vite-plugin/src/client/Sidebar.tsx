@@ -1,5 +1,6 @@
 import { Show, For, createSignal, createEffect, onCleanup, onMount, createResource } from "solid-js";
-import type { TygorStatus, TygorRpcError, DiscoverySchema, IRTypeRef, IRType } from "./types";
+import type { GetStatusResponse } from "../devserver/types";
+import type { TygorRpcError, DiscoverySchema, IRTypeRef, IRType } from "./types";
 import type { SidebarSide } from "./DevTools";
 import { Pane, type DropPosition } from "./Pane";
 
@@ -42,14 +43,16 @@ const fetchDiscovery = async (): Promise<DiscoverySchema | null> => {
   try {
     const res = await fetch("/__tygor/discovery");
     if (!res.ok) return null;
-    return res.json();
+    const data = await res.json();
+    // Unwrap RPC response format: { result: { discovery: {...} } }
+    return data.result?.discovery ?? data;
   } catch {
     return null;
   }
 };
 
 interface DevToolsState {
-  status: TygorStatus | null;
+  status: GetStatusResponse | null;
   rpcError: TygorRpcError | null;
   disconnectedSince: number | null;
   errorSince: number | null;

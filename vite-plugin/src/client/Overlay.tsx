@@ -1,6 +1,6 @@
 import { createSignal, Show } from "solid-js";
 import { Alert } from "./Alert";
-import type { TygorStatus } from "./types";
+import type { GetStatusResponse } from "../devserver/types";
 
 const PHASE_LABELS: Record<string, string> = {
   prebuild: "Prebuild",
@@ -9,7 +9,7 @@ const PHASE_LABELS: Record<string, string> = {
 };
 
 interface OverlayProps {
-  status: TygorStatus & { status: "error" };
+  status: GetStatusResponse & { status: "error" };
   onDismiss: () => void;
   timestamp?: number;
 }

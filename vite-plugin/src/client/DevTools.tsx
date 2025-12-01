@@ -1,13 +1,16 @@
 import { createSignal, createEffect, onCleanup, Show } from "solid-js";
+import { createClient } from "@tygor/client";
+import { registry as devserverRegistry } from "../devserver/manifest";
+import type { GetStatusResponse } from "../devserver/types";
 import { TigerButton, extractErrorSummary } from "./TigerButton";
 import { Sidebar } from "./Sidebar";
-import type { TygorStatus, TygorRpcError } from "./types";
+import type { TygorRpcError } from "./types";
 
 export type DevToolsMode = "overlay" | "sidebar";
 export type SidebarSide = "left" | "right";
 
 interface DevToolsState {
-  status: TygorStatus | null;
+  status: GetStatusResponse | null;
   rpcError: TygorRpcError | null;
   disconnectedSince: number | null;
   errorSince: number | null;
@@ -63,16 +66,20 @@ export function DevTools() {
     document.getElementById(DOCKED_STYLE_ID)?.remove();
   });
 
+  // Create client for tygor dev API
+  const devClient = createClient(devserverRegistry, { baseUrl: "/__tygor" });
+
   // Poll status from server
   createEffect(() => {
     let mounted = true;
+    let isInitial = true;
 
     async function poll() {
       if (!mounted) return;
 
       try {
-        const res = await fetch("/__tygor/status");
-        const data: TygorStatus = await res.json();
+        const data = await devClient.Devtools.GetStatus({ initial: isInitial });
+        isInitial = false;
 
         setState((prev) => {
           const next = { ...prev, status: data };

@@ -1,11 +1,4 @@
-/** Status response from the tygor dev server */
-export type TygorStatus =
-  | { status: "ok"; port: number; rawrData?: string[] }
-  | { status: "error"; error: string; phase: "prebuild" | "build" | "runtime"; command: string | null; cwd: string; exitCode: number | null }
-  | { status: "reloading" }
-  | { status: "starting" }
-  | { status: "disconnected" }
-  | { status: "vite_disconnected" };
+// Status type is now generated: import { GetStatusResponse } from "../devserver/types"
 
 /** Type reference in the IR schema */
 export interface IRTypeRef {

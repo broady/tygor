@@ -126,29 +126,41 @@ type GetStatusRequest struct {
 	Initial bool `json:"initial,omitempty"`
 }
 
-// GetStatusResponse returns the combined devtools status.
+// GetStatusResponse returns the combined status in flat format for the devtools UI.
+// Status is a discriminated union: "ok", "error", "reloading", "starting", "disconnected".
 type GetStatusResponse struct {
-	Devtools DevtoolsStatus `json:"devtools"`
-	App      *AppStatus     `json:"app,omitempty"`
-	// RawrData contains encoded data blobs (sent on initial request).
-	RawrData []string `json:"rawrData,omitempty"`
+	Status   string   `json:"status"`
+	Port     int      `json:"port,omitempty"`
+	Error    string   `json:"error,omitempty"`
+	Phase    string   `json:"phase,omitempty"` // "prebuild", "build", "runtime"
+	Command  *string  `json:"command"`         // null when not applicable
+	Cwd      string   `json:"cwd,omitempty"`
+	ExitCode *int     `json:"exitCode"`           // null when not applicable
+	RawrData []string `json:"rawrData,omitempty"` // sent on initial request
 }
 
-// DevtoolsStatus is the status of the devtools server itself.
-type DevtoolsStatus struct {
-	Status  string `json:"status"`
-	Version string `json:"version"`
-}
-
-// GetStatus returns combined devtools and app status.
+// GetStatus returns status for devtools UI consumption.
 func (s *Service) GetStatus(ctx context.Context, req *GetStatusRequest) (*GetStatusResponse, error) {
-	resp := &GetStatusResponse{
-		Devtools: DevtoolsStatus{
-			Status:  "ok",
-			Version: "0.1.0", // TODO: get from version package
-		},
-		App: s.appStatus,
+	resp := &GetStatusResponse{}
+
+	if s.appStatus == nil {
+		resp.Status = "disconnected"
+	} else {
+		switch s.appStatus.Status {
+		case "running":
+			resp.Status = "ok"
+			resp.Port = s.appStatus.Port
+		case "building":
+			resp.Status = "reloading"
+		case "error":
+			resp.Status = "error"
+			resp.Error = s.appStatus.Error
+			resp.Phase = s.appStatus.Phase
+		default:
+			resp.Status = "starting"
+		}
 	}
+
 	if req.Initial {
 		resp.RawrData = loadRawrData()
 	}
