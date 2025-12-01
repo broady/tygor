@@ -669,3 +669,107 @@ func TestTypeScriptGenerator_Generate_NoSink(t *testing.T) {
 		t.Errorf("error should mention sink, got: %v", err)
 	}
 }
+
+func TestTypeScriptGenerator_Generate_SliceOfPointers(t *testing.T) {
+	// Test that []*T generates T[] (pointer unwrapped) by default.
+	// Go's []*T semantically means "a slice of T values" - the pointer is an
+	// implementation detail for efficiency/mutability, not expressing optionality.
+	schema := &ir.Schema{
+		Types: []ir.TypeDescriptor{
+			&ir.StructDescriptor{
+				Name: ir.GoIdentifier{Name: "Task", Package: "test"},
+				Fields: []ir.FieldDescriptor{
+					{Name: "ID", JSONName: "id", Type: ir.String()},
+				},
+			},
+			&ir.StructDescriptor{
+				Name: ir.GoIdentifier{Name: "TaskList", Package: "test"},
+				Fields: []ir.FieldDescriptor{
+					{
+						Name:     "Tasks",
+						JSONName: "tasks",
+						Type:     ir.Slice(ir.Ptr(ir.Ref("Task", "test"))), // []*Task
+					},
+				},
+			},
+		},
+	}
+
+	memSink := sink.NewMemorySink()
+	gen := &TypeScriptGenerator{}
+
+	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
+		Sink: memSink,
+		Config: GeneratorConfig{
+			SingleFile: true,
+		},
+	})
+
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	content := string(memSink.Get("types.ts"))
+	t.Logf("Generated:\n%s", content)
+
+	// Should be Task[] not (Task | null)[]
+	if strings.Contains(content, "(Task | null)[]") {
+		t.Error("slice of pointers should NOT generate (T | null)[] by default, got nullable elements")
+	}
+
+	want := "tasks: Task[] | null;"
+	if !strings.Contains(content, want) {
+		t.Errorf("output should contain %q, got:\n%s", want, content)
+	}
+}
+
+func TestTypeScriptGenerator_Generate_SliceOfPointers_NullableElements(t *testing.T) {
+	// Test that []*T generates (T | null)[] when NullableSliceElements=true.
+	// This is for users who genuinely want to express nullable array elements.
+	schema := &ir.Schema{
+		Types: []ir.TypeDescriptor{
+			&ir.StructDescriptor{
+				Name: ir.GoIdentifier{Name: "Task", Package: "test"},
+				Fields: []ir.FieldDescriptor{
+					{Name: "ID", JSONName: "id", Type: ir.String()},
+				},
+			},
+			&ir.StructDescriptor{
+				Name: ir.GoIdentifier{Name: "TaskList", Package: "test"},
+				Fields: []ir.FieldDescriptor{
+					{
+						Name:     "Tasks",
+						JSONName: "tasks",
+						Type:     ir.Slice(ir.Ptr(ir.Ref("Task", "test"))), // []*Task
+					},
+				},
+			},
+		},
+	}
+
+	memSink := sink.NewMemorySink()
+	gen := &TypeScriptGenerator{}
+
+	_, err := gen.Generate(context.Background(), schema, GenerateOptions{
+		Sink: memSink,
+		Config: GeneratorConfig{
+			SingleFile: true,
+			Custom: map[string]any{
+				"NullableSliceElements": true,
+			},
+		},
+	})
+
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	content := string(memSink.Get("types.ts"))
+	t.Logf("Generated:\n%s", content)
+
+	// Should be (Task | null)[] when NullableSliceElements is true
+	want := "tasks: (Task | null)[] | null;"
+	if !strings.Contains(content, want) {
+		t.Errorf("output should contain %q, got:\n%s", want, content)
+	}
+}

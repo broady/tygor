@@ -512,6 +512,9 @@ func getTypeScriptConfig(config GeneratorConfig) TypeScriptConfig {
 	if v, ok := config.Custom["EmitTypeHints"].(bool); ok {
 		tsConfig.EmitTypeHints = v
 	}
+	if v, ok := config.Custom["NullableSliceElements"].(bool); ok {
+		tsConfig.NullableSliceElements = v
+	}
 
 	return tsConfig
 }

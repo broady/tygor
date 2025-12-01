@@ -557,10 +557,10 @@ func TestGenerate_PointerStripping(t *testing.T) {
 		t.Error("response type should not be nullable - pointer should be stripped")
 	}
 
-	// But nested pointers in slices should be preserved
-	// Posts.List: res should be (types.Post | null)[] - elements can be null
-	if !strings.Contains(manifestStr, "(types.Post | null)[]") {
-		t.Error("slice element pointers should be preserved as nullable: expected (types.Post | null)[]")
+	// Pointer elements in slices should be unwrapped - []*T → T[]
+	// Posts.List: res should be types.Post[] - pointer is implementation detail, not nullability
+	if !strings.Contains(manifestStr, "types.Post[]") {
+		t.Error("slice element pointers should be unwrapped: expected types.Post[]")
 	}
 }
 

@@ -467,8 +467,25 @@ func (e *Emitter) intHint(bitSize int, signed bool) string {
 }
 
 // emitArray emits an array type.
+// By default, pointer element types are unwrapped: []*T → T[] rather than (T | null)[].
+// This matches Go semantics where []*T means "a slice of T values" - the pointer is an
+// implementation detail (efficiency/mutability), not expressing optionality of elements.
+// Set NullableSliceElements=true to preserve pointer nullability in array elements.
 func (e *Emitter) emitArray(a *ir.ArrayDescriptor) (string, error) {
-	elemType, err := e.EmitTypeExpr(a.Element)
+	elem := a.Element
+
+	// Unless NullableSliceElements is set, unwrap pointer elements
+	if !e.tsConfig.NullableSliceElements {
+		for {
+			if ptr, ok := elem.(*ir.PtrDescriptor); ok {
+				elem = ptr.Element
+			} else {
+				break
+			}
+		}
+	}
+
+	elemType, err := e.EmitTypeExpr(elem)
 	if err != nil {
 		return "", err
 	}
@@ -520,10 +537,11 @@ func (e *Emitter) emitReference(r *ir.ReferenceDescriptor) string {
 	return escapeReservedWord(typeName)
 }
 
-// emitPtr emits a pointer type.
+// emitPtr emits a pointer type with | null.
 // Note: PtrDescriptor nullability is context-dependent (§4.9).
 // For field-level pointers, determineOptionalNullable handles nullability.
-// For nested contexts (array elements, map values), we add | null here.
+// For array elements, emitArray unwraps pointers (Go's []*T is semantically T[]).
+// For map values, we add | null here since map[K]*V can have nil values.
 // This method recursively unwraps nested pointers to avoid (T | null) | null.
 func (e *Emitter) emitPtr(p *ir.PtrDescriptor) (string, error) {
 	// Unwrap all nested pointers to get to the base type
@@ -541,7 +559,7 @@ func (e *Emitter) emitPtr(p *ir.PtrDescriptor) (string, error) {
 		return "", err
 	}
 	// Parenthesize to ensure correct precedence in compound types
-	// e.g., []*string → (string | null)[] not string | null[]
+	// e.g., map[string]*int → Record<string, (number | null)>
 	return "(" + elemType + " | null)", nil
 }
 

@@ -122,4 +122,9 @@ type TypeScriptConfig struct {
 	// Example: `number /* int64 */`, `string /* RFC3339 */`
 	// Useful for documentation and debugging precision concerns.
 	EmitTypeHints bool
+
+	// NullableSliceElements controls whether []*T generates T[] or (T | null)[].
+	// false (default): []*T → T[] - pointers are treated as implementation detail
+	// true:            []*T → (T | null)[] - pointers indicate nullable elements
+	NullableSliceElements bool
 }
