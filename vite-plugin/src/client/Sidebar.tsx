@@ -441,17 +441,26 @@ export function Sidebar(props: SidebarProps) {
                               <ul class="tygor-sidebar-endpoints">
                                 <For each={svc.endpoints}>
                                   {(ep) => {
-                                    const isQuery = ep.primitive === "query";
+                                    const primitive = ep.primitive || "exec";
+                                    const label = {
+                                      query: "Query",
+                                      exec: "Exec",
+                                      stream: "Stream",
+                                      atom: "Atom",
+                                    }[primitive] || primitive;
                                     const params = formatRequestParams(ep.request, discovery()?.Types);
                                     const res = formatTypeRef(ep.response);
                                     return (
                                       <li class="tygor-sidebar-endpoint">
-                                        <span class={`tygor-sidebar-endpoint-verb tygor-sidebar-endpoint-verb--${isQuery ? 'query' : 'exec'}`}>
-                                          {isQuery ? "Query" : "Exec\u00A0"}
-                                        </span>
-                                        <span class="tygor-sidebar-endpoint-sig">
-                                          {ep.name}({params}){res && <span class="tygor-sidebar-endpoint-res"> → {res}</span>}
-                                        </span>
+                                        <div class="tygor-sidebar-endpoint-left">
+                                          <span class={`tygor-sidebar-endpoint-verb tygor-sidebar-endpoint-verb--${primitive}`}>
+                                            {label}
+                                          </span>
+                                          <span class="tygor-sidebar-endpoint-sig">
+                                            {ep.name}({params})
+                                          </span>
+                                        </div>
+                                        {res && <span class="tygor-sidebar-endpoint-res"><span class="tygor-sidebar-endpoint-arrow">→</span> {res}</span>}
                                       </li>
                                     );
                                   }}
