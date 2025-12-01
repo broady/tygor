@@ -39,7 +39,7 @@ func TestDiscoverySchemaRoundTrip(t *testing.T) {
 			if ep.Primitive == "" {
 				t.Errorf("endpoint %s.%s missing primitive", svc.Name, ep.Name)
 			}
-			if ep.Primitive != "query" && ep.Primitive != "exec" && ep.Primitive != "stream" {
+			if ep.Primitive != "query" && ep.Primitive != "exec" && ep.Primitive != "stream" && ep.Primitive != "atom" {
 				t.Errorf("endpoint %s.%s has invalid primitive: %s", svc.Name, ep.Name, ep.Primitive)
 			}
 		}

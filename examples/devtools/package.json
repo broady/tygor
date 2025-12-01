@@ -12,7 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@tygor/client": "^0.7.3",
+    "@tygor/client": "file:../../client",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

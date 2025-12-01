@@ -3,8 +3,15 @@ package tygor
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"iter"
+	"log/slog"
+	"net/http"
+	"reflect"
 	"sync"
+	"time"
+
+	"github.com/broady/tygor/internal"
 )
 
 // Atom holds a single value that can be read, written, and subscribed to.
@@ -25,8 +32,8 @@ import (
 //	// Update and broadcast to all subscribers
 //	status.Set(&Status{State: "running"})
 //
-//	// Register SSE endpoint
-//	svc.Register("SubscribeStatus", status.SubscribeHandler())
+//	// Register SSE endpoint with proper "atom" primitive
+//	svc.Register("Status", status.Handler())
 type Atom[T any] struct {
 	mu          sync.RWMutex
 	value       T
@@ -140,40 +147,14 @@ func (a *Atom[T]) Subscribe(ctx context.Context) iter.Seq[T] {
 	}
 }
 
-// SubscribeHandler returns a StreamHandler for SSE streaming.
-// Sends the current value immediately, then streams updates.
+// Handler returns an AtomHandler for registering with a Service.
+// The handler uses the "atom" primitive for proper TypeScript codegen.
 //
 // Example:
 //
-//	svc.Register("SubscribeStatus", statusAtom.SubscribeHandler())
-func (a *Atom[T]) SubscribeHandler() *StreamHandler[Empty, json.RawMessage] {
-	return StreamEmit(func(ctx context.Context, _ Empty, emit *Emitter[json.RawMessage]) error {
-		// Send current value
-		a.mu.RLock()
-		current := a.bytes
-		a.mu.RUnlock()
-
-		if err := emit.Send(current); err != nil {
-			return err
-		}
-
-		// Create channel and subscribe
-		ch := make(chan json.RawMessage, 1)
-		subID := a.addSubscriber(ch)
-		defer a.removeSubscriber(subID)
-
-		// Stream updates until disconnect
-		for {
-			select {
-			case <-ctx.Done():
-				return nil
-			case data := <-ch:
-				if err := emit.Send(data); err != nil {
-					return err
-				}
-			}
-		}
-	})
+//	svc.Register("Status", statusAtom.Handler())
+func (a *Atom[T]) Handler() *AtomHandler[T] {
+	return &AtomHandler[T]{atom: a}
 }
 
 // addSubscriber adds a channel to the subscriber list.
@@ -192,4 +173,178 @@ func (a *Atom[T]) removeSubscriber(id int64) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	delete(a.subscribers, id)
+}
+
+// AtomHandler implements [Endpoint] for Atom subscriptions.
+// It streams the current value immediately, then pushes updates via SSE.
+type AtomHandler[T any] struct {
+	atom              *Atom[T]
+	interceptors      []UnaryInterceptor
+	writeTimeout      time.Duration
+	heartbeatInterval time.Duration
+}
+
+// WithUnaryInterceptor adds an interceptor that runs during stream setup.
+func (h *AtomHandler[T]) WithUnaryInterceptor(i UnaryInterceptor) *AtomHandler[T] {
+	h.interceptors = append(h.interceptors, i)
+	return h
+}
+
+// WithWriteTimeout sets the timeout for writing each event to the client.
+func (h *AtomHandler[T]) WithWriteTimeout(d time.Duration) *AtomHandler[T] {
+	h.writeTimeout = d
+	return h
+}
+
+// WithHeartbeat sets the interval for sending SSE heartbeat comments.
+func (h *AtomHandler[T]) WithHeartbeat(d time.Duration) *AtomHandler[T] {
+	h.heartbeatInterval = d
+	return h
+}
+
+// Metadata implements [Endpoint].
+func (h *AtomHandler[T]) Metadata() *internal.MethodMetadata {
+	var req Empty
+	var res T
+	return &internal.MethodMetadata{
+		Primitive: "atom",
+		Request:   reflect.TypeOf(req),
+		Response:  reflect.TypeOf(res),
+	}
+}
+
+// metadata returns the runtime metadata for the atom handler.
+func (h *AtomHandler[T]) metadata() *internal.MethodMetadata {
+	return h.Metadata()
+}
+
+// serveHTTP implements the SSE streaming for atom subscriptions.
+func (h *AtomHandler[T]) serveHTTP(ctx *rpcContext) {
+	// Run unary interceptors for setup (auth, etc.)
+	if len(h.interceptors) > 0 || len(ctx.interceptors) > 0 {
+		allInterceptors := make([]UnaryInterceptor, 0, len(ctx.interceptors)+len(h.interceptors))
+		allInterceptors = append(allInterceptors, ctx.interceptors...)
+		allInterceptors = append(allInterceptors, h.interceptors...)
+
+		chain := chainInterceptors(allInterceptors)
+		noopHandler := func(ctx context.Context, req any) (any, error) {
+			return nil, nil
+		}
+		if _, err := chain(ctx, nil, noopHandler); err != nil {
+			handleError(ctx, err)
+			return
+		}
+	}
+
+	// Set SSE headers
+	ctx.writer.Header().Set("Content-Type", "text/event-stream")
+	ctx.writer.Header().Set("Cache-Control", "no-cache")
+	ctx.writer.Header().Set("Connection", "keep-alive")
+	ctx.writer.Header().Set("X-Accel-Buffering", "no")
+
+	flusher, ok := ctx.writer.(http.Flusher)
+	if !ok {
+		handleError(ctx, NewError(CodeInternal, "streaming not supported"))
+		return
+	}
+	flusher.Flush()
+
+	logger := ctx.logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+
+	// Determine effective timeouts
+	writeTimeout := ctx.streamWriteTimeout
+	if h.writeTimeout > 0 {
+		writeTimeout = h.writeTimeout
+	}
+	heartbeatInterval := ctx.streamHeartbeat
+	if h.heartbeatInterval > 0 {
+		heartbeatInterval = h.heartbeatInterval
+	}
+
+	var rc *http.ResponseController
+	if writeTimeout > 0 {
+		rc = http.NewResponseController(ctx.writer)
+	}
+
+	// Send current value immediately
+	h.atom.mu.RLock()
+	current := h.atom.bytes
+	h.atom.mu.RUnlock()
+
+	if err := h.writeSSEEvent(ctx.writer, current); err != nil {
+		if !isClientDisconnect(err) {
+			logger.Error("failed to write initial atom value",
+				slog.String("endpoint", ctx.EndpointID()),
+				slog.Any("error", err))
+		}
+		return
+	}
+	flusher.Flush()
+
+	// Subscribe for updates
+	ch := make(chan json.RawMessage, 1)
+	subID := h.atom.addSubscriber(ch)
+	defer h.atom.removeSubscriber(subID)
+
+	// Set up heartbeat
+	var heartbeat <-chan time.Time
+	if heartbeatInterval > 0 {
+		ticker := time.NewTicker(heartbeatInterval)
+		defer ticker.Stop()
+		heartbeat = ticker.C
+	}
+
+	// Stream updates until disconnect
+	for {
+		select {
+		case <-ctx.request.Context().Done():
+			return
+
+		case <-heartbeat:
+			if _, err := fmt.Fprint(ctx.writer, ": heartbeat\n\n"); err != nil {
+				if !isClientDisconnect(err) {
+					logger.Error("failed to write heartbeat",
+						slog.String("endpoint", ctx.EndpointID()),
+						slog.Any("error", err))
+				}
+				return
+			}
+			flusher.Flush()
+
+		case data := <-ch:
+			if rc != nil {
+				if err := rc.SetWriteDeadline(time.Now().Add(writeTimeout)); err != nil {
+					logger.Warn("write deadline not supported",
+						slog.String("endpoint", ctx.EndpointID()),
+						slog.Any("error", err))
+					rc = nil
+				}
+			}
+
+			if err := h.writeSSEEvent(ctx.writer, data); err != nil {
+				if !isClientDisconnect(err) {
+					logger.Error("failed to write atom update",
+						slog.String("endpoint", ctx.EndpointID()),
+						slog.Any("error", err))
+				}
+				return
+			}
+
+			if rc != nil {
+				rc.SetWriteDeadline(time.Time{})
+			}
+			flusher.Flush()
+		}
+	}
+}
+
+// writeSSEEvent writes a pre-serialized value as an SSE event.
+func (h *AtomHandler[T]) writeSSEEvent(w http.ResponseWriter, data json.RawMessage) error {
+	// Wrap in response envelope: {"result": <data>}
+	// Since data is already JSON, we construct the envelope manually
+	_, err := fmt.Fprintf(w, "data: {\"result\":%s}\n\n", data)
+	return err
 }

@@ -170,7 +170,7 @@ function emitRpcError(service: string, method: string, code: string, message: st
 
 export interface ServiceRegistry<Manifest extends Record<string, any>> {
   manifest: Manifest;
-  metadata: Record<string, { path: string; primitive: "query" | "exec" | "stream" }>;
+  metadata: Record<string, { path: string; primitive: "query" | "exec" | "stream" | "atom" }>;
 }
 
 /**
@@ -201,6 +201,35 @@ export interface Stream<T> extends AsyncIterable<T> {
   subscribe(onValue: (value: T) => void, onError?: (error: Error) => void): () => void;
 }
 
+/**
+ * Atom represents a synchronized state value.
+ * Unlike streams which emit events, atoms represent current state.
+ * The callback is called immediately with the current value,
+ * then again whenever the value changes on the server.
+ *
+ * @example
+ * // React
+ * useEffect(() => client.Status.Current.subscribe(setStatus), []);
+ *
+ * // Vanilla
+ * const unsubscribe = client.Status.Current.subscribe(
+ *   (status) => console.log("Status:", status),
+ *   (error) => console.error("Error:", error)
+ * );
+ */
+export interface Atom<T> {
+  /**
+   * Subscribe to the atom's value. Returns an unsubscribe function.
+   * The callback is called immediately with the current value,
+   * then again whenever the server pushes an update.
+   *
+   * @param onValue - Called with current value immediately, then on each update
+   * @param onError - Optional error handler. AbortErrors from cleanup are automatically ignored.
+   * @returns Unsubscribe function that cancels the subscription
+   */
+  subscribe(onValue: (value: T) => void, onError?: (error: Error) => void): () => void;
+}
+
 export function createClient<Manifest extends Record<string, any>>(
   registry: ServiceRegistry<Manifest>,
   config: ClientConfig = {}
@@ -226,7 +255,7 @@ export function createClient<Manifest extends Record<string, any>>(
                 throw new Error(`Unknown service method: ${opId}`);
               }
 
-              // Streaming endpoints return AsyncIterable
+              // Streaming endpoints return Stream (AsyncIterable + subscribe)
               if (meta.primitive === "stream") {
                 return (req: any = {}, options?: StreamOptions) => {
                   return createSSEStream(
@@ -243,6 +272,21 @@ export function createClient<Manifest extends Record<string, any>>(
                     validateResponse
                   );
                 };
+              }
+
+              // Atom endpoints return Atom (subscribe only, no AsyncIterable)
+              if (meta.primitive === "atom") {
+                return createAtomClient(
+                  opId,
+                  service,
+                  method,
+                  meta,
+                  config,
+                  fetchFn,
+                  schemas,
+                  validateRequest,
+                  validateResponse
+                );
               }
 
               // Unary endpoints return Promise
@@ -371,7 +415,7 @@ function createSSEStream<T>(
   opId: string,
   service: string,
   method: string,
-  meta: { path: string; primitive: "query" | "exec" | "stream" },
+  meta: { path: string; primitive: "query" | "exec" | "stream" | "atom" },
   req: any,
   options: StreamOptions | undefined,
   config: ClientConfig,
@@ -560,6 +604,151 @@ function createSSEStream<T>(
   };
 }
 
+/**
+ * Creates an Atom client for synchronized state subscriptions.
+ * Unlike streams, atoms represent current state - subscribers get the
+ * current value immediately, then updates as they occur.
+ */
+function createAtomClient<T>(
+  opId: string,
+  service: string,
+  method: string,
+  meta: { path: string; primitive: "query" | "exec" | "stream" | "atom" },
+  config: ClientConfig,
+  fetchFn: FetchFunction,
+  schemas: SchemaMap | undefined,
+  validateRequest: boolean | undefined,
+  validateResponse: boolean | undefined
+): Atom<T> {
+  return {
+    subscribe(onValue: (value: T) => void, onError?: (error: Error) => void): () => void {
+      const controller = new AbortController();
+
+      (async () => {
+        // Atoms have no request parameters (always Empty)
+        const req = {};
+
+        const headers = config.headers ? config.headers() : {};
+        const url = (config.baseUrl || "") + meta.path;
+        const fetchOptions: RequestInit = {
+          method: "POST",
+          headers: {
+            ...headers,
+            "Content-Type": "application/json",
+            Accept: "text/event-stream",
+          },
+          body: JSON.stringify(req),
+          signal: controller.signal,
+        };
+
+        let res: globalThis.Response;
+        try {
+          res = await fetchFn(url, fetchOptions);
+        } catch (e) {
+          if ((e as Error).name === "AbortError") return;
+          const msg = e instanceof Error ? e.message : "Network error";
+          emitRpcError(service, method, "network_error", msg);
+          throw new TransportError(msg, 0, e);
+        }
+
+        const httpStatus = res.status;
+
+        // Check for non-SSE error response
+        const contentType = res.headers.get("Content-Type") || "";
+        if (!contentType.includes("text/event-stream")) {
+          let rawBody = "";
+          try {
+            rawBody = await res.text();
+            const envelope = JSON.parse(rawBody);
+            if (envelope.error) {
+              const code = envelope.error.code || "unknown";
+              const msg = envelope.error.message || "Unknown error";
+              emitRpcError(service, method, code, msg);
+              throw new ServerError(code, msg, httpStatus, envelope.error.details);
+            }
+          } catch (e) {
+            if (e instanceof ServerError) throw e;
+            const msg = res.statusText || "Failed to establish atom subscription";
+            emitRpcError(service, method, "transport_error", msg);
+            throw new TransportError(msg, httpStatus, undefined, rawBody.slice(0, 1000));
+          }
+        }
+
+        if (!res.body) {
+          throw new TransportError("Response body is null", httpStatus);
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        try {
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+
+            // Parse complete SSE events from buffer
+            let eventEnd: number;
+            while ((eventEnd = buffer.indexOf("\n\n")) !== -1) {
+              const eventText = buffer.slice(0, eventEnd);
+              buffer = buffer.slice(eventEnd + 2);
+
+              // Parse SSE event
+              const lines = eventText.split("\n");
+              for (const line of lines) {
+                if (line.startsWith("data: ")) {
+                  const data = line.slice(6);
+                  try {
+                    const envelope = JSON.parse(data) as Response<T>;
+
+                    if (envelope.error) {
+                      const code = envelope.error.code || "unknown";
+                      const msg = envelope.error.message || "Unknown error";
+                      emitRpcError(service, method, code, msg);
+                      throw new ServerError(code, msg, httpStatus, envelope.error.details);
+                    }
+
+                    // Response validation
+                    if (validateResponse && schemas?.[opId]?.response) {
+                      const schema = schemas[opId].response;
+                      const result = await schema["~standard"].validate(envelope.result);
+                      if (result.issues) {
+                        const err = new ValidationError(opId, "response", result.issues);
+                        emitRpcError(service, method, "validation_error", err.message);
+                        throw err;
+                      }
+                    }
+
+                    onValue(envelope.result as T);
+                  } catch (e) {
+                    if (e instanceof ServerError || e instanceof ValidationError) throw e;
+                    emitRpcError(service, method, "transport_error", "Failed to parse atom event");
+                    throw new TransportError("Failed to parse atom event", httpStatus, e, data);
+                  }
+                }
+              }
+            }
+          }
+        } finally {
+          reader.releaseLock();
+        }
+      })().catch((err) => {
+        // Silently ignore AbortError from cleanup
+        if (err.name === "AbortError") return;
+        if (onError) {
+          onError(err);
+        } else {
+          console.error("Atom subscription error:", err);
+        }
+      });
+
+      return () => controller.abort();
+    },
+  };
+}
+
 // Type helpers to transform the flat Manifest into a nested Client structure
 type ServiceName<K> = K extends `${infer S}.${string}` ? S : never;
 
@@ -578,13 +767,18 @@ type ServiceMethods<M, S extends string> = {
       ? (req?: Req, options?: StreamOptions) => Stream<Res>
       : (req: Req, options?: StreamOptions) => Stream<Res>
     : M[K] extends {
-          req: infer Req;
           res: infer Res;
+          primitive: "atom";
         }
-      ? IsOptionalRequest<Req> extends true
-        ? (req?: Req) => Promise<Res>
-        : (req: Req) => Promise<Res>
-      : never;
+      ? Atom<Res>
+      : M[K] extends {
+            req: infer Req;
+            res: infer Res;
+          }
+        ? IsOptionalRequest<Req> extends true
+          ? (req?: Req) => Promise<Res>
+          : (req: Req) => Promise<Res>
+        : never;
 };
 
 export type Client<M> = {

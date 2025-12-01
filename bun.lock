@@ -15,7 +15,7 @@
       "name": "tygor-devtools-example",
       "version": "0.0.0",
       "dependencies": {
-        "@tygor/client": "^0.7.3",
+        "@tygor/client": "file:../../client",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
       },
@@ -427,6 +427,8 @@
 
     "yargs-parser": ["yargs-parser@21.1.1", "", {}, "sha512-tVpsJW7DdjecAiFpbIB1e3qxIQsE6NoPc5/eTdrbbIC4h0LVsWhnoa3g+m2HclBIujHzsxZ4VJVA+GUuc2/LBw=="],
 
+    "@tygor/vite-plugin/@tygor/client": ["@tygor/client@file:client", { "devDependencies": { "typescript": "^5.0.0" } }],
+
     "anymatch/picomatch": ["picomatch@2.3.1", "", {}, "sha512-JU3teHTNjmE2VCGFzuY8EXzCDVwEqB2a8fsIvwaStHhAWJEeVd1o1QD80CU6+ZdEXXSLbSsuLwJjkCBWqRQUVA=="],
 
     "babel-plugin-jsx-dom-expressions/@babel/helper-module-imports": ["@babel/helper-module-imports@7.18.6", "", { "dependencies": { "@babel/types": "^7.18.6" } }, "sha512-0NFvs3VkuSYbFi1x2Vd6tKrywq+z/cLeYC/RJNFrIX/30Bf5aiGYbtvGXolEktzJH8o5E5KJ3tT+nkxuuZFVlA=="],
@@ -434,5 +436,9 @@
     "chalk/supports-color": ["supports-color@7.2.0", "", { "dependencies": { "has-flag": "^4.0.0" } }, "sha512-qpCAvRl9stuOHveKsn7HncJRvv501qIacKzQlO/+Lwxc9+0q2wLyv4Dfvt80/DPn2pqOBsJdDiogXGR9+OvwRw=="],
 
     "readdirp/picomatch": ["picomatch@2.3.1", "", {}, "sha512-JU3teHTNjmE2VCGFzuY8EXzCDVwEqB2a8fsIvwaStHhAWJEeVd1o1QD80CU6+ZdEXXSLbSsuLwJjkCBWqRQUVA=="],
+
+    "tygor-devtools-example/@tygor/client": ["@tygor/client@file:client", { "devDependencies": { "typescript": "^5.0.0" } }],
+
+    "tygor-example-react/@tygor/client": ["@tygor/client@file:client", { "devDependencies": { "typescript": "^5.0.0" } }],
   }
 }

@@ -18,6 +18,10 @@ export interface Task {
   /** Done indicates if the task is completed. */
   done: boolean;
 }
+/** TimeUpdate is sent by the time stream every second. */
+export interface TimeUpdate {
+  time: string /* RFC3339 */;
+}
 /** ToggleTaskParams identifies which task to toggle. */
 export interface ToggleTaskParams {
   id: number /* int32 */;

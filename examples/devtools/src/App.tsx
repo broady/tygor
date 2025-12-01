@@ -1,7 +1,7 @@
 import { useState, useEffect, FormEvent, Component, ReactNode } from "react";
 import { createClient, ServerError, TransportError } from "@tygor/client";
 import { registry } from "./rpc/manifest";
-import type { Task } from "./rpc/types";
+import type { Task, TimeUpdate } from "./rpc/types";
 
 // No baseUrl needed - uses current origin (works with Vite proxy in dev, same-origin in prod)
 const client = createClient(registry);
@@ -59,6 +59,7 @@ export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [newTask, setNewTask] = useState("");
   const [error, setError] = useState<AppError | null>(null);
+  const [time, setTime] = useState<TimeUpdate | null>(null);
 
   const fetchTasks = async () => {
     try {
@@ -71,6 +72,11 @@ export default function App() {
 
   useEffect(() => {
     fetchTasks();
+  }, []);
+
+  // Subscribe to time stream
+  useEffect(() => {
+    return client.Tasks.Time({}).subscribe(setTime);
   }, []);
 
 
@@ -112,6 +118,12 @@ export default function App() {
         </button>
 
         <h1>Tasks</h1>
+        {time && (
+          <div style={{ fontSize: "0.8rem", color: "#666", marginBottom: 12, fontVariantNumeric: "tabular-nums" }}>
+            Server time: {new Date(time.time).toLocaleTimeString()}{" "}
+            <span style={{ opacity: 0.6 }}>(via Tasks.Time SSE)</span>
+          </div>
+        )}
         <form onSubmit={handleCreate}>
           <input
             value={newTask}

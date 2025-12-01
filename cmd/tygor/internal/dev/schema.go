@@ -36,7 +36,7 @@ type ServiceDescriptor struct {
 type EndpointDescriptor struct {
 	Name      string   `json:"name"`
 	FullName  string   `json:"fullName"`
-	Primitive string   `json:"primitive"` // "query", "exec", or "stream"
+	Primitive string   `json:"primitive"` // "query", "exec", "stream", or "atom"
 	Path      string   `json:"path"`
 	Request   *TypeRef `json:"request,omitempty"`
 	Response  *TypeRef `json:"response,omitempty"`
@@ -49,8 +49,8 @@ type TypeDescriptor struct {
 	Kind           string            `json:"kind"` // "struct", "enum", "alias"
 	Name           GoIdentifier      `json:"Name"`
 	TypeParameters []TypeParameter   `json:"TypeParameters,omitempty"`
-	Fields         []FieldDescriptor `json:"Fields,omitempty"`    // for struct
-	Members        []EnumMember      `json:"Members,omitempty"`   // for enum
+	Fields         []FieldDescriptor `json:"Fields,omitempty"`     // for struct
+	Members        []EnumMember      `json:"Members,omitempty"`    // for enum
 	Underlying     *TypeRef          `json:"Underlying,omitempty"` // for alias
 	Extends        []GoIdentifier    `json:"Extends,omitempty"`
 	Documentation  *Documentation    `json:"Documentation,omitempty"`
@@ -60,7 +60,7 @@ type TypeDescriptor struct {
 // TypeRef is a reference to a type (used in fields, requests, responses).
 // Uses kind discriminator for the various type expression forms.
 type TypeRef struct {
-	Kind          string    `json:"kind"` // "primitive", "reference", "array", "map", "ptr", "union", "typeParameter"
+	Kind          string    `json:"kind"`                    // "primitive", "reference", "array", "map", "ptr", "union", "typeParameter"
 	PrimitiveKind string    `json:"primitiveKind,omitempty"` // for primitive
 	BitSize       int       `json:"bitSize,omitempty"`       // for numeric primitives
 	Name          string    `json:"name,omitempty"`          // for reference

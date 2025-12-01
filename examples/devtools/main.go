@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/broady/tygor"
@@ -17,13 +16,10 @@ import (
 	"github.com/broady/tygor/examples/devtools/api"
 )
 
-// In-memory task store
-var (
-	tasks      = []*api.Task{}
-	tasksMu    sync.Mutex
-	nextID     int32 = 1
-	serverPort string
-)
+// Task list as an Atom - subscribers get current list and updates
+var tasksAtom = tygor.NewAtom([]*api.Task{})
+var nextID int32 = 1
+var serverPort string
 
 func Kill(ctx context.Context, req tygor.Empty) (tygor.Empty, error) {
 	fmt.Println("Kill requested, shutting down...")
@@ -35,9 +31,7 @@ func Kill(ctx context.Context, req tygor.Empty) (tygor.Empty, error) {
 }
 
 func ListTasks(ctx context.Context, req *api.ListTasksParams) ([]*api.Task, error) {
-	tasksMu.Lock()
-	defer tasksMu.Unlock()
-
+	tasks := tasksAtom.Get()
 	if req.ShowDone != nil && !*req.ShowDone {
 		filtered := []*api.Task{}
 		for _, t := range tasks {
@@ -54,16 +48,17 @@ func ListTasks(ctx context.Context, req *api.ListTasksParams) ([]*api.Task, erro
 }
 
 func CreateTask(ctx context.Context, req *api.CreateTaskParams) (*api.Task, error) {
-	tasksMu.Lock()
-	defer tasksMu.Unlock()
-
 	task := &api.Task{
 		ID:    nextID,
 		Title: req.Title,
 		Done:  false,
 	}
 	nextID++
-	tasks = append(tasks, task)
+
+	// Update atom - this broadcasts to all subscribers
+	tasksAtom.Update(func(tasks []*api.Task) []*api.Task {
+		return append(tasks, task)
+	})
 	return task, nil
 }
 
@@ -72,16 +67,43 @@ func MakeError(ctx context.Context, req tygor.Empty) (tygor.Empty, error) {
 }
 
 func ToggleTask(ctx context.Context, req *api.ToggleTaskParams) (*api.Task, error) {
-	tasksMu.Lock()
-	defer tasksMu.Unlock()
+	var found *api.Task
+	tasksAtom.Update(func(tasks []*api.Task) []*api.Task {
+		for _, t := range tasks {
+			if t.ID == req.ID {
+				t.Done = !t.Done
+				found = t
+				break
+			}
+		}
+		return tasks
+	})
+	if found == nil {
+		return nil, tygor.NewError(tygor.CodeNotFound, "task not found")
+	}
+	return found, nil
+}
 
-	for _, t := range tasks {
-		if t.ID == req.ID {
-			t.Done = !t.Done
-			return t, nil
+// CurrentTime streams the current time every second
+func CurrentTime(ctx context.Context, req tygor.Empty, emit *tygor.Emitter[*api.TimeUpdate]) error {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	// Send immediately
+	if err := emit.Send(&api.TimeUpdate{Time: time.Now()}); err != nil {
+		return err
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case t := <-ticker.C:
+			if err := emit.Send(&api.TimeUpdate{Time: t}); err != nil {
+				return err
+			}
 		}
 	}
-	return nil, tygor.NewError(tygor.CodeNotFound, "task not found")
 }
 
 func main() {
@@ -115,6 +137,8 @@ func main() {
 
 	tasksvc := app.Service("Tasks")
 	tasksvc.Register("List", tygor.Query(ListTasks))
+	tasksvc.Register("Subscribe", tasksAtom.Handler())
+	tasksvc.Register("Time", tygor.StreamEmit(CurrentTime))
 	tasksvc.Register("Create", tygor.Exec(CreateTask))
 	tasksvc.Register("Toggle", tygor.Exec(ToggleTask))
 	tasksvc.Register("MakeError", tygor.Exec(MakeError))

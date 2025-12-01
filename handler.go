@@ -36,6 +36,7 @@ func init() {
 //   - [*ExecHandler] - for POST requests (created with [Exec])
 //   - [*QueryHandler] - for GET requests (created with [Query])
 //   - [*StreamHandler] - for SSE streaming (created with [Stream])
+//   - [*AtomHandler] - for synchronized state (created with [Atom.Handler])
 type Endpoint interface {
 	// Metadata returns route metadata for code generation.
 	// The return type is internal; this method is for use by tygorgen only.

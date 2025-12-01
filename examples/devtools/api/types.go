@@ -1,5 +1,7 @@
 package api
 
+import "time"
+
 //go:generate go run ../ -gen -out ../src/rpc
 
 // Task represents a todo item.
@@ -26,4 +28,9 @@ type CreateTaskParams struct {
 // ToggleTaskParams identifies which task to toggle.
 type ToggleTaskParams struct {
 	ID int32 `json:"id" validate:"required"`
+}
+
+// TimeUpdate is sent by the time stream every second.
+type TimeUpdate struct {
+	Time time.Time `json:"time"`
 }

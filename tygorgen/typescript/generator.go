@@ -413,9 +413,9 @@ func (g *TypeScriptGenerator) generateManifest(ctx context.Context, schema *ir.S
 		buf.WriteString(resType)
 		buf.WriteString(";\n")
 
-		// Primitive field for stream endpoints
-		if endpoint.Primitive == "stream" {
-			buf.WriteString("    primitive: \"stream\";\n")
+		// Primitive field for streaming endpoints (stream and atom)
+		if endpoint.Primitive == "stream" || endpoint.Primitive == "atom" {
+			buf.WriteString(fmt.Sprintf("    primitive: %q;\n", endpoint.Primitive))
 		}
 
 		buf.WriteString("  };\n")

@@ -19,6 +19,16 @@ export interface Manifest {
     req: Record<string, never>;
     res: Record<string, never>;
   };
+  "Tasks.Subscribe": {
+    req: Record<string, never>;
+    res: (types.Task | null)[];
+    primitive: "atom";
+  };
+  "Tasks.Time": {
+    req: Record<string, never>;
+    res: types.TimeUpdate;
+    primitive: "stream";
+  };
   "Tasks.Toggle": {
     req: types.ToggleTaskParams;
     res: types.Task;
@@ -30,6 +40,8 @@ const metadata = {
   "Tasks.Create": { path: "/Tasks/Create", primitive: "exec" },
   "Tasks.List": { path: "/Tasks/List", primitive: "query" },
   "Tasks.MakeError": { path: "/Tasks/MakeError", primitive: "exec" },
+  "Tasks.Subscribe": { path: "/Tasks/Subscribe", primitive: "atom" },
+  "Tasks.Time": { path: "/Tasks/Time", primitive: "stream" },
   "Tasks.Toggle": { path: "/Tasks/Toggle", primitive: "exec" },
 } as const;
 
