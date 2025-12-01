@@ -178,22 +178,26 @@ func (s *Service) GetStatus(ctx context.Context, req *GetStatusRequest, emit *ty
 }
 
 // buildStatusResponse creates a status response from current state.
+// Must be called with statusMu held or after snapshotting appStatus.
 func (s *Service) buildStatusResponse() *GetStatusResponse {
-	resp := &GetStatusResponse{}
+	s.statusMu.Lock()
+	appStatus := s.appStatus
+	s.statusMu.Unlock()
 
-	if s.appStatus == nil {
+	resp := &GetStatusResponse{}
+	if appStatus == nil {
 		resp.Status = "disconnected"
 	} else {
-		switch s.appStatus.Status {
+		switch appStatus.Status {
 		case "running":
 			resp.Status = "ok"
-			resp.Port = s.appStatus.Port
+			resp.Port = appStatus.Port
 		case "building":
 			resp.Status = "reloading"
 		case "error":
 			resp.Status = "error"
-			resp.Error = s.appStatus.Error
-			resp.Phase = s.appStatus.Phase
+			resp.Error = appStatus.Error
+			resp.Phase = appStatus.Phase
 		default:
 			resp.Status = "starting"
 		}
@@ -254,7 +258,10 @@ type UpdateStatusResponse struct{}
 // UpdateStatus updates the app status (called by vite plugin).
 // Notifies all connected GetStatus subscribers of the change.
 func (s *Service) UpdateStatus(ctx context.Context, req *UpdateStatusRequest) (*UpdateStatusResponse, error) {
+	s.statusMu.Lock()
 	s.appStatus = &req.App
+	s.statusMu.Unlock()
+
 	s.notifySubscribers()
 	return &UpdateStatusResponse{}, nil
 }
