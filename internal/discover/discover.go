@@ -55,7 +55,8 @@ type Result struct {
 	ConfigFunc  *ConfigFunc // optional config function
 	PackagePath string
 	ModulePath  string
-	Dir         string
+	ModuleDir   string // directory containing go.mod
+	Dir         string // directory containing the package
 }
 
 // Find scans a Go package for export functions.
@@ -100,7 +101,7 @@ func FindDir(pattern, dir string) (*Result, error) {
 
 	if pkg.Module != nil {
 		result.ModulePath = pkg.Module.Path
-		result.Dir = pkg.Module.Dir
+		result.ModuleDir = pkg.Module.Dir
 	}
 
 	if len(pkg.GoFiles) > 0 {

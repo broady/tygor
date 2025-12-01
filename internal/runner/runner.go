@@ -47,18 +47,41 @@ type Options struct {
 	// PkgDir is the directory containing the package.
 	PkgDir string
 
+	// PkgPath is the import path of the package (e.g., "github.com/foo/bar").
+	// Required for non-main packages.
+	PkgPath string
+
+	// ModulePath is the module path (e.g., "github.com/foo").
+	// Required for non-main packages.
+	ModulePath string
+
+	// ModuleDir is the directory containing the module's go.mod.
+	// Required for non-main packages.
+	ModuleDir string
+
 	// CheckMode runs validation only, outputs JSON stats instead of generating files.
 	CheckMode bool
 }
 
 // Exec builds and runs the generator.
 //
-// It creates an overlay that:
-// 1. Replaces files containing func main() with versions that have main() removed
-// 2. Adds a runner file with our own main()
-//
-// The overlay approach lets us work with package main and unexported functions.
+// For package main: uses overlay to replace main() with runner main().
+// For other packages: creates a temp module that imports the target package.
 func Exec(opts Options) (output []byte, err error) {
+	// Check if this is a main package by looking for func main()
+	isMainPkg, err := hasMainFunc(opts.PkgDir)
+	if err != nil {
+		return nil, fmt.Errorf("check main: %w", err)
+	}
+
+	if isMainPkg {
+		return execOverlay(opts)
+	}
+	return execImport(opts)
+}
+
+// execOverlay handles package main by using Go's overlay feature.
+func execOverlay(opts Options) (output []byte, err error) {
 	// Create temp directory for overlay files
 	tmpDir, err := os.MkdirTemp("", "tygor-gen-*")
 	if err != nil {
@@ -143,6 +166,110 @@ func Exec(opts Options) (output []byte, err error) {
 	}
 
 	return output, nil
+}
+
+// execImport handles non-main packages by using overlay to create a virtual
+// runner package inside the module that imports the target package.
+func execImport(opts Options) (output []byte, err error) {
+	if opts.PkgPath == "" {
+		return nil, fmt.Errorf("PkgPath required for non-main packages")
+	}
+	if opts.ModuleDir == "" {
+		return nil, fmt.Errorf("ModuleDir required for non-main packages")
+	}
+
+	// Create temp directory for overlay files
+	tmpDir, err := os.MkdirTemp("", "tygor-gen-*")
+	if err != nil {
+		return nil, fmt.Errorf("create temp dir: %w", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Generate runner that imports the target package
+	runnerSrc, err := generateImportRunner(opts)
+	if err != nil {
+		return nil, fmt.Errorf("generate runner: %w", err)
+	}
+
+	// Write runner to temp file
+	runnerFile := filepath.Join(tmpDir, "main.go")
+	if err := os.WriteFile(runnerFile, runnerSrc, 0644); err != nil {
+		return nil, fmt.Errorf("write runner: %w", err)
+	}
+
+	// Create overlay that places runner at a virtual path inside the module.
+	// To import internal packages, the runner must be placed as a sibling of
+	// or inside the "internal" directory's parent. We place it alongside the
+	// target package.
+	virtualRunnerDir := filepath.Join(opts.PkgDir, ".tygor-runner")
+	virtualRunnerFile := filepath.Join(virtualRunnerDir, "main.go")
+
+	overlay := map[string]string{
+		virtualRunnerFile: runnerFile,
+	}
+
+	overlayData := struct {
+		Replace map[string]string `json:"Replace"`
+	}{Replace: overlay}
+
+	overlayJSON, err := json.Marshal(overlayData)
+	if err != nil {
+		return nil, fmt.Errorf("marshal overlay: %w", err)
+	}
+
+	overlayFile := filepath.Join(tmpDir, "overlay.json")
+	if err := os.WriteFile(overlayFile, overlayJSON, 0644); err != nil {
+		return nil, fmt.Errorf("write overlay: %w", err)
+	}
+
+	// Build with overlay, targeting the virtual runner directory
+	binaryPath := filepath.Join(tmpDir, "runner")
+	buildCmd := exec.Command("go", "build", "-overlay", overlayFile, "-o", binaryPath, virtualRunnerDir)
+	buildCmd.Dir = opts.ModuleDir
+	buildCmd.Env = append(os.Environ(), "GOWORK=off")
+	if buildOut, err := buildCmd.CombinedOutput(); err != nil {
+		return buildOut, fmt.Errorf("build: %w\n%s", err, buildOut)
+	}
+
+	// Run the binary
+	runCmd := exec.Command(binaryPath)
+	runCmd.Dir = opts.PkgDir
+	output, err = runCmd.CombinedOutput()
+	if err != nil {
+		return output, fmt.Errorf("run: %w\n%s", err, output)
+	}
+
+	return output, nil
+}
+
+// hasMainFunc checks if any .go file in the directory has a main() function.
+func hasMainFunc(dir string) (bool, error) {
+	files, err := filepath.Glob(filepath.Join(dir, "*.go"))
+	if err != nil {
+		return false, err
+	}
+
+	for _, file := range files {
+		// Skip test files
+		if filepath.Base(file) == "_test.go" || len(file) > 8 && file[len(file)-8:] == "_test.go" {
+			continue
+		}
+
+		fset := token.NewFileSet()
+		f, err := parser.ParseFile(fset, file, nil, 0)
+		if err != nil {
+			return false, err
+		}
+
+		for _, decl := range f.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if ok && fn.Name.Name == "main" && fn.Recv == nil {
+				return true, nil
+			}
+		}
+	}
+
+	return false, nil
 }
 
 // removeMain parses a Go file and returns a version with func main() removed.
@@ -329,6 +456,183 @@ import (
 
 func main() {
 	g := {{.ExportFunc}}()
+	result, err := g.Generate()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "tygor check: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Print stats
+	endpoints := 0
+	for _, svc := range result.Schema.Services {
+		endpoints += len(svc.Endpoints)
+	}
+	fmt.Printf("%d %d %d\n", len(result.Schema.Services), endpoints, len(result.Schema.Types))
+
+	// Print warnings to stderr
+	for _, w := range result.Warnings {
+		fmt.Fprintf(os.Stderr, "warning: %s: %s\n", w.Code, w.Message)
+	}
+}
+`
+
+// generateImportRunner creates runner source that imports a non-main package.
+func generateImportRunner(opts Options) ([]byte, error) {
+	var tmplStr string
+	if opts.CheckMode {
+		switch opts.Export.Type {
+		case discover.ExportTypeApp:
+			tmplStr = importAppCheckTemplate
+		case discover.ExportTypeGenerator:
+			tmplStr = importGeneratorCheckTemplate
+		default:
+			return nil, fmt.Errorf("unknown export type: %v", opts.Export.Type)
+		}
+	} else {
+		switch opts.Export.Type {
+		case discover.ExportTypeApp:
+			tmplStr = importAppRunnerTemplate
+		case discover.ExportTypeGenerator:
+			tmplStr = importGeneratorRunnerTemplate
+		default:
+			return nil, fmt.Errorf("unknown export type: %v", opts.Export.Type)
+		}
+	}
+
+	tmpl, err := template.New("runner").Parse(tmplStr)
+	if err != nil {
+		return nil, err
+	}
+
+	configFunc := ""
+	if opts.ConfigFunc != "" && !opts.NoConfig {
+		configFunc = opts.ConfigFunc
+	}
+
+	data := struct {
+		PkgPath    string
+		ExportFunc string
+		OutDir     string
+		Flavor     string
+		Discovery  bool
+		ConfigFunc string
+	}{
+		PkgPath:    opts.PkgPath,
+		ExportFunc: opts.Export.Name,
+		OutDir:     opts.OutDir,
+		Flavor:     opts.Flavor,
+		Discovery:  opts.Discovery,
+		ConfigFunc: configFunc,
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
+}
+
+const importAppRunnerTemplate = `package main
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/broady/tygor/tygorgen"
+	pkg "{{.PkgPath}}"
+)
+
+func main() {
+	g := tygorgen.FromApp(pkg.{{.ExportFunc}}())
+{{if .Flavor}}
+	g = g.WithFlavor(tygorgen.Flavor("{{.Flavor}}"))
+{{end}}
+{{if .Discovery}}
+	g = g.WithDiscovery()
+{{end}}
+{{if .ConfigFunc}}
+	g = pkg.{{.ConfigFunc}}(g)
+{{end}}
+	result, err := g.ToDir("{{.OutDir}}")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "tygor gen: %v\n", err)
+		os.Exit(1)
+	}
+	for _, w := range result.Warnings {
+		fmt.Fprintf(os.Stderr, "warning: %s: %s\n", w.Code, w.Message)
+	}
+}
+`
+
+const importGeneratorRunnerTemplate = `package main
+
+import (
+	"fmt"
+	"os"
+
+	pkg "{{.PkgPath}}"
+)
+
+func main() {
+	g := pkg.{{.ExportFunc}}()
+	result, err := g.ToDir("{{.OutDir}}")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "tygor gen: %v\n", err)
+		os.Exit(1)
+	}
+	for _, w := range result.Warnings {
+		fmt.Fprintf(os.Stderr, "warning: %s: %s\n", w.Code, w.Message)
+	}
+}
+`
+
+const importAppCheckTemplate = `package main
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/broady/tygor/tygorgen"
+	pkg "{{.PkgPath}}"
+)
+
+func main() {
+	g := tygorgen.FromApp(pkg.{{.ExportFunc}}())
+{{if .ConfigFunc}}
+	g = pkg.{{.ConfigFunc}}(g)
+{{end}}
+	result, err := g.Generate()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "tygor check: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Print stats
+	endpoints := 0
+	for _, svc := range result.Schema.Services {
+		endpoints += len(svc.Endpoints)
+	}
+	fmt.Printf("%d %d %d\n", len(result.Schema.Services), endpoints, len(result.Schema.Types))
+
+	// Print warnings to stderr
+	for _, w := range result.Warnings {
+		fmt.Fprintf(os.Stderr, "warning: %s: %s\n", w.Code, w.Message)
+	}
+}
+`
+
+const importGeneratorCheckTemplate = `package main
+
+import (
+	"fmt"
+	"os"
+
+	pkg "{{.PkgPath}}"
+)
+
+func main() {
+	g := pkg.{{.ExportFunc}}()
 	result, err := g.Generate()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "tygor check: %v\n", err)

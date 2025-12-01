@@ -49,12 +49,15 @@ func (c *Cmd) Run() error {
 
 	// Build runner options
 	opts := runner.Options{
-		Export:    *export,
-		OutDir:    outDir,
-		Flavor:    c.Flavor,
-		Discovery: c.Discovery,
-		NoConfig:  c.NoConfig,
-		PkgDir:    result.Dir,
+		Export:     *export,
+		OutDir:     outDir,
+		Flavor:     c.Flavor,
+		Discovery:  c.Discovery,
+		NoConfig:   c.NoConfig,
+		PkgDir:     result.Dir,
+		PkgPath:    result.PackagePath,
+		ModulePath: result.ModulePath,
+		ModuleDir:  result.ModuleDir,
 	}
 
 	// Add config function if present and applicable

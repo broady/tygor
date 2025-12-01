@@ -36,9 +36,12 @@ func (c *Cmd) Run() error {
 
 	// Build runner options for check mode
 	opts := runner.Options{
-		Export:    *export,
-		CheckMode: true,
-		PkgDir:    result.Dir,
+		Export:     *export,
+		CheckMode:  true,
+		PkgDir:     result.Dir,
+		PkgPath:    result.PackagePath,
+		ModulePath: result.ModulePath,
+		ModuleDir:  result.ModuleDir,
 	}
 
 	// Add config function if present and applicable
