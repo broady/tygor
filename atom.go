@@ -40,6 +40,7 @@ type Atom[T any] struct {
 	bytes       json.RawMessage // pre-serialized for efficient broadcast
 	subscribers map[int64]chan json.RawMessage
 	nextSubID   int64
+	closed      bool
 }
 
 // NewAtom creates a new Atom with the given initial value.
@@ -62,6 +63,7 @@ func (a *Atom[T]) Get() T {
 
 // Set updates the value and broadcasts to all subscribers.
 // The value is serialized once and the same bytes are sent to all subscribers.
+// No-op if the Atom has been closed.
 func (a *Atom[T]) Set(value T) {
 	// Serialize once before taking lock
 	data, err := json.Marshal(value)
@@ -69,13 +71,19 @@ func (a *Atom[T]) Set(value T) {
 		// If serialization fails, still update in-memory value
 		// but don't broadcast (subscribers would get stale data)
 		a.mu.Lock()
-		a.value = value
+		if !a.closed {
+			a.value = value
+		}
 		a.mu.Unlock()
 		return
 	}
 
 	// Update value and snapshot subscribers
 	a.mu.Lock()
+	if a.closed {
+		a.mu.Unlock()
+		return
+	}
 	a.value = value
 	a.bytes = data
 	subs := make([]chan json.RawMessage, 0, len(a.subscribers))
@@ -113,13 +121,19 @@ func (a *Atom[T]) Update(fn func(T) T) {
 }
 
 // Subscribe returns an iterator that yields the current value and all future
-// updates until ctx is canceled. For use in Go code, not HTTP handlers.
+// updates until ctx is canceled or the Atom is closed.
+// For use in Go code, not HTTP handlers.
 func (a *Atom[T]) Subscribe(ctx context.Context) iter.Seq[T] {
 	return func(yield func(T) bool) {
 		// Send current value
 		a.mu.RLock()
 		current := a.value
+		closed := a.closed
 		a.mu.RUnlock()
+
+		if closed {
+			return
+		}
 
 		if !yield(current) {
 			return
@@ -128,13 +142,19 @@ func (a *Atom[T]) Subscribe(ctx context.Context) iter.Seq[T] {
 		// Create channel and subscribe
 		ch := make(chan json.RawMessage, 1)
 		subID := a.addSubscriber(ch)
+		if subID < 0 {
+			return // Atom was closed
+		}
 		defer a.removeSubscriber(subID)
 
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case data := <-ch:
+			case data, ok := <-ch:
+				if !ok {
+					return // Atom was closed
+				}
 				var val T
 				if err := json.Unmarshal(data, &val); err != nil {
 					continue // Skip malformed data
@@ -158,9 +178,14 @@ func (a *Atom[T]) Handler() *AtomHandler[T] {
 }
 
 // addSubscriber adds a channel to the subscriber list.
+// Returns -1 if the Atom has been closed.
 func (a *Atom[T]) addSubscriber(ch chan json.RawMessage) int64 {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
+	if a.closed {
+		return -1
+	}
 
 	id := a.nextSubID
 	a.nextSubID++
@@ -173,6 +198,24 @@ func (a *Atom[T]) removeSubscriber(id int64) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	delete(a.subscribers, id)
+}
+
+// Close signals all subscribers to disconnect and prevents new subscriptions.
+// Safe to call multiple times. After Close, Set is a no-op.
+func (a *Atom[T]) Close() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if a.closed {
+		return
+	}
+	a.closed = true
+
+	// Close all subscriber channels to signal disconnection
+	for id, ch := range a.subscribers {
+		close(ch)
+		delete(a.subscribers, id)
+	}
 }
 
 // AtomHandler implements [Endpoint] for Atom subscriptions.
@@ -236,6 +279,17 @@ func (h *AtomHandler[T]) serveHTTP(ctx *rpcContext) {
 		}
 	}
 
+	// Check if atom is closed before setting up SSE
+	h.atom.mu.RLock()
+	current := h.atom.bytes
+	closed := h.atom.closed
+	h.atom.mu.RUnlock()
+
+	if closed {
+		handleError(ctx, NewError(CodeUnavailable, "atom closed"))
+		return
+	}
+
 	// Set SSE headers
 	ctx.writer.Header().Set("Content-Type", "text/event-stream")
 	ctx.writer.Header().Set("Cache-Control", "no-cache")
@@ -269,11 +323,6 @@ func (h *AtomHandler[T]) serveHTTP(ctx *rpcContext) {
 		rc = http.NewResponseController(ctx.writer)
 	}
 
-	// Send current value immediately
-	h.atom.mu.RLock()
-	current := h.atom.bytes
-	h.atom.mu.RUnlock()
-
 	if err := h.writeSSEEvent(ctx.writer, current); err != nil {
 		if !isClientDisconnect(err) {
 			logger.Error("failed to write initial atom value",
@@ -287,6 +336,9 @@ func (h *AtomHandler[T]) serveHTTP(ctx *rpcContext) {
 	// Subscribe for updates
 	ch := make(chan json.RawMessage, 1)
 	subID := h.atom.addSubscriber(ch)
+	if subID < 0 {
+		return // Atom was closed between check and subscribe
+	}
 	defer h.atom.removeSubscriber(subID)
 
 	// Set up heartbeat
@@ -314,7 +366,11 @@ func (h *AtomHandler[T]) serveHTTP(ctx *rpcContext) {
 			}
 			flusher.Flush()
 
-		case data := <-ch:
+		case data, ok := <-ch:
+			if !ok {
+				return // Atom was closed
+			}
+
 			if rc != nil {
 				if err := rc.SetWriteDeadline(time.Now().Add(writeTimeout)); err != nil {
 					logger.Warn("write deadline not supported",
