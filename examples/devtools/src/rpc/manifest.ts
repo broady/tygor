@@ -13,7 +13,7 @@ export interface Manifest {
   };
   "Tasks.List": {
     req: types.ListTasksParams;
-    res: (types.Task | null)[];
+    res: types.Task[];
   };
   "Tasks.MakeError": {
     req: Record<string, never>;
@@ -21,7 +21,7 @@ export interface Manifest {
   };
   "Tasks.SyncedList": {
     req: Record<string, never>;
-    res: (types.Task | null)[];
+    res: types.Task[];
     primitive: "atom";
   };
   "Tasks.Time": {

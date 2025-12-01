@@ -71,11 +71,11 @@ const user = await client.Users.Get({ id: "123" });
 Clone the React + Vite example and start building:
 
 ```bash
-bunx degit broady/tygor/examples/react#v0.7.4 my-app
+bunx degit broady/tygor/examples/react#v0.8.0 my-app
 cd my-app && bun i && bun dev
 ```
 
-Or with npm: `npx degit broady/tygor/examples/react#v0.7.4 my-app`
+Or with npm: `npx degit broady/tygor/examples/react#v0.8.0 my-app`
 
 Prerequisites: Go 1.21+, Node.js 18+
 

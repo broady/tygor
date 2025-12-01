@@ -18,7 +18,7 @@ export interface Manifest {
   };
   "Tasks.List": {
     req: types.ListTasksParams;
-    res: (types.Task | null)[];
+    res: types.Task[];
   };
   "Tasks.Toggle": {
     req: types.ToggleTaskParams;
