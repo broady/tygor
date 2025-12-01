@@ -157,6 +157,7 @@ import { tygorDev } from "@tygor/vite-plugin";
 export default defineConfig({
   plugins: [
     tygorDev({
+      workdir: "../server",  // Path to your Go module
       build: "go build -o ./tmp/server .",
       start: (port) => ({ cmd: `./tmp/server -port=${port}` }),
     }),

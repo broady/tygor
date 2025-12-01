@@ -12,7 +12,9 @@ import { registry as devserverRegistry } from "./devserver/manifest.js";
 import { clientBundle } from "./generated/client-bundle.js";
 
 export interface TygorDevOptions {
-  /** Command to run before starting the server (e.g., codegen) */
+  /** Run tygor gen automatically (default: true). Set to false to disable. */
+  gen?: boolean;
+  /** Command to run before starting the server (e.g., custom codegen) */
   prebuild?: string | string[];
   /** Build command (e.g., "go build -o ./tmp/server ."). If provided, build errors are distinguished from runtime errors */
   build?: string | string[];
@@ -24,7 +26,7 @@ export interface TygorDevOptions {
     env?: Record<string, string>;
     cwd?: string;
   };
-  /** Directory containing generated RPC files (default: './src/rpc'). Used for serving discovery.json and deriving proxy paths */
+  /** Directory containing generated RPC files (default: './src/rpc'). Used for serving discovery.json, deriving proxy paths, and tygor gen output */
   rpcDir?: string;
   /** Glob patterns to watch (default: ['**\/*.go']) */
   watch?: string[];
@@ -55,6 +57,7 @@ interface DevServerState {
 }
 
 const DEFAULT_OPTIONS = {
+  gen: true,
   watch: ["**/*.go"],
   ignore: ["**/node_modules", "**/.git", "**/tmp", "**/dist"],
   health: false as const,
@@ -212,6 +215,58 @@ export function tygorDev(options: TygorDevOptions): Plugin {
     } catch (e) {
       log(`Failed to update devserver status: ${e instanceof Error ? e.message : e}`);
     }
+  }
+
+  /** Run tygor gen to generate TypeScript types */
+  async function runGen(): Promise<boolean> {
+    if (!opts.gen) return true;
+
+    const tygorCmd = getTygorCommand(opts.tygorCommand);
+    const rpcDir = resolve(process.cwd(), opts.rpcDir!);
+    const args = [...tygorCmd.slice(1), "gen", rpcDir, "--discovery"];
+    const command = tygorCmd[0];
+    const fullCmd = `${command} ${args.join(" ")}`;
+
+    log(`Running: ${fullCmd}`);
+
+    return new Promise((resolve) => {
+      const proc = spawn(command, args, {
+        cwd: workdir,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+
+      let stdout = "";
+      let stderr = "";
+
+      proc.stdout?.on("data", (data) => {
+        stdout += data.toString();
+      });
+
+      proc.stderr?.on("data", (data) => {
+        stderr += data.toString();
+      });
+
+      proc.on("error", (err) => {
+        buildError = err.message;
+        errorPhase = "prebuild";
+        errorCommand = fullCmd;
+        logError(`tygor gen failed: ${err.message}`);
+        resolve(false);
+      });
+
+      proc.on("exit", (code) => {
+        if (code !== 0) {
+          buildError = stderr || `tygor gen exited with code ${code}`;
+          errorPhase = "prebuild";
+          errorCommand = fullCmd;
+          logError(`tygor gen failed:\n${buildError}`);
+          resolve(false);
+        } else {
+          if (stdout.trim()) process.stdout.write(pc.dim(stdout));
+          resolve(true);
+        }
+      });
+    });
   }
 
   async function runPrebuild(): Promise<boolean> {
@@ -438,6 +493,14 @@ export function tygorDev(options: TygorDevOptions): Plugin {
 
     log("Detected changes, reloading...");
     await updateDevServerStatus("building", undefined, "prebuild");
+
+    // Run tygor gen
+    const genOk = await runGen();
+    if (!genOk) {
+      await updateDevServerStatus("error", buildError ?? "tygor gen failed", "prebuild");
+      isReloading = false;
+      return;
+    }
 
     // Run prebuild
     const prebuildOk = await runPrebuild();
@@ -740,21 +803,28 @@ if (import.meta.hot) {
         logError("tygor dev failed to start");
       }
 
-      // Initial build and server start
-      await updateDevServerStatus("building", undefined, "build");
-      const buildOk = await runBuild();
-      if (buildOk) {
-        await updateDevServerStatus("starting", undefined, "runtime");
-        currentServer = await startServerWithRetry();
-        if (currentServer.ready) {
-          await updateDevServerStatus("running");
-        } else {
-          await updateDevServerStatus("error", buildError ?? "Server start failed", "runtime");
-          logError("Server start failed - fix errors and save to retry");
-        }
+      // Initial gen, build, and server start
+      await updateDevServerStatus("building", undefined, "prebuild");
+      const genOk = await runGen();
+      if (!genOk) {
+        await updateDevServerStatus("error", buildError ?? "tygor gen failed", "prebuild");
+        logError("tygor gen failed - fix errors and save to retry");
       } else {
-        await updateDevServerStatus("error", buildError ?? "Build failed", "build");
-        logError("Build failed - fix errors and save to retry");
+        await updateDevServerStatus("building", undefined, "build");
+        const buildOk = await runBuild();
+        if (buildOk) {
+          await updateDevServerStatus("starting", undefined, "runtime");
+          currentServer = await startServerWithRetry();
+          if (currentServer.ready) {
+            await updateDevServerStatus("running");
+          } else {
+            await updateDevServerStatus("error", buildError ?? "Server start failed", "runtime");
+            logError("Server start failed - fix errors and save to retry");
+          }
+        } else {
+          await updateDevServerStatus("error", buildError ?? "Build failed", "build");
+          logError("Build failed - fix errors and save to retry");
+        }
       }
 
       // Watchdog: continuously ping server and restart if unresponsive

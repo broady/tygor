@@ -17,6 +17,7 @@ import { tygorDev } from "@tygor/vite-plugin";
 export default defineConfig({
   plugins: [
     tygorDev({
+      workdir: "../server",  // Path to your Go module
       build: "go build -o ./tmp/server .",
       start: (port) => ({ cmd: `./tmp/server -port=${port}` }),
     }),
@@ -25,11 +26,13 @@ export default defineConfig({
 ```
 
 That's it. The plugin automatically:
-- Runs `tygor gen` to generate TypeScript types
+- Runs `tygor gen` to generate TypeScript types (output to `rpcDir`)
 - Starts a devtools server (`tygor dev`)
 - Builds and runs your Go server
 - Hot-reloads on file changes with zero downtime
 - Shows errors in-browser
+
+> **Note**: `workdir` sets the working directory for Go commands. In a typical monorepo with `client/` and `server/` directories, set this to the path of your Go module relative to `vite.config.ts`.
 
 ## How It Works
 
@@ -71,15 +74,16 @@ When you edit a `.go` file:
 |--------|------|---------|-------------|
 | `start` | `(port) => { cmd, env?, cwd? }` | required | Function returning server start command |
 | `build` | `string \| string[]` | - | Build command (e.g., `go build -o ./tmp/server .`) |
-| `prebuild` | `string \| string[]` | - | Custom command before build (overrides `tygor gen`) |
+| `gen` | `boolean` | `true` | Run `tygor gen` automatically. Set to `false` to disable |
+| `prebuild` | `string \| string[]` | - | Custom command to run after `tygor gen` but before build |
 | `buildOutput` | `string` | - | Path to build output (creates parent directory) |
-| `rpcDir` | `string` | `'./src/rpc'` | Directory for generated files and discovery.json |
+| `rpcDir` | `string` | `'./src/rpc'` | Output directory for `tygor gen` and discovery.json |
 | `proxy` | `string[]` | - | Proxy paths (auto-derived from discovery.json if not set) |
 | `watch` | `string[]` | `['**/*.go']` | Glob patterns to watch |
 | `ignore` | `string[]` | `['node_modules', '.git', 'tmp', 'dist']` | Patterns to ignore |
 | `health` | `string \| false` | `false` | Health check endpoint (false = TCP probe) |
 | `port` | `number` | `8080` | Starting port to search from |
-| `workdir` | `string` | `process.cwd()` | Working directory for Go commands |
+| `workdir` | `string` | `process.cwd()` | Working directory for Go commands and file watcher |
 
 ## Error Handling
 
@@ -95,13 +99,7 @@ The overlay uses Shadow DOM for style isolation.
 
 The plugin serves your API schema at `/__tygor/discovery`. The devtools sidebar uses this to display your services.
 
-To enable discovery, run `tygor gen` with `--discovery`:
-
-```bash
-tygor gen ./src/rpc --discovery
-```
-
-Or set a custom `prebuild` that includes the flag.
+Discovery is enabled automatically - the plugin runs `tygor gen <rpcDir> --discovery` on startup and on each file change.
 
 ## Proxy Behavior
 
@@ -121,13 +119,24 @@ tygorDev({
 })
 ```
 
-## Advanced: Custom Prebuild
+## Advanced: Custom Codegen
 
-To override the default `tygor gen`, use `prebuild`:
+To run additional commands after `tygor gen` (e.g., custom codegen), use `prebuild`:
 
 ```typescript
 tygorDev({
-  prebuild: "go run ./cmd/gen -out ./src/rpc",
+  prebuild: "go generate ./...",
+  build: "go build -o ./tmp/server .",
+  start: (port) => ({ cmd: `./tmp/server -port=${port}` }),
+})
+```
+
+To disable `tygor gen` entirely (e.g., if you're using a different code generator), set `gen: false`:
+
+```typescript
+tygorDev({
+  gen: false,
+  prebuild: "my-custom-codegen ./src/rpc",
   build: "go build -o ./tmp/server .",
   start: (port) => ({ cmd: `./tmp/server -port=${port}` }),
 })
