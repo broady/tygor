@@ -8,31 +8,30 @@
     {
       "kind": "struct",
       "Name": {
-        "name": "ToggleTaskParams",
+        "name": "CreateTaskParams",
         "package": "github.com/broady/tygor/examples/devtools/api"
       },
       "TypeParameters": null,
       "Fields": [
         {
-          "name": "ID",
+          "name": "Title",
           "type": {
             "kind": "primitive",
-            "primitiveKind": "Int",
-            "bitSize": 32
+            "primitiveKind": "String"
           },
-          "jsonName": "id",
-          "validateTag": "required"
+          "jsonName": "title",
+          "validateTag": "required,min=1"
         }
       ],
       "Extends": [],
       "Documentation": {
-        "Summary": "ToggleTaskParams identifies which task to toggle.",
-        "Body": "ToggleTaskParams identifies which task to toggle.",
+        "Summary": "CreateTaskParams contains parameters for creating a task.",
+        "Body": "CreateTaskParams contains parameters for creating a task.",
         "Deprecated": null
       },
       "Source": {
         "File": "/home/cbro/tygor/examples/devtools/api/types.go",
-        "Line": 27,
+        "Line": 22,
         "Column": 6
       }
     },
@@ -82,6 +81,37 @@
       "Source": {
         "File": "/home/cbro/tygor/examples/devtools/api/types.go",
         "Line": 6,
+        "Column": 6
+      }
+    },
+    {
+      "kind": "struct",
+      "Name": {
+        "name": "ToggleTaskParams",
+        "package": "github.com/broady/tygor/examples/devtools/api"
+      },
+      "TypeParameters": null,
+      "Fields": [
+        {
+          "name": "ID",
+          "type": {
+            "kind": "primitive",
+            "primitiveKind": "Int",
+            "bitSize": 32
+          },
+          "jsonName": "id",
+          "validateTag": "required"
+        }
+      ],
+      "Extends": [],
+      "Documentation": {
+        "Summary": "ToggleTaskParams identifies which task to toggle.",
+        "Body": "ToggleTaskParams identifies which task to toggle.",
+        "Deprecated": null
+      },
+      "Source": {
+        "File": "/home/cbro/tygor/examples/devtools/api/types.go",
+        "Line": 27,
         "Column": 6
       }
     },
@@ -390,36 +420,6 @@
         "Line": 16,
         "Column": 6
       }
-    },
-    {
-      "kind": "struct",
-      "Name": {
-        "name": "CreateTaskParams",
-        "package": "github.com/broady/tygor/examples/devtools/api"
-      },
-      "TypeParameters": null,
-      "Fields": [
-        {
-          "name": "Title",
-          "type": {
-            "kind": "primitive",
-            "primitiveKind": "String"
-          },
-          "jsonName": "title",
-          "validateTag": "required,min=1"
-        }
-      ],
-      "Extends": [],
-      "Documentation": {
-        "Summary": "CreateTaskParams contains parameters for creating a task.",
-        "Body": "CreateTaskParams contains parameters for creating a task.",
-        "Deprecated": null
-      },
-      "Source": {
-        "File": "/home/cbro/tygor/examples/devtools/api/types.go",
-        "Line": 22,
-        "Column": 6
-      }
     }
   ],
   "Services": [
@@ -429,7 +429,7 @@
         {
           "name": "Info",
           "fullName": "Devtools.Info",
-          "httpMethod": "GET",
+          "primitive": "query",
           "path": "/Devtools/Info",
           "request": {
             "kind": "reference",
@@ -445,7 +445,7 @@
         {
           "name": "Ping",
           "fullName": "Devtools.Ping",
-          "httpMethod": "GET",
+          "primitive": "query",
           "path": "/Devtools/Ping",
           "request": {
             "kind": "reference",
@@ -461,7 +461,7 @@
         {
           "name": "Status",
           "fullName": "Devtools.Status",
-          "httpMethod": "GET",
+          "primitive": "query",
           "path": "/Devtools/Status",
           "request": {
             "kind": "reference",
@@ -482,7 +482,7 @@
         {
           "name": "Kill",
           "fullName": "System.Kill",
-          "httpMethod": "POST",
+          "primitive": "exec",
           "path": "/System/Kill",
           "request": {
             "kind": "primitive",
@@ -501,7 +501,7 @@
         {
           "name": "Create",
           "fullName": "Tasks.Create",
-          "httpMethod": "POST",
+          "primitive": "exec",
           "path": "/Tasks/Create",
           "request": {
             "kind": "reference",
@@ -517,7 +517,7 @@
         {
           "name": "List",
           "fullName": "Tasks.List",
-          "httpMethod": "GET",
+          "primitive": "query",
           "path": "/Tasks/List",
           "request": {
             "kind": "reference",
@@ -537,7 +537,7 @@
         {
           "name": "MakeError",
           "fullName": "Tasks.MakeError",
-          "httpMethod": "POST",
+          "primitive": "exec",
           "path": "/Tasks/MakeError",
           "request": {
             "kind": "primitive",
@@ -551,7 +551,7 @@
         {
           "name": "Toggle",
           "fullName": "Tasks.Toggle",
-          "httpMethod": "POST",
+          "primitive": "exec",
           "path": "/Tasks/Toggle",
           "request": {
             "kind": "reference",

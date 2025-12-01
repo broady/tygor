@@ -14,8 +14,9 @@ import (
 
 	"github.com/broady/tygor"
 	"github.com/broady/tygor/devtools"
-	"github.com/broady/tygor/examples/devtools/api"
 	"github.com/broady/tygor/tygorgen"
+
+	"github.com/broady/tygor/examples/devtools/api"
 )
 
 func parsePort(s string) int {

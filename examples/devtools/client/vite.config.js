@@ -1,6 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import { tygorDev } from "../../../vite-plugin/src/index.ts";
+import { tygorDev } from "@tygor/vite-plugin";
 
 export default defineConfig({
   plugins: [

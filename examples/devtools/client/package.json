@@ -15,7 +15,7 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@tygor/vite-plugin": "file:../../../vite-plugin",
+    "@tygor/vite-plugin": "^0.7.3",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.0",

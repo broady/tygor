@@ -38,14 +38,14 @@ export interface Manifest {
 }
 
 const metadata = {
-  "Devtools.Info": { method: "GET", path: "/Devtools/Info" },
-  "Devtools.Ping": { method: "GET", path: "/Devtools/Ping" },
-  "Devtools.Status": { method: "GET", path: "/Devtools/Status" },
-  "System.Kill": { method: "POST", path: "/System/Kill" },
-  "Tasks.Create": { method: "POST", path: "/Tasks/Create" },
-  "Tasks.List": { method: "GET", path: "/Tasks/List" },
-  "Tasks.MakeError": { method: "POST", path: "/Tasks/MakeError" },
-  "Tasks.Toggle": { method: "POST", path: "/Tasks/Toggle" },
+  "Devtools.Info": { path: "/Devtools/Info", primitive: "query" },
+  "Devtools.Ping": { path: "/Devtools/Ping", primitive: "query" },
+  "Devtools.Status": { path: "/Devtools/Status", primitive: "query" },
+  "System.Kill": { path: "/System/Kill", primitive: "exec" },
+  "Tasks.Create": { path: "/Tasks/Create", primitive: "exec" },
+  "Tasks.List": { path: "/Tasks/List", primitive: "query" },
+  "Tasks.MakeError": { path: "/Tasks/MakeError", primitive: "exec" },
+  "Tasks.Toggle": { path: "/Tasks/Toggle", primitive: "exec" },
 } as const;
 
 export const registry = {

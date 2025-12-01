@@ -8,8 +8,8 @@ import type { Plugin, ViteDevServer } from "vite";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import pc from "picocolors";
 import { createClient } from "@tygor/client";
-import { registry as devtoolsRegistry } from "./devtools/manifest";
-import { clientBundle } from "./generated/client-bundle";
+import { registry as devtoolsRegistry } from "./devtools/manifest.js";
+import { clientBundle } from "./generated/client-bundle.js";
 
 export interface TygorDevOptions {
   /** Command to run before starting the server (e.g., codegen) */
