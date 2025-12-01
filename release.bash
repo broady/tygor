@@ -43,7 +43,7 @@ fi
 
 # Bump version in client (this is the source of truth)
 cd client
-npm version "${VERSION_TYPE}" --no-git-tag-version
+bun version "${VERSION_TYPE}" --no-git-tag-version
 NEW_VERSION=$(jq -r .version package.json)
 cd ..
 

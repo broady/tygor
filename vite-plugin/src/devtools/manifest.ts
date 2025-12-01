@@ -5,15 +5,15 @@ import * as types from './types';
 export interface Manifest {
   "Devtools.Info": {
     req: Record<string, never>;
-    res: (types.InfoResponse | null);
+    res: types.InfoResponse;
   };
   "Devtools.Ping": {
     req: Record<string, never>;
-    res: (types.PingResponse | null);
+    res: types.PingResponse;
   };
   "Devtools.Status": {
-    req: (types.StatusRequest | null);
-    res: (types.StatusResponse | null);
+    req: types.StatusRequest;
+    res: types.StatusResponse;
   };
 }
 
