@@ -4,9 +4,6 @@
 export interface CreateTaskParams {
   title: string;
 }
-/** Empty is used for endpoints with no parameters. */
-export interface Empty {
-}
 /** ListTasksParams contains parameters for listing tasks. */
 export interface ListTasksParams {
   /** ShowDone filters to show completed tasks. */

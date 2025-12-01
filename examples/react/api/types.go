@@ -18,9 +18,6 @@ type MemoryStats struct {
 	NumGC      uint32 `json:"num_gc"`
 }
 
-// Empty is used for endpoints with no parameters.
-type Empty struct{}
-
 // Task represents a todo item.
 type Task struct {
 	// ID is the unique identifier.

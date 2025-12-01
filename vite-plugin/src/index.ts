@@ -392,7 +392,7 @@ export function tygorDev(options: TygorDevOptions): Plugin {
         baseUrl: `http://localhost:${currentServer.port}`,
       });
       const res = await client.Devtools.Ping({});
-      return res.ok;
+      return res?.ok ?? false;
     } catch {
       return false;
     }
@@ -456,14 +456,18 @@ export function tygorDev(options: TygorDevOptions): Plugin {
                 });
                 const needsInitial = cachedRawrData === null;
                 const serverStatus = await client.Devtools.Status({ initial: needsInitial });
-                if (serverStatus.rawrData) {
-                  cachedRawrData = serverStatus.rawrData;
+                if (serverStatus) {
+                  if (serverStatus.rawrData) {
+                    cachedRawrData = serverStatus.rawrData;
+                  }
+                  status = {
+                    status: "ok",
+                    port: serverStatus.port,
+                    rawrData: cachedRawrData ?? undefined,
+                  };
+                } else {
+                  status = { status: "disconnected" };
                 }
-                status = {
-                  status: "ok",
-                  port: serverStatus.port,
-                  rawrData: cachedRawrData ?? undefined,
-                };
               } catch {
                 status = { status: "disconnected" };
               }

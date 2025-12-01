@@ -4,16 +4,16 @@ import * as types from './types';
 
 export interface Manifest {
   "Devtools.Info": {
-    req: types.InfoRequest;
-    res: types.InfoResponse;
+    req: Record<string, never>;
+    res: (types.InfoResponse | null);
   };
   "Devtools.Ping": {
-    req: types.PingRequest;
-    res: types.PingResponse;
+    req: Record<string, never>;
+    res: (types.PingResponse | null);
   };
   "Devtools.Status": {
-    req: types.StatusRequest;
-    res: types.StatusResponse;
+    req: (types.StatusRequest | null);
+    res: (types.StatusResponse | null);
   };
 }
 

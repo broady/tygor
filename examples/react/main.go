@@ -24,7 +24,7 @@ var (
 	nextID  int32 = 1
 )
 
-func GetRuntimeInfo(ctx context.Context, req *api.Empty) (*api.RuntimeInfo, error) {
+func GetRuntimeInfo(ctx context.Context, req tygor.Empty) (*api.RuntimeInfo, error) {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 	return &api.RuntimeInfo{
@@ -40,24 +40,20 @@ func GetRuntimeInfo(ctx context.Context, req *api.Empty) (*api.RuntimeInfo, erro
 	}, nil
 }
 
-func StreamRuntimeInfo(ctx context.Context, req *api.Empty, e *tygor.Emitter[*api.RuntimeInfo]) error {
+func StreamRuntimeInfo(ctx context.Context, req tygor.Empty, e *tygor.Emitter[*api.RuntimeInfo]) error {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-ticker.C:
-			info, err := GetRuntimeInfo(ctx, req)
-			if err != nil {
-				return err
-			}
-			if err := e.Send(info); err != nil {
-				return err
-			}
+	for range ticker.C {
+		info, err := GetRuntimeInfo(ctx, nil)
+		if err != nil {
+			return err
+		}
+		if err := e.Send(info); err != nil {
+			return err
 		}
 	}
+	return nil
 }
 
 // [snippet:handlers collapse]
