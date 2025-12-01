@@ -94,6 +94,13 @@ for example_pkg in examples/*/client/package.json; do
   fi
 done
 
+# Dry-run builds to catch errors before committing
+echo ""
+echo "Running dry-run builds..."
+(cd client && bun publish --dry-run)
+(cd vite-plugin && bun install && bun publish --dry-run)
+echo "Dry-run builds passed."
+
 # Confirmation
 echo ""
 read -p "Ready to release ${TAG}? (y/N) " -n 1 -r
@@ -118,6 +125,7 @@ cd ..
 echo ""
 echo "Publishing @tygor/vite-plugin..."
 cd vite-plugin
+bun install
 bun publish
 cd ..
 

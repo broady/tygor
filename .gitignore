@@ -10,6 +10,9 @@ client/runtime.d.ts.map
 # Example build artifacts
 examples/*/server
 
+# Generated RPC files (machine-specific paths)
+**/discovery.json
+
 # Draft documentation (working notes, not part of spec)
 doc/drafts/
 examples/devtools/client/dist/
