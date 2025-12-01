@@ -63,7 +63,7 @@ export default function App() {
 
   const fetchTasks = async () => {
     try {
-      setTasks(await client.Tasks.List({}));
+      setTasks(await client.Tasks.List());
       setError(null);
     } catch (e) {
       setError(toAppError(e));
@@ -77,7 +77,7 @@ export default function App() {
   useEffect(() => {
     const fetchInfo = async () => {
       try {
-        setInfo(await client.Devtools.Info({}));
+        setInfo(await client.Devtools.Info());
         setError(null);
       } catch (e) {
         setError(toAppError(e));
@@ -130,12 +130,12 @@ export default function App() {
           <div className="info">
             <strong>:{info.port}</strong> | {info.version} | {info.num_goroutines} goroutines |{" "}
             {formatBytes(info.memory.alloc)} alloc | {info.memory.num_gc} GC |{" "}
-            <button onClick={() => client.System.Kill({}).catch((e) => setError(toAppError(e)))} style={{ fontSize: "0.7rem", padding: "2px 6px" }}>
+            <button onClick={() => client.System.Kill().catch((e) => setError(toAppError(e)))} style={{ fontSize: "0.7rem", padding: "2px 6px" }}>
               Kill
             </button>
           </div>
         )}
-        <button onClick={() => client.Tasks.MakeError({}).catch((e) => setError(toAppError(e)))} style={{ fontSize: "0.7rem", padding: "2px 6px" }}>
+        <button onClick={() => client.Tasks.MakeError().catch((e) => setError(toAppError(e)))} style={{ fontSize: "0.7rem", padding: "2px 6px" }}>
           Make an error
         </button>
 

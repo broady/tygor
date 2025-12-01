@@ -519,6 +519,80 @@ func TestFromTypes_MultiPackageGenericInstantiation(t *testing.T) {
 	}
 }
 
+// TestGenerate_PointerStripping verifies that pointer types are handled correctly:
+// - Top-level endpoint request/response pointers are stripped (Go idiom, not nullability)
+// - Nested pointers in slices/maps are preserved (indicate nullable elements)
+func TestGenerate_PointerStripping(t *testing.T) {
+	reg := tygor.NewApp()
+	outDir := t.TempDir()
+
+	// Handler with pointer request and response (common Go pattern)
+	createHandler := func(ctx context.Context, req *testfixtures.CreateUserRequest) (*testfixtures.User, error) {
+		return nil, nil
+	}
+	// Handler returning slice of pointers (elements can be null)
+	listHandler := func(ctx context.Context, req *testfixtures.ListPostsParams) ([]*testfixtures.Post, error) {
+		return nil, nil
+	}
+	reg.Service("Users").Register("Create", tygor.Exec(createHandler))
+	reg.Service("Posts").Register("List", tygor.Query(listHandler))
+
+	cfg := &Config{OutDir: outDir, SingleFile: true, Provider: "reflection"}
+
+	_, err := Generate(reg, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	manifestPath := filepath.Join(outDir, "manifest.ts")
+	content, _ := os.ReadFile(manifestPath)
+	manifestStr := string(content)
+
+	// Top-level pointers should be stripped - no "| null" on req/res types
+	// Users.Create: req should be CreateUserRequest, not (CreateUserRequest | null)
+	if strings.Contains(manifestStr, "(types.CreateUserRequest | null)") {
+		t.Error("request type should not be nullable - pointer should be stripped")
+	}
+	if strings.Contains(manifestStr, "(types.User | null)") {
+		t.Error("response type should not be nullable - pointer should be stripped")
+	}
+
+	// But nested pointers in slices should be preserved
+	// Posts.List: res should be (types.Post | null)[] - elements can be null
+	if !strings.Contains(manifestStr, "(types.Post | null)[]") {
+		t.Error("slice element pointers should be preserved as nullable: expected (types.Post | null)[]")
+	}
+}
+
+// TestGenerate_EmptyRequestType verifies that empty request types (tygor.Empty)
+// generate Record<string, never> in the manifest
+func TestGenerate_EmptyRequestType(t *testing.T) {
+	reg := tygor.NewApp()
+	outDir := t.TempDir()
+
+	// Handler with empty request (parameterless endpoint)
+	handler := func(ctx context.Context, req *struct{}) (*testfixtures.User, error) {
+		return nil, nil
+	}
+	reg.Service("System").Register("Ping", tygor.Query(handler))
+
+	cfg := &Config{OutDir: outDir, SingleFile: true, Provider: "reflection"}
+
+	_, err := Generate(reg, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	manifestPath := filepath.Join(outDir, "manifest.ts")
+	content, _ := os.ReadFile(manifestPath)
+	manifestStr := string(content)
+
+	// Empty struct request should become Record<string, never>
+	if !strings.Contains(manifestStr, "req: Record<string, never>") {
+		t.Errorf("empty request type should be Record<string, never>, got:\n%s", manifestStr)
+	}
+}
+
 func TestFromTypes_SourceProviderGenericDefinition(t *testing.T) {
 	// Test that source provider generates generic definitions (Page<T>)
 	// and follows type arguments to generate referenced types.

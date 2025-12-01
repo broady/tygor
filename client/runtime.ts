@@ -192,7 +192,7 @@ export interface Stream<T> extends AsyncIterable<T> {
    * Designed to work naturally with React's useEffect:
    *
    * @example
-   * useEffect(() => client.System.InfoStream({}).subscribe(setInfo), []);
+   * useEffect(() => client.System.InfoStream().subscribe(setInfo), []);
    *
    * @param onValue - Called for each value emitted by the stream
    * @param onError - Optional error handler. AbortErrors from cleanup are automatically ignored.
@@ -228,7 +228,7 @@ export function createClient<Manifest extends Record<string, any>>(
 
               // Streaming endpoints return AsyncIterable
               if (meta.primitive === "stream") {
-                return (req: any, options?: StreamOptions) => {
+                return (req: any = {}, options?: StreamOptions) => {
                   return createSSEStream(
                     opId,
                     service,
@@ -246,7 +246,7 @@ export function createClient<Manifest extends Record<string, any>>(
               }
 
               // Unary endpoints return Promise
-              return async (req: any) => {
+              return async (req: any = {}) => {
                 // Request validation (before sending)
                 if (validateRequest && schemas?.[opId]?.request) {
                   const schema = schemas[opId].request;
@@ -563,18 +563,27 @@ function createSSEStream<T>(
 // Type helpers to transform the flat Manifest into a nested Client structure
 type ServiceName<K> = K extends `${infer S}.${string}` ? S : never;
 
+// IsOptionalRequest checks if the request parameter can be omitted.
+// True when: Record<string, never> (empty), or all fields are optional.
+// This allows both client.System.Kill() and client.Tasks.List() to work.
+type IsOptionalRequest<T> = {} extends T ? true : false;
+
 type ServiceMethods<M, S extends string> = {
   [K in keyof M as K extends `${S}.${infer Method}` ? Method : never]: M[K] extends {
     req: infer Req;
     res: infer Res;
     primitive: "stream";
   }
-    ? (req: Req, options?: StreamOptions) => Stream<Res>
+    ? IsOptionalRequest<Req> extends true
+      ? (req?: Req, options?: StreamOptions) => Stream<Res>
+      : (req: Req, options?: StreamOptions) => Stream<Res>
     : M[K] extends {
           req: infer Req;
           res: infer Res;
         }
-      ? (req: Req) => Promise<Res>
+      ? IsOptionalRequest<Req> extends true
+        ? (req?: Req) => Promise<Res>
+        : (req: Req) => Promise<Res>
       : never;
 };
 

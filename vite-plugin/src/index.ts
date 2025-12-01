@@ -391,7 +391,7 @@ export function tygorDev(options: TygorDevOptions): Plugin {
       const client = createClient(devtoolsRegistry, {
         baseUrl: `http://localhost:${currentServer.port}`,
       });
-      const res = await client.Devtools.Ping({});
+      const res = await client.Devtools.Ping();
       return res?.ok ?? false;
     } catch {
       return false;

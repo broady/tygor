@@ -18,7 +18,7 @@ export default function App() {
   const [info, setInfo] = useState<RuntimeInfo | null>(null);
 
   const fetchTasks = async () => {
-    setTasks(await client.Tasks.List({}));
+    setTasks(await client.Tasks.List());
   };
 
   useEffect(() => {

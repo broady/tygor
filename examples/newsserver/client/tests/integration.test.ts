@@ -110,7 +110,7 @@ describe("Type safety verification", () => {
   });
 
   test("status union types are properly typed", async () => {
-    const news = await client.News.List({});
+    const news = await client.News.List();
 
     for (const article of news) {
       // TypeScript ensures status is one of the valid string values

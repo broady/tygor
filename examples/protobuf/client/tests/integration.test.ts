@@ -50,7 +50,7 @@ describe("Items service (protobuf types)", () => {
     });
 
     test("works with default parameters", async () => {
-      const result = await client.Items.List({});
+      const result = await client.Items.List();
 
       expect(result.items).toBeDefined();
       expect(result.total).toBeDefined();

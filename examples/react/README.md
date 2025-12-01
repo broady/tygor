@@ -93,7 +93,7 @@ export default function App() {
   const [info, setInfo] = useState<RuntimeInfo | null>(null);
 
   const fetchTasks = async () => {
-    setTasks(await client.Tasks.List({}));
+    setTasks(await client.Tasks.List());
   };
 
   useEffect(() => {
@@ -102,7 +102,7 @@ export default function App() {
 
   useEffect(() => {
     const fetchInfo = async () => {
-      setInfo(await client.System.Info({}));
+      setInfo(await client.System.Info());
     };
     fetchInfo();
     const interval = setInterval(fetchInfo, 1000);
