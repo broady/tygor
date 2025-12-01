@@ -4,25 +4,25 @@ import * as types from './types';
 
 export interface Manifest {
   "System.Info": {
-    req: types.Empty;
-    res: types.RuntimeInfo;
+    req: Record<string, never>;
+    res: (types.RuntimeInfo | null);
   };
   "System.InfoStream": {
-    req: types.Empty;
-    res: types.RuntimeInfo;
+    req: Record<string, never>;
+    res: (types.RuntimeInfo | null);
     primitive: "stream";
   };
   "Tasks.Create": {
-    req: types.CreateTaskParams;
-    res: types.Task;
+    req: (types.CreateTaskParams | null);
+    res: (types.Task | null);
   };
   "Tasks.List": {
-    req: types.ListTasksParams;
-    res: types.Task[];
+    req: (types.ListTasksParams | null);
+    res: (types.Task | null)[];
   };
   "Tasks.Toggle": {
-    req: types.ToggleTaskParams;
-    res: types.Task;
+    req: (types.ToggleTaskParams | null);
+    res: (types.Task | null);
   };
 }
 

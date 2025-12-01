@@ -470,7 +470,8 @@ func buildServiceDescriptors(routes internal.RouteMap) []ir.ServiceDescriptor {
 		}
 
 		// Convert request type to descriptor
-		if route.Request != nil {
+		// Per spec §4.8: void requests use Request: nil
+		if route.Request != nil && !isEmptyStructType(route.Request) {
 			endpoint.Request = reflectTypeToIRRef(route.Request)
 		}
 
@@ -501,42 +502,70 @@ func buildServiceDescriptors(routes internal.RouteMap) []ir.ServiceDescriptor {
 }
 
 // reflectTypeToIRRef converts a reflect.Type to an IR TypeDescriptor reference.
-// This handles the basic mapping from Go types to IR type expressions.
+// This handles the basic mapping from Go types to IR type expressions,
+// preserving pointer semantics to match encoding/json behavior.
 func reflectTypeToIRRef(t reflect.Type) ir.TypeDescriptor {
 	if t == nil {
 		return ir.Any()
 	}
 
+	// Handle pointers: track if we have at least one level of indirection.
+	// Multiple pointer levels collapse to the same JSON semantics (nullable).
+	isPointer := false
+	for t.Kind() == reflect.Pointer {
+		isPointer = true
+		t = t.Elem()
+	}
+
+	// Get the base type descriptor
+	var base ir.TypeDescriptor
+
+	switch {
+	// Handle slices/arrays
+	case t.Kind() == reflect.Slice || t.Kind() == reflect.Array:
+		elem := reflectTypeToIRRef(t.Elem())
+		if t.Kind() == reflect.Slice {
+			base = ir.Slice(elem)
+		} else {
+			base = ir.Array(elem, t.Len())
+		}
+
+	// Handle maps
+	case t.Kind() == reflect.Map:
+		key := reflectTypeToIRRef(t.Key())
+		value := reflectTypeToIRRef(t.Elem())
+		base = ir.Map(key, value)
+
+	// Handle empty struct (struct{})
+	case t.Kind() == reflect.Struct && t.NumField() == 0:
+		base = ir.Empty()
+
+	// For named types (structs, aliases), create a reference
+	case t.Name() != "":
+		// Sanitize generic type names to match what the reflection provider generates
+		name := sanitizeTypeName(t.Name())
+		base = ir.Ref(name, t.PkgPath())
+
+	// Fallback for primitives and unnamed types
+	default:
+		base = ir.Any()
+	}
+
+	// Wrap in Ptr if the original type was a pointer
+	if isPointer {
+		return ir.Ptr(base)
+	}
+	return base
+}
+
+// isEmptyStructType checks if a reflect.Type is an empty struct (*struct{} or struct{}).
+// Used to detect void request types per spec §4.8.
+func isEmptyStructType(t reflect.Type) bool {
 	// Unwrap pointers
 	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
-
-	// Handle slices/arrays
-	if t.Kind() == reflect.Slice || t.Kind() == reflect.Array {
-		elem := reflectTypeToIRRef(t.Elem())
-		if t.Kind() == reflect.Slice {
-			return ir.Slice(elem)
-		}
-		return ir.Array(elem, t.Len())
-	}
-
-	// Handle maps
-	if t.Kind() == reflect.Map {
-		key := reflectTypeToIRRef(t.Key())
-		value := reflectTypeToIRRef(t.Elem())
-		return ir.Map(key, value)
-	}
-
-	// For named types (structs, aliases), create a reference
-	if t.Name() != "" {
-		// Sanitize generic type names to match what the reflection provider generates
-		name := sanitizeTypeName(t.Name())
-		return ir.Ref(name, t.PkgPath())
-	}
-
-	// Fallback for primitives and unnamed types
-	return ir.Any()
+	return t.Kind() == reflect.Struct && t.NumField() == 0
 }
 
 // sanitizeTypeName applies the synthetic naming algorithm for generic instantiations.
