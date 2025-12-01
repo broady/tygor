@@ -105,7 +105,7 @@ typecheck-vite-plugin:
 	@cd vite-plugin && bun run --silent typecheck
 
 # Precommit sub-targets (for parallel execution, all depend on fmt-check)
-.PHONY: precommit-test precommit-lint precommit-check precommit-examples precommit-typecheck precommit-vite-plugin precommit-devserver precommit-client-bundle precommit-readme-version
+.PHONY: precommit-test precommit-lint precommit-check precommit-examples precommit-typecheck precommit-vite-plugin precommit-devserver precommit-client-bundle precommit-readme-version precommit-version-sync
 precommit-test: fmt-check ; @$(MAKE) --no-print-directory test-quiet
 precommit-lint: fmt-check ; @$(MAKE) --no-print-directory lint-quiet
 precommit-check: fmt-check ; @$(MAKE) --no-print-directory check-quiet
@@ -119,6 +119,14 @@ precommit-readme-version: fmt-check
 	if ! grep -q "broady/tygor/examples/react#v$$VERSION" README.md; then \
 		echo "ERROR: README degit version doesn't match VERSION file (v$$VERSION)"; \
 		echo "Update the degit command in README.md to use #v$$VERSION"; \
+		exit 1; \
+	fi
+precommit-version-sync: fmt-check
+	@if ! diff -q VERSION cmd/tygor/VERSION > /dev/null 2>&1; then \
+		echo "ERROR: VERSION files are out of sync"; \
+		echo "  VERSION:          $$(cat VERSION)"; \
+		echo "  cmd/tygor/VERSION: $$(cat cmd/tygor/VERSION)"; \
+		echo "Run: cp VERSION cmd/tygor/VERSION"; \
 		exit 1; \
 	fi
 precommit-client-bundle: fmt-check
@@ -138,7 +146,7 @@ precommit-client-bundle: fmt-check
 	fi
 
 # Run all precommit checks in parallel (fmt-check runs first)
-precommit: precommit-test precommit-lint precommit-check precommit-examples precommit-typecheck precommit-vite-plugin precommit-devserver precommit-client-bundle precommit-readme-version
+precommit: precommit-test precommit-lint precommit-check precommit-examples precommit-typecheck precommit-vite-plugin precommit-devserver precommit-client-bundle precommit-readme-version precommit-version-sync
 	@echo "All precommit checks passed."
 
 # Run CI locally using act (https://github.com/nektos/act)

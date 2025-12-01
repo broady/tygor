@@ -44,8 +44,10 @@ esac
 TAG="v${NEW_VERSION}"
 echo "New version: ${NEW_VERSION}"
 
-# Update VERSION file
+# Update VERSION files
 echo "${NEW_VERSION}" > VERSION
+cp VERSION cmd/tygor/VERSION
+echo "  Updated VERSION files"
 
 # Update degit version in README.md
 sed -i "s|broady/tygor/examples/react#v[0-9.]*|broady/tygor/examples/react#v${NEW_VERSION}|g" README.md
