@@ -3,8 +3,9 @@ import { createClient, ServerError, TransportError, StreamState } from "@tygor/c
 import { registry } from "./rpc/manifest";
 import type { Task, TimeUpdate } from "./rpc/types";
 
-// No baseUrl needed - uses current origin (works with Vite proxy in dev, same-origin in prod)
-const client = createClient(registry);
+const client = createClient(registry, {
+  baseUrl: "/api",
+});
 
 interface AppError {
   type: "server" | "transport" | "unknown";

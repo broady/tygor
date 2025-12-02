@@ -6,6 +6,7 @@ export default defineConfig({
   plugins: [
     react(),
     tygorDev({
+      proxyPrefix: "/api",
       prebuild: "go run . -gen -out ./src/rpc",
       build: "go build -o ./tmp/server .",
       buildOutput: "./tmp/server",

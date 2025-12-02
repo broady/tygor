@@ -42,6 +42,15 @@ export interface TygorDevOptions {
   proxy?: string[];
   /** Override the tygor command (default: auto-detected local or 'go run ...@latest') */
   tygorCommand?: string | string[];
+  /**
+   * Prefix for proxied API paths (default: '/').
+   * Requests matching this prefix are forwarded to the Go server.
+   * Example: '/api' proxies /api/ServiceName/* to the Go server as /ServiceName/*
+   *
+   * Set this to match your production API mount point, then use the same
+   * value for baseUrl in createClient().
+   */
+  proxyPrefix?: string;
 }
 
 interface ServerState {
@@ -63,6 +72,7 @@ const DEFAULT_OPTIONS = {
   health: false as const,
   port: 8080,
   rpcDir: "./src/rpc",
+  proxyPrefix: "/",
 };
 
 /** Find an available port starting from the given port */
@@ -512,6 +522,7 @@ export function tygorDev(options: TygorDevOptions): Plugin {
 
     // Reload proxy paths in case new services were added
     proxyPaths = loadProxyPaths();
+    serviceNames = getServiceNames();
 
     // Run build (separate from start so we can distinguish build vs runtime errors)
     await updateDevServerStatus("building", undefined, "build");
@@ -561,6 +572,9 @@ export function tygorDev(options: TygorDevOptions): Plugin {
     reloadTimeout = setTimeout(reload, 300);
   }
 
+  // Normalize proxyPrefix: ensure leading slash, no trailing slash
+  const proxyPrefix = opts.proxyPrefix === "/" ? "" : opts.proxyPrefix!.replace(/\/$/, "");
+
   // Load proxy paths from discovery.json
   function loadProxyPaths(): string[] {
     if (opts.proxy && opts.proxy.length > 0) {
@@ -573,7 +587,7 @@ export function tygorDev(options: TygorDevOptions): Plugin {
         const discovery = JSON.parse(content);
         const services = new Set<string>();
         for (const svc of discovery.Services ?? []) {
-          if (svc.name) services.add(`/${svc.name}`);
+          if (svc.name) services.add(`${proxyPrefix}/${svc.name}`);
         }
         if (services.size > 0) {
           log(`Proxy paths from discovery.json: ${[...services].join(", ")}`);
@@ -583,10 +597,24 @@ export function tygorDev(options: TygorDevOptions): Plugin {
     } catch (err) {
       log(`Failed to load discovery.json: ${err}`);
     }
+    // If no discovery.json but proxyPrefix is set, proxy everything under it
+    if (proxyPrefix) {
+      log(`No discovery.json, proxying ${proxyPrefix}/*`);
+      return [proxyPrefix];
+    }
     return [];
   }
 
   let proxyPaths = loadProxyPaths();
+
+  // Extract service names for mismatch detection (computed once, updated on reload)
+  function getServiceNames(): string[] {
+    return proxyPaths.map((p) => {
+      const withoutPrefix = proxyPrefix ? p.slice(proxyPrefix.length) : p;
+      return withoutPrefix.split("/")[1];
+    }).filter(Boolean);
+  }
+  let serviceNames = getServiceNames();
 
   // Simple heartbeat - just check if server responds
   async function heartbeat(): Promise<boolean> {
@@ -624,15 +652,21 @@ export function tygorDev(options: TygorDevOptions): Plugin {
   }
 
   // Simple proxy function using Node's http module
+  // Strips proxyPrefix when forwarding (Go server is mounted at /)
   function proxyRequest(req: IncomingMessage, res: ServerResponse) {
     const port = currentServer.port;
-    log(`Proxying ${req.url} -> localhost:${port}`);
+    // Strip proxyPrefix from the URL before forwarding to Go server
+    let targetPath = req.url || "/";
+    if (proxyPrefix && targetPath.startsWith(proxyPrefix)) {
+      targetPath = targetPath.slice(proxyPrefix.length) || "/";
+    }
+    log(`Proxying ${req.url} -> localhost:${port}${targetPath}`);
 
     const proxyReq = httpRequest(
       {
         hostname: "localhost",
         port,
-        path: req.url,
+        path: targetPath,
         method: req.method,
         headers: req.headers,
       },
@@ -659,9 +693,15 @@ export function tygorDev(options: TygorDevOptions): Plugin {
   const VIRTUAL_HMR = "virtual:tygor-hmr";
   const RESOLVED_VIRTUAL_HMR = "\0" + VIRTUAL_HMR;
 
+  let isDev = false;
+  let warnedAboutProxyPrefix = false;
+
   return {
     name: "tygor-dev",
-    apply: "serve",
+
+    config(_, { command }) {
+      isDev = command === "serve";
+    },
 
     resolveId(id) {
       if (id === VIRTUAL_HMR) return RESOLVED_VIRTUAL_HMR;
@@ -754,6 +794,47 @@ if (import.meta.hot) {
         if (proxyPaths.some((prefix) => req.url?.startsWith(prefix))) {
           proxyRequest(req, res as ServerResponse);
           return;
+        }
+
+        // Detect misconfigured client baseUrl using known service names
+        if (!warnedAboutProxyPrefix && req.url) {
+          const url = req.url.split("?")[0];
+          let mismatchError: string | null = null;
+
+          // Case 1: proxyPrefix is set but client sent without prefix
+          // e.g. proxyPrefix="/api", request="/Tasks/List" → mismatch
+          if (proxyPrefix) {
+            for (const svc of serviceNames) {
+              if (url.startsWith(`/${svc}/`)) {
+                mismatchError =
+                  `Request to ${url} but proxyPrefix is "${opts.proxyPrefix}". ` +
+                  `Either remove proxyPrefix from tygorDev() or add baseUrl: "${opts.proxyPrefix}" to createClient().`;
+                break;
+              }
+            }
+          }
+
+          // Case 2: proxyPrefix is "/" but client sent with a prefix
+          // e.g. proxyPrefix="/", request="/api/Tasks/List" → check if Tasks is a known service
+          if (!proxyPrefix) {
+            for (const svc of serviceNames) {
+              const idx = url.indexOf(`/${svc}/`);
+              if (idx > 0) {
+                const prefix = url.slice(0, idx);
+                mismatchError =
+                  `Request to ${url} but proxyPrefix is "/". ` +
+                  `Either add proxyPrefix: "${prefix}" to tygorDev() or remove baseUrl from createClient().`;
+                break;
+              }
+            }
+          }
+
+          if (mismatchError) {
+            warnedAboutProxyPrefix = true;
+            logError(mismatchError);
+            // Also send to devtools
+            updateDevServerStatus("error", mismatchError, "config");
+          }
         }
 
         next();
@@ -885,6 +966,9 @@ if (import.meta.hot) {
     },
 
     transformIndexHtml(html) {
+      // Only inject devtools in dev mode
+      if (!isDev) return html;
+
       // Inject devtools bundle + HMR listener (processed by Vite for import.meta.hot)
       const scripts = `
 <script type="module" src="/@tygor/client.js"></script>
