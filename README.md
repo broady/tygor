@@ -152,11 +152,11 @@ npm install @tygor/vite-plugin
 
 ```typescript title="vite.config.ts"
 import { defineConfig } from "vite";
-import { tygorDev } from "@tygor/vite-plugin";
+import { tygor } from "@tygor/vite-plugin";
 
 export default defineConfig({
   plugins: [
-    tygorDev({
+    tygor({
       workdir: "../server",  // Path to your Go module
       build: "go build -o ./tmp/server .",
       start: (port) => ({ cmd: `./tmp/server -port=${port}` }),

@@ -127,7 +127,7 @@ function getDevtoolsBundlePath(): string | undefined {
   return undefined;
 }
 
-export function tygorDev(options: TygorDevOptions): Plugin {
+export function tygor(options: TygorDevOptions): Plugin {
   const opts = { ...DEFAULT_OPTIONS, ...options };
   // Auto-detect devtools bundle path when in tygor repo (for hot reload during development)
   const devtoolsBundlePath = getDevtoolsBundlePath();
@@ -697,7 +697,7 @@ export function tygorDev(options: TygorDevOptions): Plugin {
   let warnedAboutProxyPrefix = false;
 
   return {
-    name: "tygor-dev",
+    name: "tygor",
 
     config(_, { command }) {
       isDev = command === "serve";
@@ -818,7 +818,7 @@ if (import.meta.hot) {
               if (url.startsWith(`/${svc}/`)) {
                 mismatchError =
                   `Request to ${url} but proxyPrefix is "${opts.proxyPrefix}". ` +
-                  `Either remove proxyPrefix from tygorDev() or add baseUrl: "${opts.proxyPrefix}" to createClient().`;
+                  `Either remove proxyPrefix from tygor() or add baseUrl: "${opts.proxyPrefix}" to createClient().`;
                 break;
               }
             }
@@ -833,7 +833,7 @@ if (import.meta.hot) {
                 const prefix = url.slice(0, idx);
                 mismatchError =
                   `Request to ${url} but proxyPrefix is "/". ` +
-                  `Either add proxyPrefix: "${prefix}" to tygorDev() or remove baseUrl from createClient().`;
+                  `Either add proxyPrefix: "${prefix}" to tygor() or remove baseUrl from createClient().`;
                 break;
               }
             }
@@ -993,4 +993,7 @@ if (import.meta.hot) {
   };
 }
 
-export default tygorDev;
+/** @deprecated Use `tygor` instead */
+export const tygorDev = tygor;
+
+export default tygor;

@@ -65,7 +65,7 @@ import { registry } from "./src/rpc/manifest";
 See `vite.config.js` for the plugin configuration:
 
 ```javascript
-tygorDev({
+tygor({
   manifest: registry,
   prebuild: "go run . -gen -out ./src/rpc",
   build: "go build -o ./tmp/server .",

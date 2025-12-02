@@ -12,11 +12,11 @@ npm install @tygor/vite-plugin
 
 ```typescript title="vite.config.ts"
 import { defineConfig } from "vite";
-import { tygorDev } from "@tygor/vite-plugin";
+import { tygor } from "@tygor/vite-plugin";
 
 export default defineConfig({
   plugins: [
-    tygorDev({
+    tygor({
       workdir: "../server",  // Path to your Go module
       build: "go build -o ./tmp/server .",
       start: (port) => ({ cmd: `./tmp/server -port=${port}` }),
@@ -113,7 +113,7 @@ The plugin reads `discovery.json` and proxies requests based on service names:
 Override with `proxy` option:
 
 ```typescript
-tygorDev({
+tygor({
   proxy: ["/health", "/static", "/uploads"],
   // ...
 })
@@ -124,7 +124,7 @@ tygorDev({
 To run additional commands after `tygor gen` (e.g., custom codegen), use `prebuild`:
 
 ```typescript
-tygorDev({
+tygor({
   prebuild: "go generate ./...",
   build: "go build -o ./tmp/server .",
   start: (port) => ({ cmd: `./tmp/server -port=${port}` }),
@@ -134,7 +134,7 @@ tygorDev({
 To disable `tygor gen` entirely (e.g., if you're using a different code generator), set `gen: false`:
 
 ```typescript
-tygorDev({
+tygor({
   gen: false,
   prebuild: "my-custom-codegen ./src/rpc",
   build: "go build -o ./tmp/server .",
