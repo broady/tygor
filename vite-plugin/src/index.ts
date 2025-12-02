@@ -146,14 +146,14 @@ export function tygorDev(options: TygorDevOptions): Plugin {
   const log = (msg: string) => console.log(pc.cyan("[tygor]"), msg);
   const logError = (msg: string) => console.log(pc.cyan("[tygor]"), pc.red(msg));
 
-  /** Start the tygor dev server */
+  /** Start the tygor devtools server */
   async function startDevServer(port: number): Promise<DevServerState> {
     const tygorCmd = getTygorCommand(opts.tygorCommand);
     const rpcDir = resolve(process.cwd(), opts.rpcDir!);
-    const args = [...tygorCmd.slice(1), "dev", "--rpc-dir", rpcDir, "--port", String(port)];
+    const args = [...tygorCmd.slice(1), "devtools", "--rpc-dir", rpcDir, "--port", String(port)];
     const command = tygorCmd[0];
 
-    log(`Starting tygor dev on port ${port}: ${command} ${args.join(" ")}`);
+    log(`Starting tygor devtools on port ${port}: ${command} ${args.join(" ")}`);
 
     return new Promise((resolve) => {
       const proc = spawn(command, args, {
@@ -165,23 +165,23 @@ export function tygorDev(options: TygorDevOptions): Plugin {
 
       proc.stdout?.on("data", (data) => {
         const output = data.toString();
-        process.stdout.write(pc.dim(`[tygor dev] ${output}`));
+        process.stdout.write(pc.dim(`[tygor devtools] ${output}`));
         // Check for ready message
         if (!resolved && output.includes("listening on")) {
           resolved = true;
-          log(pc.green(`tygor dev ready on port ${port}`));
+          log(pc.green(`tygor devtools ready on port ${port}`));
           resolve({ process: proc, port, ready: true });
         }
       });
 
       proc.stderr?.on("data", (data) => {
-        process.stderr.write(pc.dim(`[tygor dev] ${data.toString()}`));
+        process.stderr.write(pc.dim(`[tygor devtools] ${data.toString()}`));
       });
 
       proc.on("error", (err) => {
         if (!resolved) {
           resolved = true;
-          logError(`Failed to start tygor dev: ${err.message}`);
+          logError(`Failed to start tygor devtools: ${err.message}`);
           resolve({ process: null, port, ready: false });
         }
       });
@@ -189,7 +189,7 @@ export function tygorDev(options: TygorDevOptions): Plugin {
       proc.on("exit", (code) => {
         if (!resolved) {
           resolved = true;
-          logError(`tygor dev exited with code ${code}`);
+          logError(`tygor devtools exited with code ${code}`);
           resolve({ process: null, port, ready: false });
         }
       });
@@ -198,7 +198,7 @@ export function tygorDev(options: TygorDevOptions): Plugin {
       setTimeout(() => {
         if (!resolved) {
           resolved = true;
-          logError("tygor dev startup timed out");
+          logError("tygor devtools startup timed out");
           proc.kill();
           resolve({ process: null, port, ready: false });
         }
@@ -206,7 +206,7 @@ export function tygorDev(options: TygorDevOptions): Plugin {
     });
   }
 
-  /** Send status update to tygor dev */
+  /** Send status update to tygor devtools */
   async function updateDevServerStatus(status: "running" | "building" | "error" | "starting", error?: string, phase?: string) {
     if (!devServer.ready) return;
 
@@ -622,11 +622,11 @@ export function tygorDev(options: TygorDevOptions): Plugin {
     return checkHealth(currentServer.port);
   }
 
-  // Proxy to tygor dev server
+  // Proxy to tygor devtools server
   function proxyToDevServer(req: IncomingMessage, res: ServerResponse, path?: string) {
     const targetPath = path ?? req.url;
     if (process.env.TYGOR_DEBUG) {
-      log(`Proxying ${req.url} -> tygor dev:${devServer.port}${targetPath}`);
+      log(`Proxying ${req.url} -> tygor devtools:${devServer.port}${targetPath}`);
     }
 
     const proxyReq = httpRequest(
@@ -645,7 +645,7 @@ export function tygorDev(options: TygorDevOptions): Plugin {
 
     proxyReq.on("error", () => {
       res.writeHead(503, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: { code: "devserver_unavailable", message: "tygor dev is starting..." } }));
+      res.end(JSON.stringify({ error: { code: "devserver_unavailable", message: "tygor devtools is starting..." } }));
     });
 
     req.pipe(proxyReq);
@@ -774,11 +774,11 @@ if (import.meta.hot) {
           return;
         }
 
-        // Proxy /__tygor/* to tygor dev (served at /__tygor/Devtools/*)
+        // Proxy /__tygor/* to tygor devtools server (served at /__tygor/Devtools/*)
         if (req.url?.startsWith("/__tygor/")) {
           if (!devServer.ready) {
             res.writeHead(503, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ error: "tygor dev is starting..." }));
+            res.end(JSON.stringify({ error: "tygor devtools is starting..." }));
             return;
           }
           // Legacy path rewrites for backwards compatibility
@@ -877,11 +877,11 @@ if (import.meta.hot) {
         scheduleReload();
       });
 
-      // Start tygor dev server first
+      // Start tygor devtools server first
       const devPort = await findPort(9000);
       devServer = await startDevServer(devPort);
       if (!devServer.ready) {
-        logError("tygor dev failed to start");
+        logError("tygor devtools failed to start");
       }
 
       // Initial gen, build, and server start
@@ -952,7 +952,7 @@ if (import.meta.hot) {
         watcher.close();
         killServer(currentServer);
         if (nextServer) killServer(nextServer);
-        // Kill tygor dev
+        // Kill tygor devtools
         if (devServer.process && devServer.process.exitCode === null) {
           devServer.process.kill("SIGTERM");
         }

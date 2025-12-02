@@ -10,10 +10,10 @@ import (
 )
 
 type CLI struct {
-	Version VersionCmd `cmd:"" help:"Print version information."`
-	Gen     gen.Cmd    `cmd:"" help:"Generate TypeScript types and manifest."`
-	Check   check.Cmd  `cmd:"" help:"Validate exports and types without generating files."`
-	Dev     dev.Cmd    `cmd:"" help:"Start standalone devtools server."`
+	Version  VersionCmd `cmd:"" help:"Print version information."`
+	Gen      gen.Cmd    `cmd:"" help:"Generate TypeScript types and manifest."`
+	Check    check.Cmd  `cmd:"" help:"Validate exports and types without generating files."`
+	Devtools dev.Cmd    `cmd:"" hidden:"" help:"Start devtools server (used by vite plugin)."`
 }
 
 type VersionCmd struct{}
