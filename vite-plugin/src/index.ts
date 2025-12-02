@@ -703,6 +703,16 @@ export function tygorDev(options: TygorDevOptions): Plugin {
       isDev = command === "serve";
     },
 
+    async buildStart() {
+      // Run tygor gen during production builds to ensure types are fresh
+      if (!isDev && opts.gen) {
+        const ok = await runGen();
+        if (!ok) {
+          throw new Error(`tygor gen failed:\n${buildError}`);
+        }
+      }
+    },
+
     resolveId(id) {
       if (id === VIRTUAL_HMR) return RESOLVED_VIRTUAL_HMR;
     },
