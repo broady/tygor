@@ -10,7 +10,7 @@ DOC_FILES := $(wildcard doc/examples/quickstart/*.go) $(wildcard doc/examples/qu
              $(wildcard doc/examples/tygorgen/*.go) $(wildcard doc/examples/tygorgen/*.ts) \
              $(wildcard doc/examples/client/*.ts)
 
-.PHONY: all test test-quiet lint lint-quiet check check-quiet readme lint-readme precommit fmt fmt-check ci-local typecheck-docs typecheck-vite-plugin release help
+.PHONY: all test test-quiet lint lint-quiet check check-quiet readme lint-readme precommit fmt fmt-check ci-local typecheck-docs typecheck-vite-plugin release help gen
 
 # Default target
 all: test lint
@@ -95,6 +95,10 @@ check-quiet:
 		exit 1; \
 	fi
 
+# Generate client error types from Go source
+gen:
+	go run ./cmd/tygor gen client/generated -t ErrorCode -t Error -p github.com/broady/tygor
+
 # Type-check documentation examples
 typecheck-docs:
 	@cd doc/examples && npm install --silent
@@ -105,7 +109,7 @@ typecheck-vite-plugin:
 	@cd vite-plugin && bun run --silent typecheck
 
 # Precommit sub-targets (for parallel execution, all depend on fmt-check)
-.PHONY: precommit-test precommit-lint precommit-check precommit-examples precommit-typecheck precommit-vite-plugin precommit-devserver precommit-client-bundle precommit-readme-version precommit-version-sync
+.PHONY: precommit-test precommit-lint precommit-check precommit-examples precommit-typecheck precommit-vite-plugin precommit-devserver precommit-client-bundle precommit-readme-version precommit-version-sync precommit-client-gen
 precommit-test: fmt-check ; @$(MAKE) --no-print-directory test-quiet
 precommit-lint: fmt-check ; @$(MAKE) --no-print-directory lint-quiet
 precommit-check: fmt-check ; @$(MAKE) --no-print-directory check-quiet
@@ -114,6 +118,8 @@ precommit-typecheck: fmt-check ; @$(MAKE) --no-print-directory typecheck-docs
 precommit-vite-plugin: fmt-check ; @$(MAKE) --no-print-directory typecheck-vite-plugin
 precommit-devserver: fmt-check
 	@go run ./cmd/tygor gen --check -p ./cmd/tygor/internal/dev ./vite-plugin/src/devserver
+precommit-client-gen: fmt-check
+	@go run ./cmd/tygor gen --check client/generated -t ErrorCode -t Error -p github.com/broady/tygor
 precommit-readme-version: fmt-check
 	@VERSION=$$(cat VERSION); \
 	if ! grep -q "broady/tygor/examples/react#v$$VERSION" README.md; then \
@@ -146,7 +152,7 @@ precommit-client-bundle: fmt-check
 	fi
 
 # Run all precommit checks in parallel (fmt-check runs first)
-precommit: precommit-test precommit-lint precommit-check precommit-examples precommit-typecheck precommit-vite-plugin precommit-devserver precommit-client-bundle precommit-readme-version precommit-version-sync
+precommit: precommit-test precommit-lint precommit-check precommit-examples precommit-typecheck precommit-vite-plugin precommit-devserver precommit-client-bundle precommit-readme-version precommit-version-sync precommit-client-gen
 	@echo "All precommit checks passed."
 
 # Run CI locally using act (https://github.com/nektos/act)
@@ -167,6 +173,7 @@ help:
 	@echo "  make test           - Run tests"
 	@echo "  make lint           - Run go vet and staticcheck"
 	@echo "  make fmt            - Format Go code"
+	@echo "  make gen            - Generate client error types from Go source"
 	@echo "  make readme         - Update READMEs with code snippets"
 	@echo "  make lint-readme    - Check all .md files for unmanaged code blocks"
 	@echo "  make typecheck-docs - Type-check documentation examples"

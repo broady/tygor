@@ -2,25 +2,36 @@ package gen
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/broady/tygor/internal/discover"
 	"github.com/broady/tygor/internal/runner"
+	"github.com/broady/tygor/tygorgen/provider"
+	"github.com/broady/tygor/tygorgen/sink"
+	"github.com/broady/tygor/tygorgen/typescript"
 )
 
 type Cmd struct {
-	Out       string `arg:"" help:"Output directory for generated files."`
-	Export    string `help:"Export function name (required if multiple exports exist)." short:"e"`
-	Flavor    string `help:"Output flavor (e.g., zod)." short:"f"`
-	Discovery bool   `help:"Generate discovery.json." short:"d"`
-	NoConfig  bool   `help:"Ignore config function."`
-	Package   string `help:"Package to scan (default: current directory)." short:"p" default:"."`
-	Check     bool   `help:"Check if generated files are up-to-date (exit 1 if stale)." short:"c"`
+	Out       string   `arg:"" help:"Output directory for generated files."`
+	Export    string   `help:"Export function name (required if multiple exports exist)." short:"e"`
+	Flavor    string   `help:"Output flavor (e.g., zod)." short:"f"`
+	Discovery bool     `help:"Generate discovery.json." short:"d"`
+	NoConfig  bool     `help:"Ignore config function."`
+	Package   string   `help:"Package to scan (default: current directory)." short:"p" default:"."`
+	Check     bool     `help:"Check if generated files are up-to-date (exit 1 if stale)." short:"c"`
+	Types     []string `help:"Generate types without a tygor app (e.g., -t ErrorCode -t github.com/foo/bar.MyType)." short:"t" name:"type"`
 }
 
 func (c *Cmd) Run() error {
+	// Standalone type generation mode
+	if len(c.Types) > 0 {
+		return c.runStandaloneTypes()
+	}
+
 	// Discover exports in the package
 	result, err := discover.Find(c.Package)
 	if err != nil {
@@ -148,4 +159,153 @@ func (c *Cmd) compareFiles(genDir, outDir string) error {
 	}
 
 	return nil
+}
+
+// runStandaloneTypes generates TypeScript types directly from Go types
+// without requiring a tygor app export.
+func (c *Cmd) runStandaloneTypes() error {
+	// Validate incompatible flags
+	if c.Export != "" {
+		return fmt.Errorf("--export cannot be used with --type")
+	}
+	if c.NoConfig {
+		return fmt.Errorf("--no-config cannot be used with --type")
+	}
+
+	// Parse type specifications into packages and root types
+	packages, rootTypes, err := parseTypeSpecs(c.Types, c.Package)
+	if err != nil {
+		return err
+	}
+
+	// Resolve output directory
+	outDir, err := filepath.Abs(c.Out)
+	if err != nil {
+		return fmt.Errorf("resolve output path: %w", err)
+	}
+
+	// In check mode, generate to temp dir and compare
+	genDir := outDir
+	if c.Check {
+		tmpDir, err := os.MkdirTemp("", "tygor-gen-check-*")
+		if err != nil {
+			return fmt.Errorf("create temp dir: %w", err)
+		}
+		defer os.RemoveAll(tmpDir)
+		genDir = tmpDir
+	}
+
+	// Build schema using source provider
+	ctx := context.Background()
+	p := &provider.SourceProvider{}
+	schema, err := p.BuildSchema(ctx, provider.SourceInputOptions{
+		Packages:  packages,
+		RootTypes: rootTypes,
+	})
+	if err != nil {
+		return fmt.Errorf("build schema: %w", err)
+	}
+
+	// Validate schema
+	if errs := schema.Validate(); len(errs) > 0 {
+		return fmt.Errorf("schema validation: %w", errs[0])
+	}
+
+	// Configure TypeScript generator
+	tsConfig := typescript.GeneratorConfig{
+		FieldCase:       "preserve",
+		TypeCase:        "preserve",
+		SingleFile:      true, // Standalone types go in single file
+		IndentStyle:     "space",
+		IndentSize:      2,
+		LineEnding:      "lf",
+		TrailingNewline: true,
+		EmitComments:    true,
+		Custom: map[string]any{
+			"EmitExport":        true,
+			"EmitDeclare":       false,
+			"UseInterface":      true,
+			"UseReadonlyArrays": false,
+			"EnumStyle":         "union",
+			"OptionalType":      "undefined",
+			"UnknownType":       "unknown",
+			"EmitTypes":         true,
+		},
+	}
+
+	// Add flavors if specified
+	if c.Flavor != "" {
+		tsConfig.Custom["Flavors"] = []string{c.Flavor}
+	}
+
+	// Create filesystem sink
+	outputSink := sink.NewFilesystemSink(genDir)
+
+	// Generate TypeScript
+	gen := &typescript.TypeScriptGenerator{}
+	result, err := gen.Generate(ctx, schema, typescript.GenerateOptions{
+		Sink:   outputSink,
+		Config: tsConfig,
+	})
+	if err != nil {
+		return fmt.Errorf("generate: %w", err)
+	}
+
+	// Print warnings
+	for _, w := range result.Warnings {
+		fmt.Fprintf(os.Stderr, "warning: %s: %s\n", w.Code, w.Message)
+	}
+
+	// In check mode, compare files
+	if c.Check {
+		return c.compareFiles(genDir, outDir)
+	}
+
+	return nil
+}
+
+// parseTypeSpecs parses type specifications like "ErrorCode" or "github.com/foo/bar.MyType"
+// into packages to load and root types to extract.
+func parseTypeSpecs(specs []string, defaultPkg string) ([]string, []provider.RootType, error) {
+	seen := make(map[string]bool)
+	var packages []string
+	var rootTypes []provider.RootType
+
+	for _, spec := range specs {
+		var pkg, name string
+
+		// Check if it's a fully qualified type (contains a dot after a slash)
+		// e.g., "github.com/foo/bar.MyType" -> pkg="github.com/foo/bar", name="MyType"
+		if lastDot := strings.LastIndex(spec, "."); lastDot > 0 {
+			// Ensure there's a slash before the dot (it's a package path, not just "pkg.Type")
+			if strings.Contains(spec[:lastDot], "/") {
+				pkg = spec[:lastDot]
+				name = spec[lastDot+1:]
+			} else {
+				// Could be "pkg.Type" which is ambiguous - treat as error
+				return nil, nil, fmt.Errorf("ambiguous type %q: use fully qualified path (e.g., github.com/pkg.Type) or simple name with --package", spec)
+			}
+		} else {
+			// Simple name like "ErrorCode" - use default package
+			pkg = defaultPkg
+			name = spec
+		}
+
+		if name == "" {
+			return nil, nil, fmt.Errorf("invalid type specification: %q", spec)
+		}
+
+		// Add package if not seen
+		if !seen[pkg] {
+			seen[pkg] = true
+			packages = append(packages, pkg)
+		}
+
+		rootTypes = append(rootTypes, provider.RootType{
+			Package: pkg,
+			Name:    name,
+		})
+	}
+
+	return packages, rootTypes, nil
 }
