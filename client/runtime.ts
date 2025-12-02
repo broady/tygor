@@ -1,3 +1,8 @@
+import type { Error as TygorErrorEnvelope, ErrorCode } from "./generated/types.js";
+
+// Re-export generated types
+export type { ErrorCode } from "./generated/types.js";
+
 /**
  * TygorError is the base class for all tygor client errors.
  * Use instanceof to narrow to ServerError or TransportError.
@@ -16,11 +21,11 @@ export abstract class TygorError extends Error {
  */
 export class ServerError extends TygorError {
   readonly kind = "server" as const;
-  code: string;
-  details?: Record<string, any>;
+  code: ErrorCode;
+  details?: Record<string, unknown>;
   httpStatus: number;
 
-  constructor(code: string, message: string, httpStatus: number, details?: Record<string, any>) {
+  constructor(code: ErrorCode, message: string, httpStatus: number, details?: Record<string, unknown>) {
     super(message);
     this.name = "ServerError";
     this.code = code;
@@ -60,7 +65,7 @@ export class TransportError extends TygorError {
  */
 export type Response<T> =
   | { result: T; error?: never }
-  | { result?: never; error: { code: string; message: string; details?: Record<string, any> } };
+  | { result?: never; error: TygorErrorEnvelope };
 
 /**
  * Empty represents a void response (null).
@@ -407,7 +412,7 @@ export function createClient<Manifest extends Record<string, any>>(
 
                 // Check for error in envelope - this is an application-level error
                 if (envelope.error) {
-                  const code = envelope.error.code || "unknown";
+                  const code = (envelope.error.code || "internal") as ErrorCode;
                   const msg = envelope.error.message || "Unknown error";
                   emitRpcError(service, method, code, msg);
                   throw new ServerError(code, msg, httpStatus, envelope.error.details);
@@ -532,7 +537,7 @@ function createSSEStream<T>(
           rawBody = await res.text();
           const envelope = JSON.parse(rawBody);
           if (envelope.error) {
-            const code = envelope.error.code || "unknown";
+            const code = (envelope.error.code || "internal") as ErrorCode;
             const msg = envelope.error.message || "Unknown error";
             emitRpcError(service, method, code, msg);
             const err = new ServerError(code, msg, httpStatus, envelope.error.details);
@@ -590,7 +595,7 @@ function createSSEStream<T>(
                   const envelope = JSON.parse(data) as Response<T>;
 
                   if (envelope.error) {
-                    const code = envelope.error.code || "unknown";
+                    const code = (envelope.error.code || "internal") as ErrorCode;
                     const msg = envelope.error.message || "Unknown error";
                     emitRpcError(service, method, code, msg);
                     const err = new ServerError(code, msg, httpStatus, envelope.error.details);
@@ -830,7 +835,7 @@ function createAtomClient<T>(
           rawBody = await res.text();
           const envelope = JSON.parse(rawBody);
           if (envelope.error) {
-            const code = envelope.error.code || "unknown";
+            const code = (envelope.error.code || "internal") as ErrorCode;
             const msg = envelope.error.message || "Unknown error";
             emitRpcError(service, method, code, msg);
             const err = new ServerError(code, msg, httpStatus, envelope.error.details);
@@ -888,7 +893,7 @@ function createAtomClient<T>(
                   const envelope = JSON.parse(data) as Response<T>;
 
                   if (envelope.error) {
-                    const code = envelope.error.code || "unknown";
+                    const code = (envelope.error.code || "internal") as ErrorCode;
                     const msg = envelope.error.message || "Unknown error";
                     emitRpcError(service, method, code, msg);
                     const err = new ServerError(code, msg, httpStatus, envelope.error.details);

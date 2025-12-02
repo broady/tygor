@@ -235,7 +235,7 @@ describe("createClient", () => {
       expect.unreachable("Should have thrown an error");
     } catch (e: any) {
       expect(e).toBeInstanceOf(ServerError);
-      expect(e.code).toBe("unknown");
+      expect(e.code).toBe("internal"); // fallback when server omits code
       expect(e.message).toBe("Something went wrong");
     }
   });

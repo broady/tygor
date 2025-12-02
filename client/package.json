@@ -13,7 +13,9 @@
   },
   "files": [
     "runtime.js",
-    "runtime.d.ts"
+    "runtime.d.ts",
+    "runtime.d.ts.map",
+    "generated/"
   ],
   "scripts": {
     "build": "bunx tsc",
