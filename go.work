@@ -5,4 +5,5 @@ use (
 	./examples
 	./examples/devtools
 	./examples/react
+	./examples/starter-solid
 )

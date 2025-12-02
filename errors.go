@@ -126,12 +126,15 @@ func DefaultErrorTransformer(err error) *Error {
 	var valErrs validator.ValidationErrors
 	if errors.As(err, &valErrs) {
 		details := make(map[string]any)
+		messages := make([]string, 0, len(valErrs))
 		for _, ve := range valErrs {
-			details[ve.Field()] = ve.Tag()
+			msg := formatValidationError(ve)
+			details[ve.Field()] = msg
+			messages = append(messages, ve.Field()+": "+msg)
 		}
 		return &Error{
 			Code:    CodeInvalidArgument,
-			Message: "validation failed",
+			Message: strings.Join(messages, "; "),
 			Details: details,
 		}
 	}
@@ -193,6 +196,45 @@ func (c ErrorCode) HTTPStatus() int {
 		return http.StatusGatewayTimeout
 	default:
 		return http.StatusInternalServerError
+	}
+}
+
+// formatValidationError converts a validator.FieldError to a human-readable message.
+func formatValidationError(ve validator.FieldError) string {
+	switch ve.Tag() {
+	case "required":
+		return "required"
+	case "min":
+		return fmt.Sprintf("must be at least %s characters", ve.Param())
+	case "max":
+		return fmt.Sprintf("must be at most %s characters", ve.Param())
+	case "len":
+		return fmt.Sprintf("must be exactly %s characters", ve.Param())
+	case "eq":
+		return fmt.Sprintf("must equal %s", ve.Param())
+	case "ne":
+		return fmt.Sprintf("must not equal %s", ve.Param())
+	case "gt":
+		return fmt.Sprintf("must be greater than %s", ve.Param())
+	case "gte":
+		return fmt.Sprintf("must be at least %s", ve.Param())
+	case "lt":
+		return fmt.Sprintf("must be less than %s", ve.Param())
+	case "lte":
+		return fmt.Sprintf("must be at most %s", ve.Param())
+	case "email":
+		return "must be a valid email address"
+	case "url":
+		return "must be a valid URL"
+	case "uuid":
+		return "must be a valid UUID"
+	case "oneof":
+		return fmt.Sprintf("must be one of: %s", ve.Param())
+	default:
+		if ve.Param() != "" {
+			return fmt.Sprintf("failed %s=%s validation", ve.Tag(), ve.Param())
+		}
+		return fmt.Sprintf("failed %s validation", ve.Tag())
 	}
 }
 

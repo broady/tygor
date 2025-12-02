@@ -273,7 +273,8 @@ func hasMainFunc(dir string) (bool, error) {
 	return false, nil
 }
 
-// removeMain parses a Go file and returns a version with func main() removed.
+// removeMain parses a Go file and returns a version with func main() renamed.
+// We rename instead of removing so that imports used only by main() stay valid.
 // Returns (hasMain, modifiedSource, error).
 func removeMain(filename string) (bool, []byte, error) {
 	fset := token.NewFileSet()
@@ -282,23 +283,20 @@ func removeMain(filename string) (bool, []byte, error) {
 		return false, nil, err
 	}
 
-	// Find and remove main function
+	// Find and rename main function
 	hasMain := false
-	var newDecls []ast.Decl
 	for _, decl := range f.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
 		if ok && fn.Name.Name == "main" && fn.Recv == nil {
 			hasMain = true
-			continue // skip main()
+			fn.Name.Name = "_tygor_original_main_"
+			break
 		}
-		newDecls = append(newDecls, decl)
 	}
 
 	if !hasMain {
 		return false, nil, nil
 	}
-
-	f.Decls = newDecls
 
 	var buf bytes.Buffer
 	if err := format.Node(&buf, fset, f); err != nil {

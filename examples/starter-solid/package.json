@@ -1,0 +1,25 @@
+{
+  "name": "tygor-starter-solid",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "gen": "go run github.com/broady/tygor/cmd/tygor@latest gen ./src/rpc",
+    "postinstall": "npm run gen",
+    "dev": "vite --clearScreen false",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tygor/client": "^0.7.3",
+    "solid-js": "^1.9.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@tygor/vite-plugin": "^0.7.3",
+    "typescript": "^5.0.0",
+    "vite": "^6.0.0",
+    "vite-plugin-solid": "^2.11.0"
+  }
+}

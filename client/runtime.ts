@@ -274,6 +274,9 @@ export function createClient<Manifest extends Record<string, any>>(
   const validateRequest = schemas && (config.validate?.request ?? true); // Default: true if schemas provided
   const validateResponse = schemas && (config.validate?.response ?? false); // Default: false
 
+  // Cache atom clients so multiple accesses return the same instance
+  const atomCache = new Map<string, Atom<unknown>>();
+
   return new Proxy(
     {},
     {
@@ -307,19 +310,24 @@ export function createClient<Manifest extends Record<string, any>>(
                 };
               }
 
-              // Atom endpoints return Atom (subscribe only, no AsyncIterable)
+              // Atom endpoints return cached Atom (same instance on every access)
               if (meta.primitive === "atom") {
-                return createAtomClient(
-                  opId,
-                  service,
-                  method,
-                  meta,
-                  config,
-                  fetchFn,
-                  schemas,
-                  validateRequest,
-                  validateResponse
-                );
+                let atom = atomCache.get(opId);
+                if (!atom) {
+                  atom = createAtomClient(
+                    opId,
+                    service,
+                    method,
+                    meta,
+                    config,
+                    fetchFn,
+                    schemas,
+                    validateRequest,
+                    validateResponse
+                  );
+                  atomCache.set(opId, atom);
+                }
+                return atom;
               }
 
               // Unary endpoints return Promise

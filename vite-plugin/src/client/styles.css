@@ -449,6 +449,7 @@
   font-size: 11px;
   line-height: 1.5;
   font-family: var(--tygor-font-mono);
+  tab-size: 2;
   max-height: 200px;
   overflow: auto;
 }
@@ -711,6 +712,7 @@
   font-size: 11px;
   line-height: 1.6;
   font-family: var(--tygor-font-mono);
+  tab-size: 2;
 }
 
 .tygor-alert-body .command {
