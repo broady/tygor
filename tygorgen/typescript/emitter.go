@@ -3,6 +3,7 @@ package typescript
 import (
 	"bytes"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -65,10 +66,21 @@ func (e *Emitter) qualifyTypeName(id ir.GoIdentifier) string {
 
 // EmitType emits a top-level type declaration.
 func (e *Emitter) EmitType(buf *bytes.Buffer, typ ir.TypeDescriptor) ([]ir.Warning, error) {
-	// Emit documentation comments if enabled
-	if e.config.EmitComments && !typ.Doc().IsZero() {
-		e.emitJSDoc(buf, typ.Doc())
+	// Build @see reference from package path + filename + symbol name
+	var seeRef string
+	if typeName := typ.TypeName(); !typeName.IsZero() {
+		pkg := typeName.Package
+		file := ""
+		if src := typ.Src(); !src.IsZero() && src.File != "" {
+			file = filepath.Base(src.File)
+		}
+		if pkg != "" && file != "" {
+			seeRef = fmt.Sprintf("%s/%s#%s", pkg, file, typeName.Name)
+		}
 	}
+
+	// Emit unified JSDoc block with doc comment and @see reference
+	e.emitJSDocWithSee(buf, typ.Doc(), seeRef)
 
 	switch t := typ.(type) {
 	case *ir.StructDescriptor:
@@ -655,22 +667,39 @@ func (e *Emitter) getPropertyName(field ir.FieldDescriptor) string {
 	}
 }
 
-// emitJSDoc emits JSDoc-style documentation comments.
-func (e *Emitter) emitJSDoc(buf *bytes.Buffer, doc ir.Documentation) {
-	if doc.IsZero() {
+// emitJSDocWithSee emits a unified JSDoc block with documentation and @see reference.
+// If both doc and seeRef are empty, nothing is emitted.
+// If only seeRef is provided, emits a single-line JSDoc with just @see.
+// If doc is provided, emits doc content with @see appended (when present).
+func (e *Emitter) emitJSDocWithSee(buf *bytes.Buffer, doc ir.Documentation, seeRef string) {
+	hasDoc := e.config.EmitComments && !doc.IsZero()
+	hasSee := seeRef != ""
+
+	if !hasDoc && !hasSee {
 		return
 	}
 
+	// Simple case: only @see, no doc
+	if !hasDoc && hasSee {
+		buf.WriteString("/** @see ")
+		buf.WriteString(seeRef)
+		buf.WriteString(" */\n")
+		return
+	}
+
+	// Has doc content
 	lines := strings.Split(doc.Body, "\n")
-	if len(lines) == 1 && doc.Deprecated == nil {
-		// Single line
+	needsMultiLine := len(lines) > 1 || doc.Deprecated != nil || hasSee
+
+	if !needsMultiLine {
+		// Single line doc without @see or @deprecated
 		buf.WriteString("/** ")
 		buf.WriteString(strings.TrimSpace(lines[0]))
 		buf.WriteString(" */\n")
 		return
 	}
 
-	// Multi-line
+	// Multi-line format
 	buf.WriteString("/**\n")
 	for _, line := range lines {
 		buf.WriteString(" * ")
@@ -687,7 +716,18 @@ func (e *Emitter) emitJSDoc(buf *bytes.Buffer, doc ir.Documentation) {
 		buf.WriteString("\n")
 	}
 
+	if hasSee {
+		buf.WriteString(" * @see ")
+		buf.WriteString(seeRef)
+		buf.WriteString("\n")
+	}
+
 	buf.WriteString(" */\n")
+}
+
+// emitJSDoc emits JSDoc-style documentation comments.
+func (e *Emitter) emitJSDoc(buf *bytes.Buffer, doc ir.Documentation) {
+	e.emitJSDocWithSee(buf, doc, "")
 }
 
 // formatEnumValue formats an enum member value for output.
