@@ -10,12 +10,10 @@ import (
 
 	"github.com/broady/tygor"
 	"github.com/broady/tygor/tygorgen"
-
-	"github.com/broady/tygor/examples/starter-solid/api"
 )
 
 // Atom holding message state - subscribers get current value and updates
-var messageAtom = tygor.NewAtom(&api.MessageState{
+var messageAtom = tygor.NewAtom(&MessageState{
 	Message:  "hello",
 	SetCount: 0,
 })
@@ -41,10 +39,10 @@ func TygorConfig(g *tygorgen.Generator) *tygorgen.Generator {
 		WithFlavor(tygorgen.FlavorZod)
 }
 
-func SetMessage(ctx context.Context, req *api.SetMessageParams) (*api.MessageState, error) {
-	var newState *api.MessageState
-	messageAtom.Update(func(state *api.MessageState) *api.MessageState {
-		newState = &api.MessageState{
+func SetMessage(ctx context.Context, req *SetMessageParams) (*MessageState, error) {
+	var newState *MessageState
+	messageAtom.Update(func(state *MessageState) *MessageState {
+		newState = &MessageState{
 			Message:  req.Message,
 			SetCount: state.SetCount + 1,
 		}

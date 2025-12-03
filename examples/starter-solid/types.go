@@ -1,4 +1,4 @@
-package api
+package main
 
 // MessageState holds the current message and how many times it's been set.
 type MessageState struct {
@@ -10,5 +10,5 @@ type MessageState struct {
 
 // SetMessageParams contains the new message value.
 type SetMessageParams struct {
-	Message string `json:"message" validate:"required,min=5,max=10"`
+	Message string `json:"message" validate:"required,min=2,max=10"`
 }

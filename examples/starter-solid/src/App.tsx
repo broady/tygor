@@ -1,8 +1,8 @@
-import { createSignal, onMount, onCleanup } from "solid-js";
-import { createClient, ServerError, ValidationError, type StreamState } from "@tygor/client";
+import { createSignal, Show } from "solid-js";
+import { createClient, ServerError, ValidationError } from "@tygor/client";
 import { registry } from "./rpc/manifest";
 import { schemaMap } from "./rpc/schemas.map.zod";
-import type { MessageState } from "./rpc/types";
+import { useAtom } from "./useAtom";
 
 const client = createClient(registry, {
   baseUrl: "/api",
@@ -26,21 +26,9 @@ function formatError(err: unknown): string {
 }
 
 export default function App() {
-  const [state, setState] = createSignal<MessageState | null>(null);
-  const [connectionState, setConnectionState] = createSignal<StreamState | null>(null);
+  const atom = useAtom(client.Message.State);
   const [input, setInput] = createSignal("");
   const [error, setError] = createSignal<string | null>(null);
-
-  // Subscribe to the atom - get current value and updates
-  onMount(() => {
-    const atom = client.Message.State;
-    const unsub = atom.data.subscribe(setState);
-    const unsubState = atom.state.subscribe(setConnectionState);
-    onCleanup(() => {
-      unsub();
-      unsubState();
-    });
-  });
 
   const handleSet = async (e: Event) => {
     e.preventDefault();
@@ -57,20 +45,20 @@ export default function App() {
     <div>
       <h1>Message Atom</h1>
 
-      {connectionState() && (
-        <div style={{ "font-size": "0.75rem", color: connectionState()!.status === "connected" ? "#16a34a" : "#ca8a04", "margin-bottom": "1rem" }}>
-          {connectionState()!.status === "connected" ? "\u25CF" : connectionState()!.status === "connecting" ? "\u25CB" : "\u25CC"} {connectionState()!.status}
-        </div>
-      )}
+      <div style={{ "font-size": "0.75rem", color: atom().isConnected ? "#16a34a" : "#ca8a04", "margin-bottom": "1rem" }}>
+        {atom().isConnected ? "\u25CF" : atom().isConnecting ? "\u25CB" : "\u25CC"} {atom().status}
+      </div>
 
-      {state() && (
-        <div style={{ "margin-bottom": "1rem" }}>
-          <div style={{ "font-size": "2rem", "font-weight": "bold" }}>{state()!.message}</div>
-          <div style={{ "font-size": "0.875rem", color: "#666" }}>
-            Set {state()!.set_count} time{state()!.set_count !== 1 ? "s" : ""}
+      <Show when={atom().data}>
+        {(data) => (
+          <div style={{ "margin-bottom": "1rem" }}>
+            <div style={{ "font-size": "2rem", "font-weight": "bold" }}>{data().message}</div>
+            <div style={{ "font-size": "0.875rem", color: "#666" }}>
+              Set {data().set_count} time{data().set_count !== 1 ? "s" : ""}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </Show>
 
       <form onSubmit={handleSet}>
         <input
@@ -83,11 +71,11 @@ export default function App() {
         <button type="submit">Set</button>
       </form>
 
-      {error() && (
+      <Show when={error()}>
         <div style={{ color: "#dc2626", "margin-top": "0.5rem", "font-size": "0.875rem" }}>
           {error()}
         </div>
-      )}
+      </Show>
 
       <p style={{ "font-size": "0.75rem", color: "#999", "margin-top": "2rem" }}>
         Open this page in multiple tabs - they all sync via the Atom!

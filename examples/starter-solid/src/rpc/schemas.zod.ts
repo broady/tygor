@@ -8,6 +8,6 @@ export const MessageStateSchema = z.object({
 });
 
 export const SetMessageParamsSchema = z.object({
-  message: z.string().min(1).min(5).max(10), // validate:"required,min=5,max=10"
+  message: z.string().min(1).min(2).max(10), // validate:"required,min=2,max=10"
 });
 
