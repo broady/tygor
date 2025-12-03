@@ -1,0 +1,138 @@
+.app {
+  --color-text: #374151;
+  --color-text-muted: #666;
+  --color-text-subtle: #9ca3af;
+  --color-error: #dc2626;
+  --color-success: #16a34a;
+  --color-warning: #ca8a04;
+  --color-border: #eee;
+
+  max-width: 540px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+/* Header */
+.title {
+  margin-bottom: 0.5rem;
+}
+
+.tagline {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-bottom: 1.5rem;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.taglineLabel {
+  color: var(--color-text-muted);
+}
+
+.taglineStep {
+  font-family: ui-monospace, monospace;
+  color: var(--color-text);
+}
+
+.taglineArrow {
+  color: var(--color-text-subtle);
+}
+
+.taglineSeparator {
+  color: var(--color-text-subtle);
+  margin: 0 0.25rem;
+}
+
+/* Controls */
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.status {
+  font-size: 0.75rem;
+}
+
+.statusConnected {
+  color: var(--color-success);
+}
+
+.statusConnecting {
+  color: var(--color-warning);
+}
+
+/* Form */
+.form {
+  margin-bottom: 2rem;
+}
+
+.input {
+  width: 100%;
+  padding: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.button {
+  padding: 0.5rem 1rem;
+}
+
+/* Error */
+.error {
+  color: var(--color-error);
+  margin-bottom: 1rem;
+}
+
+/* Task list */
+.list {
+  list-style: none;
+  padding: 0;
+}
+
+.task {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.taskContent {
+  flex: 1;
+}
+
+.taskTitle {
+  /* default state */
+}
+
+.taskTitleCompleted {
+  text-decoration: line-through;
+  color: var(--color-text-subtle);
+}
+
+.taskDescription {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.taskDelete {
+  color: var(--color-error);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+/* Empty state */
+.empty {
+  color: var(--color-text-subtle);
+  text-align: center;
+}
