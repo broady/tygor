@@ -212,8 +212,14 @@ export interface Stream<T> extends AsyncIterable<T> {
 
 /**
  * SubscriptionStatus represents the connection state of a subscription.
+ * - connecting: Initial connection attempt
+ * - connected: Successfully connected and receiving data
+ * - reconnecting: Connection lost, attempting to reconnect automatically
+ * - completed: Stream ended normally (streams only, won't reconnect)
+ * - error: Connection failed with an error
+ * - disconnected: Intentionally disconnected (no more subscribers)
  */
-export type SubscriptionStatus = "connecting" | "connected" | "error" | "disconnected";
+export type SubscriptionStatus = "connecting" | "connected" | "reconnecting" | "completed" | "error" | "disconnected";
 
 /**
  * SubscriptionResult is the combined state of a subscription (Atom or Stream).
@@ -234,6 +240,10 @@ export interface SubscriptionResult<T> {
   isConnecting: boolean;
   /** Convenience: true if status === 'connected' */
   isConnected: boolean;
+  /** Convenience: true if status === 'reconnecting' */
+  isReconnecting: boolean;
+  /** Convenience: true if status === 'completed' */
+  isCompleted: boolean;
   /** Convenience: true if status === 'error' */
   isError: boolean;
   /** Convenience: true if status === 'disconnected' */
@@ -518,6 +528,8 @@ function createSSEStream<T>(
   let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   // Track if we were intentionally aborted (user-provided signal)
   let userAborted = false;
+  // Track if we've ever successfully connected (for connecting vs reconnecting)
+  let hasConnected = false;
 
   const scheduleReconnect = () => {
     // Don't reconnect if user aborted or no listeners
@@ -552,7 +564,7 @@ function createSSEStream<T>(
       });
     }
 
-    setStatus("connecting");
+    setStatus(hasConnected ? "reconnecting" : "connecting");
 
     connectionPromise = (async () => {
       // Request validation (before sending)
@@ -628,6 +640,7 @@ function createSSEStream<T>(
       }
 
       setStatus("connected");
+      hasConnected = true;
       reconnectAttempt = 0; // Reset on successful connection
 
       const reader = res.body.getReader();
@@ -694,14 +707,15 @@ function createSSEStream<T>(
         reader.releaseLock();
       }
 
-      setStatus("disconnected");
-      scheduleReconnect();
+      // Stream ended cleanly - this is intentional completion, don't reconnect
+      setStatus("completed");
     })().catch((err) => {
       // Silently ignore AbortError from cleanup (intentional disconnect)
       if (err.name === "AbortError") {
         setStatus("disconnected");
         return;
       }
+      // Connection error - set error status and attempt reconnect
       setStatus("error", err);
       scheduleReconnect();
     }).finally(() => {
@@ -827,6 +841,8 @@ function makeSubscriptionResult<T>(
     dataUpdatedAt,
     isConnecting: status === "connecting",
     isConnected: status === "connected",
+    isReconnecting: status === "reconnecting",
+    isCompleted: status === "completed",
     isError: status === "error",
     isDisconnected: status === "disconnected",
   };
@@ -888,6 +904,8 @@ function createAtomClient<T>(
   let connectionPromise: Promise<void> | null = null;
   let reconnectAttempt = 0;
   let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+  // Track if we've ever successfully connected (for connecting vs reconnecting)
+  let hasConnected = false;
 
   const scheduleReconnect = () => {
     // Only reconnect if we still have listeners
@@ -909,7 +927,7 @@ function createAtomClient<T>(
     if (connectionPromise) return connectionPromise;
 
     controller = new AbortController();
-    setStatus("connecting");
+    setStatus(hasConnected ? "reconnecting" : "connecting");
 
     connectionPromise = (async () => {
       const req = {};
@@ -975,6 +993,7 @@ function createAtomClient<T>(
       }
 
       setStatus("connected");
+      hasConnected = true;
       reconnectAttempt = 0; // Reset on successful connection
 
       const reader = res.body.getReader();
@@ -1041,7 +1060,9 @@ function createAtomClient<T>(
         reader.releaseLock();
       }
 
-      setStatus("disconnected");
+      // Atom connection closed unexpectedly - reconnect
+      // (Atoms represent persistent server state, they shouldn't end cleanly)
+      setStatus("reconnecting");
       scheduleReconnect();
     })().catch((err) => {
       // Silently ignore AbortError from cleanup (intentional disconnect)
@@ -1049,6 +1070,7 @@ function createAtomClient<T>(
         setStatus("disconnected");
         return;
       }
+      // Connection error - set error status and attempt reconnect
       setStatus("error", err);
       scheduleReconnect();
     }).finally(() => {
