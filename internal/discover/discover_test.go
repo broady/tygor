@@ -113,6 +113,27 @@ func main() {}
 			},
 			wantExports: nil,
 		},
+		{
+			name: "finds unexported functions",
+			files: map[string]string{
+				"main.go": `package main
+
+import "github.com/broady/tygor"
+
+func setupApp() *tygor.App {
+	return tygor.NewApp()
+}
+
+func main() {}
+`,
+			},
+			wantExports: []struct {
+				name       string
+				exportType ExportType
+			}{
+				{name: "setupApp", exportType: ExportTypeApp},
+			},
+		},
 	}
 
 	for _, tt := range tests {

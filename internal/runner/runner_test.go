@@ -616,6 +616,128 @@ func CheckApp() *tygor.App {
 	}
 }
 
+// TestExecImport_Unexported tests the execImport path with an unexported function.
+// This exercises the shim generation code path.
+func TestExecImport_Unexported(t *testing.T) {
+	t.Setenv("GOWORK", "off")
+
+	// Create module directory structure
+	moduleDir := t.TempDir()
+	pkgDir := filepath.Join(moduleDir, "api")
+	if err := os.MkdirAll(pkgDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	tygorRoot, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create go.mod at module root
+	goMod := `module testunexported
+
+go 1.21
+
+require github.com/broady/tygor v0.7.4
+
+replace github.com/broady/tygor => ` + tygorRoot + `
+`
+	if err := os.WriteFile(filepath.Join(moduleDir, "go.mod"), []byte(goMod), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Write a library package with unexported export function
+	apiGo := `package api
+
+import (
+	"context"
+	"github.com/broady/tygor"
+)
+
+type PingRequest struct{}
+
+type PingResponse struct {
+	Message string
+}
+
+// unexported - tests shim generation
+func setupApp() *tygor.App {
+	app := tygor.NewApp()
+	svc := app.Service("API")
+	svc.Register("Ping", tygor.Query(func(_ context.Context, req PingRequest) (PingResponse, error) {
+		return PingResponse{Message: "pong"}, nil
+	}))
+	return app
+}
+`
+	if err := os.WriteFile(filepath.Join(pkgDir, "api.go"), []byte(apiGo), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Copy go.sum from tygor root
+	goSum, err := os.ReadFile(filepath.Join(tygorRoot, "go.sum"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(moduleDir, "go.sum"), goSum, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Download dependencies
+	cmd := exec.Command("go", "mod", "download")
+	cmd.Dir = moduleDir
+	cmd.Env = append(os.Environ(), "GOWORK=off")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("go mod download: %v\n%s", err, out)
+	}
+
+	outDir := filepath.Join(pkgDir, "rpc")
+	if err := os.MkdirAll(outDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run with unexported function name (should use shim)
+	output, err := Exec(Options{
+		Export: discover.Export{
+			Name: "setupApp", // lowercase = unexported
+			Type: discover.ExportTypeApp,
+		},
+		OutDir:     outDir,
+		PkgDir:     pkgDir,
+		PkgPath:    "testunexported/api",
+		ModulePath: "testunexported",
+		ModuleDir:  moduleDir,
+	})
+	if err != nil {
+		t.Fatalf("Exec() error: %v\nOutput: %s", err, output)
+	}
+
+	// Verify output was generated
+	typesPath := filepath.Join(outDir, "types.ts")
+	if _, err := os.Stat(typesPath); os.IsNotExist(err) {
+		t.Errorf("types.ts was not generated")
+	}
+
+	manifestPath := filepath.Join(outDir, "manifest.ts")
+	if _, err := os.Stat(manifestPath); os.IsNotExist(err) {
+		t.Errorf("manifest.ts was not generated")
+	}
+
+	// Verify types file contains our types
+	typesFile := filepath.Join(outDir, "types_testunexported_api.ts")
+	content, err := os.ReadFile(typesFile)
+	if err != nil {
+		files, _ := filepath.Glob(filepath.Join(outDir, "*.ts"))
+		t.Fatalf("failed to read types file: %v\nGenerated files: %v", err, files)
+	}
+	if !strings.Contains(string(content), "PingRequest") {
+		t.Errorf("types file missing PingRequest")
+	}
+	if !strings.Contains(string(content), "PingResponse") {
+		t.Errorf("types file missing PingResponse")
+	}
+}
+
 // TestExecImport_MissingPkgPath tests error handling when PkgPath is missing.
 func TestExecImport_MissingPkgPath(t *testing.T) {
 	dir := t.TempDir()

@@ -170,6 +170,9 @@ func execOverlay(opts Options) (output []byte, err error) {
 
 // execImport handles non-main packages by using overlay to create a virtual
 // runner package inside the module that imports the target package.
+//
+// For unexported functions, we also generate a shim file in the target package
+// that exports the function under a known name.
 func execImport(opts Options) (output []byte, err error) {
 	if opts.PkgPath == "" {
 		return nil, fmt.Errorf("PkgPath required for non-main packages")
@@ -184,6 +187,31 @@ func execImport(opts Options) (output []byte, err error) {
 		return nil, fmt.Errorf("create temp dir: %w", err)
 	}
 	defer os.RemoveAll(tmpDir)
+
+	overlay := make(map[string]string)
+
+	// Check if export function is unexported
+	exportFunc := opts.Export.Name
+	isUnexported := len(exportFunc) > 0 && exportFunc[0] >= 'a' && exportFunc[0] <= 'z'
+
+	if isUnexported {
+		// Generate a shim file in the target package that exports the function
+		shimSrc, err := generateShim(opts)
+		if err != nil {
+			return nil, fmt.Errorf("generate shim: %w", err)
+		}
+
+		shimFile := filepath.Join(tmpDir, "tygor_shim_.go")
+		if err := os.WriteFile(shimFile, shimSrc, 0644); err != nil {
+			return nil, fmt.Errorf("write shim: %w", err)
+		}
+
+		// Add shim to overlay in the target package
+		overlay[filepath.Join(opts.PkgDir, "tygor_shim_.go")] = shimFile
+
+		// Update export name to use the shim's exported wrapper
+		opts.Export.Name = "TygorExport_"
+	}
 
 	// Generate runner that imports the target package
 	runnerSrc, err := generateImportRunner(opts)
@@ -204,9 +232,7 @@ func execImport(opts Options) (output []byte, err error) {
 	virtualRunnerDir := filepath.Join(opts.PkgDir, ".tygor-runner")
 	virtualRunnerFile := filepath.Join(virtualRunnerDir, "main.go")
 
-	overlay := map[string]string{
-		virtualRunnerFile: runnerFile,
-	}
+	overlay[virtualRunnerFile] = runnerFile
 
 	overlayData := struct {
 		Replace map[string]string `json:"Replace"`
@@ -649,5 +675,91 @@ func main() {
 	for _, w := range result.Warnings {
 		fmt.Fprintf(os.Stderr, "warning: %s: %s\n", w.Code, w.Message)
 	}
+}
+`
+
+// generateShim creates a file that exports an unexported function.
+// This is used when running tygor gen on a non-main package with an unexported export function.
+func generateShim(opts Options) ([]byte, error) {
+	// Get the package name by parsing an existing file
+	pkgName, err := getPackageName(opts.PkgDir)
+	if err != nil {
+		return nil, fmt.Errorf("get package name: %w", err)
+	}
+
+	var tmplStr string
+	switch opts.Export.Type {
+	case discover.ExportTypeApp:
+		tmplStr = shimAppTemplate
+	case discover.ExportTypeGenerator:
+		tmplStr = shimGeneratorTemplate
+	default:
+		return nil, fmt.Errorf("unknown export type: %v", opts.Export.Type)
+	}
+
+	tmpl, err := template.New("shim").Parse(tmplStr)
+	if err != nil {
+		return nil, err
+	}
+
+	data := struct {
+		PkgName    string
+		ExportFunc string
+	}{
+		PkgName:    pkgName,
+		ExportFunc: opts.Export.Name,
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
+}
+
+// getPackageName returns the package name from the first .go file in the directory.
+func getPackageName(dir string) (string, error) {
+	files, err := filepath.Glob(filepath.Join(dir, "*.go"))
+	if err != nil {
+		return "", err
+	}
+
+	for _, file := range files {
+		// Skip test files
+		base := filepath.Base(file)
+		if base == "_test.go" || len(base) > 8 && base[len(base)-8:] == "_test.go" {
+			continue
+		}
+
+		fset := token.NewFileSet()
+		f, err := parser.ParseFile(fset, file, nil, parser.PackageClauseOnly)
+		if err != nil {
+			continue
+		}
+
+		return f.Name.Name, nil
+	}
+
+	return "", fmt.Errorf("no Go files found in %s", dir)
+}
+
+const shimAppTemplate = `package {{.PkgName}}
+
+import "github.com/broady/tygor"
+
+// TygorExport_ is a generated wrapper to export the unexported function.
+func TygorExport_() *tygor.App {
+	return {{.ExportFunc}}()
+}
+`
+
+const shimGeneratorTemplate = `package {{.PkgName}}
+
+import "github.com/broady/tygor/tygorgen"
+
+// TygorExport_ is a generated wrapper to export the unexported function.
+func TygorExport_() *tygorgen.Generator {
+	return {{.ExportFunc}}()
 }
 `

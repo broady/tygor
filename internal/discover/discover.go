@@ -73,7 +73,7 @@ func Find(pattern string) (*Result, error) {
 func FindDir(pattern, dir string) (*Result, error) {
 	cfg := &packages.Config{
 		Mode: packages.NeedName | packages.NeedFiles |
-			packages.NeedTypes | packages.NeedModule,
+			packages.NeedTypes | packages.NeedModule | packages.NeedSyntax,
 		Dir: dir,
 	}
 
@@ -257,7 +257,7 @@ func SelectExport(exports []Export, name string) (*Export, error) {
 
 	switch len(exports) {
 	case 0:
-		return nil, fmt.Errorf("no export found\n\nAdd a function that returns *tygor.App:\n\n    func SetupApp() *tygor.App {\n        app := tygor.NewApp()\n        // ...\n        return app\n    }")
+		return nil, fmt.Errorf("no export found\n\nAdd a function that returns *tygor.App:\n\n    func setupApp() *tygor.App {\n        app := tygor.NewApp()\n        // ...\n        return app\n    }")
 	case 1:
 		return &exports[0], nil
 	default:
