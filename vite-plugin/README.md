@@ -75,7 +75,8 @@ When you edit a `.go` file:
 | `start` | `(port) => { cmd, env?, cwd? }` | required | Function returning server start command |
 | `build` | `string \| string[]` | - | Build command (e.g., `go build -o ./tmp/server .`) |
 | `gen` | `boolean` | `true` | Run `tygor gen` automatically. Set to `false` to disable |
-| `prebuild` | `string \| string[]` | - | Custom command to run after `tygor gen` but before build |
+| `pregen` | `string \| string[]` | - | Command to run before `tygor gen` (e.g., `sqlc generate`) |
+| `prebuild` | `string \| string[]` | - | Command to run after `tygor gen` but before build |
 | `buildOutput` | `string` | - | Path to build output (creates parent directory) |
 | `rpcDir` | `string` | `'./src/rpc'` | Output directory for `tygor gen` and discovery.json |
 | `proxy` | `string[]` | - | Proxy paths (auto-derived from discovery.json if not set) |
@@ -121,7 +122,23 @@ tygor({
 
 ## Advanced: Custom Codegen
 
-To run additional commands after `tygor gen` (e.g., custom codegen), use `prebuild`:
+The build pipeline runs in this order: `pregen` → `tygor gen` → `prebuild` → `build` → `start`
+
+### pregen: Code generators that produce Go code
+
+Use `pregen` for tools like [sqlc](https://sqlc.dev/) that generate Go code that tygor needs to parse:
+
+```typescript
+tygor({
+  pregen: "sqlc generate",
+  build: "go build -o ./tmp/server .",
+  start: (port) => ({ cmd: `./tmp/server -port=${port}` }),
+})
+```
+
+### prebuild: Post-gen processing
+
+Use `prebuild` for commands that run after `tygor gen`:
 
 ```typescript
 tygor({
@@ -130,6 +147,8 @@ tygor({
   start: (port) => ({ cmd: `./tmp/server -port=${port}` }),
 })
 ```
+
+### Disabling tygor gen
 
 To disable `tygor gen` entirely (e.g., if you're using a different code generator), set `gen: false`:
 

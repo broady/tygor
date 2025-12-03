@@ -14,7 +14,9 @@ import { clientBundle } from "./generated/client-bundle.js";
 export interface TygorDevOptions {
   /** Run tygor gen automatically (default: true). Set to false to disable. */
   gen?: boolean;
-  /** Command to run before starting the server (e.g., custom codegen) */
+  /** Command to run before tygor gen (e.g., sqlc generate). Use for codegen that produces Go code tygor needs to parse. */
+  pregen?: string | string[];
+  /** Command to run after tygor gen but before build (e.g., custom codegen) */
   prebuild?: string | string[];
   /** Build command (e.g., "go build -o ./tmp/server ."). If provided, build errors are distinguished from runtime errors */
   build?: string | string[];
@@ -137,11 +139,12 @@ export function tygor(options: TygorDevOptions): Plugin {
   let nextServer: ServerState | null = null;
   let devServer: DevServerState = { process: null, port: 9000, ready: false };
   let buildError: string | null = null;
-  let errorPhase: "prebuild" | "build" | "runtime" | null = null;
+  let errorPhase: "pregen" | "gen" | "prebuild" | "build" | "runtime" | null = null;
   let errorCommand: string | null = null;
   let errorExitCode: number | null = null;
   let currentPhase: "idle" | "prebuild" | "building" | "starting" = "idle";
   let isReloading = false;
+  let ignoreFileChanges = false; // Ignore file changes during pregen/gen to prevent loops
 
   const log = (msg: string) => console.log(pc.cyan("[tygor]"), msg);
   const logError = (msg: string) => console.log(pc.cyan("[tygor]"), pc.red(msg));
@@ -273,6 +276,28 @@ export function tygor(options: TygorDevOptions): Plugin {
           resolve(false);
         } else {
           if (stdout.trim()) process.stdout.write(pc.dim(stdout));
+          resolve(true);
+        }
+      });
+    });
+  }
+
+  async function runPregen(): Promise<boolean> {
+    if (!opts.pregen) return true;
+
+    const cmd = Array.isArray(opts.pregen) ? opts.pregen.join(" && ") : opts.pregen;
+    log(`Running pregen: ${cmd}`);
+
+    return new Promise((resolve) => {
+      exec(cmd, { cwd: workdir }, (error, stdout, stderr) => {
+        if (error) {
+          buildError = stderr || error.message;
+          errorPhase = "prebuild";
+          errorCommand = cmd;
+          logError(`Pregen failed:\n${buildError}`);
+          resolve(false);
+        } else {
+          if (stdout.trim()) console.log(stdout);
           resolve(true);
         }
       });
@@ -502,12 +527,29 @@ export function tygor(options: TygorDevOptions): Plugin {
     isReloading = true;
 
     log("Detected changes, reloading...");
-    await updateDevServerStatus("building", undefined, "prebuild");
+    await updateDevServerStatus("building", undefined, "pregen");
+
+    // Ignore file changes during pregen/gen to prevent loops from generated files
+    ignoreFileChanges = true;
+
+    // Run pregen (e.g., sqlc generate)
+    const pregenOk = await runPregen();
+    if (!pregenOk) {
+      await updateDevServerStatus("error", buildError ?? "Pregen failed", "pregen");
+      ignoreFileChanges = false;
+      isReloading = false;
+      return;
+    }
 
     // Run tygor gen
+    await updateDevServerStatus("building", undefined, "gen");
     const genOk = await runGen();
+
+    // Re-enable file watching after codegen completes
+    ignoreFileChanges = false;
+
     if (!genOk) {
-      await updateDevServerStatus("error", buildError ?? "tygor gen failed", "prebuild");
+      await updateDevServerStatus("error", buildError ?? "tygor gen failed", "gen");
       isReloading = false;
       return;
     }
@@ -571,6 +613,7 @@ export function tygor(options: TygorDevOptions): Plugin {
   // Debounce reload
   let reloadTimeout: ReturnType<typeof setTimeout> | null = null;
   function scheduleReload() {
+    if (ignoreFileChanges) return; // Ignore changes from pregen/gen output
     if (reloadTimeout) clearTimeout(reloadTimeout);
     reloadTimeout = setTimeout(reload, 300);
   }
@@ -972,27 +1015,46 @@ if (import.meta.hot) {
         logError("tygor devtools failed to start");
       }
 
-      // Initial gen, build, and server start
-      await updateDevServerStatus("building", undefined, "prebuild");
-      const genOk = await runGen();
-      if (!genOk) {
-        await updateDevServerStatus("error", buildError ?? "tygor gen failed", "prebuild");
-        logError("tygor gen failed - fix errors and save to retry");
+      // Initial pregen, gen, prebuild, build, and server start
+      await updateDevServerStatus("building", undefined, "pregen");
+
+      // Ignore file changes during pregen/gen to prevent loops
+      ignoreFileChanges = true;
+      const pregenOk = await runPregen();
+      if (!pregenOk) {
+        await updateDevServerStatus("error", buildError ?? "Pregen failed", "pregen");
+        logError("Pregen failed - fix errors and save to retry");
+        ignoreFileChanges = false;
       } else {
-        await updateDevServerStatus("building", undefined, "build");
-        const buildOk = await runBuild();
-        if (buildOk) {
-          await updateDevServerStatus("starting", undefined, "runtime");
-          currentServer = await startServerWithRetry();
-          if (currentServer.ready) {
-            await updateDevServerStatus("running");
-          } else {
-            await updateDevServerStatus("error", buildError ?? "Server start failed", "runtime");
-            logError("Server start failed - fix errors and save to retry");
-          }
+        await updateDevServerStatus("building", undefined, "gen");
+        const genOk = await runGen();
+        ignoreFileChanges = false;
+        if (!genOk) {
+          await updateDevServerStatus("error", buildError ?? "tygor gen failed", "gen");
+          logError("tygor gen failed - fix errors and save to retry");
         } else {
-          await updateDevServerStatus("error", buildError ?? "Build failed", "build");
-          logError("Build failed - fix errors and save to retry");
+          await updateDevServerStatus("building", undefined, "prebuild");
+          const prebuildOk = await runPrebuild();
+          if (!prebuildOk) {
+            await updateDevServerStatus("error", buildError ?? "Prebuild failed", "prebuild");
+            logError("Prebuild failed - fix errors and save to retry");
+          } else {
+            await updateDevServerStatus("building", undefined, "build");
+            const buildOk = await runBuild();
+            if (buildOk) {
+              await updateDevServerStatus("starting", undefined, "runtime");
+              currentServer = await startServerWithRetry();
+              if (currentServer.ready) {
+                await updateDevServerStatus("running");
+              } else {
+                await updateDevServerStatus("error", buildError ?? "Server start failed", "runtime");
+                logError("Server start failed - fix errors and save to retry");
+              }
+            } else {
+              await updateDevServerStatus("error", buildError ?? "Build failed", "build");
+              logError("Build failed - fix errors and save to retry");
+            }
+          }
         }
       }
 
