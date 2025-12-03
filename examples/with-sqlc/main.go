@@ -59,6 +59,7 @@ func SetupApp() *tygor.App {
 
 	return app
 }
+
 // [/snippet:app-setup]
 
 func TygorConfig(g *tygorgen.Generator) *tygorgen.Generator {
@@ -113,6 +114,7 @@ func CreateTask(ctx context.Context, p CreateTaskParams) (sqlc.Task, error) {
 		Description: p.Description,
 	})
 }
+
 // [/snippet:wrappers]
 
 func main() {

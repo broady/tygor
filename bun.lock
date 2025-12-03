@@ -65,6 +65,21 @@
       "name": "@tygor/testing",
       "version": "0.0.0",
     },
+    "examples/with-sqlc": {
+      "name": "tygor-with-sqlc",
+      "version": "0.0.0",
+      "dependencies": {
+        "@tygor/client": "^0.7.3",
+        "solid-js": "^1.9.0",
+        "zod": "^3.24.0",
+      },
+      "devDependencies": {
+        "@tygor/vite-plugin": "^0.7.3",
+        "typescript": "^5.0.0",
+        "vite": "^6.0.0",
+        "vite-plugin-solid": "^2.11.0",
+      },
+    },
     "vite-plugin": {
       "name": "@tygor/vite-plugin",
       "version": "0.8.0",
@@ -433,6 +448,8 @@
 
     "tygor-starter-solid": ["tygor-starter-solid@workspace:examples/starter-solid"],
 
+    "tygor-with-sqlc": ["tygor-with-sqlc@workspace:examples/with-sqlc"],
+
     "typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "undici-types": ["undici-types@6.21.0", "", {}, "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ=="],
@@ -476,6 +493,10 @@
     "tygor-starter-solid/@tygor/client": ["@tygor/client@0.7.4", "", {}, "sha512-jMk3LJqVehw5Sf/PiWuIrW1WGB+cYQAPfWXbkyvPkrdrN8GkMHBtSzvPo2/b2/uimOxHZoJ5ZYuyZCYipQX1JQ=="],
 
     "tygor-starter-solid/@tygor/vite-plugin": ["@tygor/vite-plugin@0.7.4", "", { "dependencies": { "@tygor/client": "0.7.4", "chokidar": "^3.6.0", "picocolors": "^1.0.0", "solid-js": "^1.9.0" }, "peerDependencies": { "vite": "^5.0.0 || ^6.0.0" } }, "sha512-1hRy/xxzCqRxw1r1G1alA1Yv22JOA4gu+RPX9ZGY/YRjwQk37wO8Ik4S9+RXlSQd8QgKYVZW5Pdv6UFN/Aaabg=="],
+
+    "tygor-with-sqlc/@tygor/client": ["@tygor/client@0.7.4", "", {}, "sha512-jMk3LJqVehw5Sf/PiWuIrW1WGB+cYQAPfWXbkyvPkrdrN8GkMHBtSzvPo2/b2/uimOxHZoJ5ZYuyZCYipQX1JQ=="],
+
+    "tygor-with-sqlc/@tygor/vite-plugin": ["@tygor/vite-plugin@0.7.4", "", { "dependencies": { "@tygor/client": "0.7.4", "chokidar": "^3.6.0", "picocolors": "^1.0.0", "solid-js": "^1.9.0" }, "peerDependencies": { "vite": "^5.0.0 || ^6.0.0" } }, "sha512-1hRy/xxzCqRxw1r1G1alA1Yv22JOA4gu+RPX9ZGY/YRjwQk37wO8Ik4S9+RXlSQd8QgKYVZW5Pdv6UFN/Aaabg=="],
 
     "tygor-devtools-example/@tygor/vite-plugin/@tygor/client": ["@tygor/client@0.7.4", "", {}, "sha512-jMk3LJqVehw5Sf/PiWuIrW1WGB+cYQAPfWXbkyvPkrdrN8GkMHBtSzvPo2/b2/uimOxHZoJ5ZYuyZCYipQX1JQ=="],
   }

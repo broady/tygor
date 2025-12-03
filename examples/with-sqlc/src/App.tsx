@@ -29,9 +29,6 @@ function formatError(err: unknown): string {
   return err instanceof Error ? err.message : "Unknown error";
 }
 
-const TYPE_CHAIN = ["SQL", "sqlc", "Go", "tygor", "TypeScript"];
-const UI_STACK = ["Solid", "Vite"];
-
 // [snippet:client-usage]
 
 export default function App() {
@@ -92,32 +89,7 @@ export default function App() {
 
   return (
     <div class={styles.app}>
-      <h1 class={styles.title}>Tygor Tasks</h1>
-      <div class={styles.tagline}>
-        <span class={styles.taglineLabel}>Type-safe:</span>
-        <For each={TYPE_CHAIN}>
-          {(step, i) => (
-            <>
-              <span class={styles.taglineStep}>{step}</span>
-              {i() < TYPE_CHAIN.length - 1 && (
-                <span class={styles.taglineArrow}>&rarr;</span>
-              )}
-            </>
-          )}
-        </For>
-        <span class={styles.taglineSeparator}>|</span>
-        <span class={styles.taglineLabel}>UI:</span>
-        <For each={UI_STACK}>
-          {(step, i) => (
-            <>
-              <span class={styles.taglineStep}>{step}</span>
-              {i() < UI_STACK.length - 1 && (
-                <span class={styles.taglineArrow}>+</span>
-              )}
-            </>
-          )}
-        </For>
-      </div>
+      <h1>Tygor Tasks</h1>
 
       <div class={styles.controls}>
         <label class={styles.toggle}>
@@ -181,16 +153,11 @@ export default function App() {
                   onChange={() => handleToggle(task)}
                 />
                 <div class={styles.taskContent}>
-                  <div
-                    class={styles.taskTitle}
-                    classList={{ [styles.taskTitleCompleted]: !!task.completed }}
-                  >
+                  <div classList={{ [styles.taskTitleCompleted]: !!task.completed }}>
                     {task.title}
                   </div>
                   <Show when={task.description}>
-                    <div class={styles.taskDescription}>
-                      {task.description}
-                    </div>
+                    <div class={styles.taskDescription}>{task.description}</div>
                   </Show>
                 </div>
                 <button

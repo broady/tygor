@@ -3,3 +3,4 @@ dist/
 .tygor/
 *.log
 data.sqlite.db
+with-sqlc

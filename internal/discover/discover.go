@@ -12,6 +12,7 @@ import (
 	"go/token"
 	"go/types"
 	"path/filepath"
+	"strings"
 
 	"golang.org/x/tools/go/packages"
 )
@@ -92,7 +93,9 @@ func FindDir(pattern, dir string) (*Result, error) {
 
 	pkg := pkgs[0]
 	if len(pkg.Errors) > 0 {
-		return nil, fmt.Errorf("package errors: %v", pkg.Errors[0])
+		// Replace tabs with 2 spaces for cleaner error display
+		errStr := strings.ReplaceAll(pkg.Errors[0].Error(), "\t", "  ")
+		return nil, fmt.Errorf("package errors: %s", errStr)
 	}
 
 	result := &Result{
