@@ -1,5 +1,5 @@
 {
-  "name": "tygor-starter-solid",
+  "name": "tygor-with-sqlc",
   "version": "0.0.0",
   "private": true,
   "type": "module",

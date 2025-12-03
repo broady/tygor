@@ -9,8 +9,10 @@ export default defineConfig({
     solid(),
     tygor({
       proxyPrefix: "/api",
-      // Prebuild: generate Go code from SQL before building
-      prebuild: "sqlc generate",
+      // Pregen: generate Go code from SQL before tygor gen parses it
+      pregen: "sqlc generate",
+      // Watch SQL files and sqlc config in addition to Go files
+      watch: ["**/*.go", "**/*.sql", "sqlc.yaml"],
       // gen: true (default) - runs `tygor gen` to generate TypeScript types
       build: "go build -o ./.tygor/server .",
       buildOutput: "./.tygor/server",
