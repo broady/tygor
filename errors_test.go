@@ -206,17 +206,19 @@ func TestDefaultErrorTransformer_ValidationErrors(t *testing.T) {
 	if result.Code != CodeInvalidArgument {
 		t.Errorf("expected code %s, got %s", CodeInvalidArgument, result.Code)
 	}
-	if result.Message != "validation failed" {
-		t.Errorf("expected message 'validation failed', got %s", result.Message)
-	}
 	if result.Details == nil {
 		t.Fatal("expected details to be non-nil")
 	}
-	if _, ok := result.Details["Email"]; !ok {
-		t.Error("expected Email field in details")
+	if result.Details["Email"] != "must be a valid email address" {
+		t.Errorf("expected Email error, got %v", result.Details["Email"])
 	}
-	if _, ok := result.Details["Age"]; !ok {
-		t.Error("expected Age field in details")
+	if result.Details["Age"] != "must be at least 0" {
+		t.Errorf("expected Age error, got %v", result.Details["Age"])
+	}
+	// Message combines field errors
+	wantMsg := "Email: must be a valid email address; Age: must be at least 0"
+	if result.Message != wantMsg {
+		t.Errorf("expected message %q, got %q", wantMsg, result.Message)
 	}
 }
 

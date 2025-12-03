@@ -68,8 +68,9 @@ func TestWithApp_Validation(t *testing.T) {
 	tygortest.AssertStatus(t, w, http.StatusBadRequest)
 	errResp := tygortest.AssertJSONError(t, w, string(tygor.CodeInvalidArgument))
 
-	if errResp.Message != "validation failed" {
-		t.Errorf("expected validation error message, got %s", errResp.Message)
+	wantMsg := "Email: must be a valid email address"
+	if errResp.Message != wantMsg {
+		t.Errorf("expected message %q, got %q", wantMsg, errResp.Message)
 	}
 }
 
