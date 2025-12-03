@@ -1,5 +1,5 @@
 import { describe, test, expect, mock } from "bun:test";
-import { createClient, TygorError, ServerError, TransportError, ServiceRegistry, Atom, Stream, StreamState } from "./runtime";
+import { createClient, TygorError, ServerError, TransportError, ServiceRegistry, Atom, Stream, SubscriptionResult } from "./runtime";
 
 // Helper to create a mock response
 function mockResponse(status: number, body: any, statusText = "") {
@@ -461,15 +461,13 @@ describe("Atom primitive", () => {
 
     const atom = client.Tasks.SyncedList;
 
-    // Check that atom has the new { data, state } shape
+    // Check that atom has subscribe/getSnapshot shape
     expect(atom).toBeDefined();
-    expect(atom.data).toBeDefined();
-    expect(atom.state).toBeDefined();
-    expect(typeof atom.data.subscribe).toBe("function");
-    expect(typeof atom.state.subscribe).toBe("function");
+    expect(typeof atom.subscribe).toBe("function");
+    expect(typeof atom.getSnapshot).toBe("function");
   });
 
-  test("atom.state.subscribe immediately emits current state", () => {
+  test("atom.subscribe immediately emits current state", () => {
     const mockFetch = mock(async () => mockResponse(200, { result: [] }));
 
     const client = createClient(atomRegistry, {
@@ -478,21 +476,22 @@ describe("Atom primitive", () => {
     });
 
     const atom = client.Tasks.SyncedList;
-    const states: StreamState[] = [];
+    const results: SubscriptionResult<string[]>[] = [];
 
-    const unsubscribe = atom.state.subscribe((state) => {
-      states.push(state);
+    const unsubscribe = atom.subscribe((result) => {
+      results.push(result);
     });
 
-    // Should immediately receive the initial state (disconnected since no data subscription yet)
-    expect(states.length).toBe(1);
-    expect(states[0].status).toBe("disconnected");
-    expect(typeof states[0].since).toBe("number");
+    // Should immediately receive the initial state (connecting since first subscriber)
+    expect(results.length).toBeGreaterThanOrEqual(1);
+    // First result should be connecting
+    expect(results[0].status).toBe("connecting");
+    expect(typeof results[0].statusUpdatedAt).toBe("number");
 
     unsubscribe();
   });
 
-  test("atom.data.subscribe returns unsubscribe function", () => {
+  test("atom.subscribe returns unsubscribe function", () => {
     const mockFetch = mock(async () => mockResponse(200, { result: [] }));
 
     const client = createClient(atomRegistry, {
@@ -501,7 +500,7 @@ describe("Atom primitive", () => {
     });
 
     const atom = client.Tasks.SyncedList;
-    const unsubscribe = atom.data.subscribe(() => {});
+    const unsubscribe = atom.subscribe(() => {});
 
     expect(typeof unsubscribe).toBe("function");
     unsubscribe();
@@ -522,7 +521,7 @@ describe("Stream primitive", () => {
     metadata: streamMetadata,
   };
 
-  test("stream returns object with data and state properties", () => {
+  test("stream returns object with subscribe/getSnapshot and AsyncIterable", () => {
     const mockFetch = mock(async () => mockResponse(200, { result: { time: "now" } }));
 
     const client = createClient(streamRegistry, {
@@ -532,15 +531,15 @@ describe("Stream primitive", () => {
 
     const stream = client.Tasks.Time({});
 
-    // Check that stream has the new { data, state } shape
+    // Check that stream has subscribe/getSnapshot shape
     expect(stream).toBeDefined();
-    expect(stream.data).toBeDefined();
-    expect(stream.state).toBeDefined();
-    expect(typeof stream.data.subscribe).toBe("function");
-    expect(typeof stream.state.subscribe).toBe("function");
+    expect(typeof stream.subscribe).toBe("function");
+    expect(typeof stream.getSnapshot).toBe("function");
+    // And is async iterable
+    expect(typeof stream[Symbol.asyncIterator]).toBe("function");
   });
 
-  test("stream.state.subscribe immediately emits current state", () => {
+  test("stream.subscribe immediately emits current state", () => {
     const mockFetch = mock(async () => mockResponse(200, { result: { time: "now" } }));
 
     const client = createClient(streamRegistry, {
@@ -549,15 +548,16 @@ describe("Stream primitive", () => {
     });
 
     const stream = client.Tasks.Time({});
-    const states: StreamState[] = [];
+    const results: SubscriptionResult<{ time: string }>[] = [];
 
-    const unsubscribe = stream.state.subscribe((state) => {
-      states.push(state);
+    const unsubscribe = stream.subscribe((result) => {
+      results.push(result);
     });
 
-    // Should immediately receive the initial state
-    expect(states.length).toBe(1);
-    expect(states[0].status).toBe("disconnected");
+    // Should immediately receive the initial state (connecting since first subscriber)
+    expect(results.length).toBeGreaterThanOrEqual(1);
+    // First result should be connecting
+    expect(results[0].status).toBe("connecting");
 
     unsubscribe();
   });
