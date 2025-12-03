@@ -68,7 +68,7 @@ interface DevServerState {
 const DEFAULT_OPTIONS = {
   gen: true,
   watch: ["**/*.go"],
-  ignore: ["**/node_modules", "**/.git", "**/tmp", "**/dist"],
+  ignore: ["**/node_modules", "**/.git", "**/.tygor", "**/dist"],
   health: false as const,
   port: 8080,
   rpcDir: "./src/rpc",

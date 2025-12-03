@@ -157,13 +157,20 @@ export interface ClientConfig {
   schemas?: SchemaMap;
   /** Validation options. Only applies if schemas is provided */
   validate?: ValidateConfig;
+  /**
+   * Whether to emit 'tygor:rpc-error' events for devtools to display.
+   * Default: true. Set to false for internal/infrastructure clients
+   * where errors are handled separately (e.g., devtools' own API client).
+   */
+  emitErrors?: boolean;
 }
 
 /**
  * Emit a custom event for tygor devtools to display RPC errors.
- * Only emits in browser environment.
+ * Only emits in browser environment when enabled.
  */
-function emitRpcError(service: string, method: string, code: string, message: string): void {
+function emitRpcError(service: string, method: string, code: string, message: string, enabled: boolean): void {
+  if (!enabled) return;
   if (typeof window !== "undefined" && typeof CustomEvent !== "undefined") {
     window.dispatchEvent(
       new CustomEvent("tygor:rpc-error", {
@@ -294,6 +301,9 @@ export function createClient<Manifest extends Record<string, any>>(
   const validateRequest = schemas && (config.validate?.request ?? true); // Default: true if schemas provided
   const validateResponse = schemas && (config.validate?.response ?? false); // Default: false
 
+  // Whether to emit RPC errors to devtools (default: true)
+  const emitErrors = config.emitErrors ?? true;
+
   // Cache atom clients so multiple accesses return the same instance
   const atomCache = new Map<string, Atom<unknown>>();
 
@@ -325,7 +335,8 @@ export function createClient<Manifest extends Record<string, any>>(
                     fetchFn,
                     schemas,
                     validateRequest,
-                    validateResponse
+                    validateResponse,
+                    emitErrors
                   );
                 };
               }
@@ -343,7 +354,8 @@ export function createClient<Manifest extends Record<string, any>>(
                     fetchFn,
                     schemas,
                     validateRequest,
-                    validateResponse
+                    validateResponse,
+                    emitErrors
                   );
                   atomCache.set(opId, atom);
                 }
@@ -358,7 +370,7 @@ export function createClient<Manifest extends Record<string, any>>(
                   const result = await schema["~standard"].validate(req);
                   if (result.issues) {
                     const err = new ValidationError(opId, "request", result.issues);
-                    emitRpcError(service, method, "validation_error", err.message);
+                    emitRpcError(service, method, "validation_error", err.message, emitErrors);
                     throw err;
                   }
                 }
@@ -406,7 +418,7 @@ export function createClient<Manifest extends Record<string, any>>(
                 } catch (e) {
                   // Network error (server down, CORS, DNS failure, etc.)
                   const msg = e instanceof Error ? e.message : "Network error";
-                  emitRpcError(service, method, "network_error", msg);
+                  emitRpcError(service, method, "network_error", msg, emitErrors);
                   throw new TransportError(msg, 0, e);
                 }
                 const httpStatus = res.status;
@@ -421,20 +433,20 @@ export function createClient<Manifest extends Record<string, any>>(
                 } catch {
                   // JSON parse failed - this is a transport error (proxy HTML page, etc.)
                   const msg = res.statusText || "Failed to parse response";
-                  emitRpcError(service, method, "transport_error", msg);
+                  emitRpcError(service, method, "transport_error", msg, emitErrors);
                   throw new TransportError(msg, httpStatus, undefined, rawBody.slice(0, 1000));
                 }
 
                 // Handle malformed or null envelope
                 if (!envelope || typeof envelope !== "object") {
-                  emitRpcError(service, method, "transport_error", "Invalid response format");
+                  emitRpcError(service, method, "transport_error", "Invalid response format", emitErrors);
                   throw new TransportError("Invalid response format", httpStatus, undefined, rawBody.slice(0, 1000));
                 }
 
                 // Validate envelope has expected structure
                 if (!("result" in envelope) && !("error" in envelope)) {
                   const msg = "Invalid response format: missing result or error field";
-                  emitRpcError(service, method, "transport_error", msg);
+                  emitRpcError(service, method, "transport_error", msg, emitErrors);
                   throw new TransportError(msg, httpStatus, undefined, rawBody.slice(0, 1000));
                 }
 
@@ -442,7 +454,7 @@ export function createClient<Manifest extends Record<string, any>>(
                 if (envelope.error) {
                   const code = (envelope.error.code || "internal") as ErrorCode;
                   const msg = envelope.error.message || "Unknown error";
-                  emitRpcError(service, method, code, msg);
+                  emitRpcError(service, method, code, msg, emitErrors);
                   throw new ServerError(code, msg, httpStatus, envelope.error.details);
                 }
 
@@ -452,7 +464,7 @@ export function createClient<Manifest extends Record<string, any>>(
                   const result = await schema["~standard"].validate(envelope.result);
                   if (result.issues) {
                     const err = new ValidationError(opId, "response", result.issues);
-                    emitRpcError(service, method, "validation_error", err.message);
+                    emitRpcError(service, method, "validation_error", err.message, emitErrors);
                     throw err;
                   }
                 }
@@ -483,7 +495,8 @@ function createSSEStream<T>(
   fetchFn: FetchFunction,
   schemas: SchemaMap | undefined,
   validateRequest: boolean | undefined,
-  validateResponse: boolean | undefined
+  validateResponse: boolean | undefined,
+  emitErrors: boolean
 ): Stream<T> {
   // Combined state (same pattern as Atom)
   let currentData: T | undefined = undefined;
@@ -573,7 +586,7 @@ function createSSEStream<T>(
         const result = await schema["~standard"].validate(req);
         if (result.issues) {
           const err = new ValidationError(opId, "request", result.issues);
-          emitRpcError(service, method, "validation_error", err.message);
+          emitRpcError(service, method, "validation_error", err.message, emitErrors);
           setStatus("error", err);
           return;
         }
@@ -601,7 +614,7 @@ function createSSEStream<T>(
           return;
         }
         const msg = e instanceof Error ? e.message : "Network error";
-        emitRpcError(service, method, "network_error", msg);
+        emitRpcError(service, method, "network_error", msg, emitErrors);
         setStatus("error", new TransportError(msg, 0, e));
         return;
       }
@@ -618,7 +631,7 @@ function createSSEStream<T>(
           if (envelope.error) {
             const code = (envelope.error.code || "internal") as ErrorCode;
             const msg = envelope.error.message || "Unknown error";
-            emitRpcError(service, method, code, msg);
+            emitRpcError(service, method, code, msg, emitErrors);
             setStatus("error", new ServerError(code, msg, httpStatus, envelope.error.details));
             return;
           }
@@ -628,7 +641,7 @@ function createSSEStream<T>(
             return;
           }
           const msg = res.statusText || "Failed to establish stream";
-          emitRpcError(service, method, "transport_error", msg);
+          emitRpcError(service, method, "transport_error", msg, emitErrors);
           setStatus("error", new TransportError(msg, httpStatus, undefined, rawBody.slice(0, 1000)));
           return;
         }
@@ -671,7 +684,7 @@ function createSSEStream<T>(
                   if (envelope.error) {
                     const code = (envelope.error.code || "internal") as ErrorCode;
                     const msg = envelope.error.message || "Unknown error";
-                    emitRpcError(service, method, code, msg);
+                    emitRpcError(service, method, code, msg, emitErrors);
                     setStatus("error", new ServerError(code, msg, httpStatus, envelope.error.details));
                     return;
                   }
@@ -682,7 +695,7 @@ function createSSEStream<T>(
                     const result = await schema["~standard"].validate(envelope.result);
                     if (result.issues) {
                       const err = new ValidationError(opId, "response", result.issues);
-                      emitRpcError(service, method, "validation_error", err.message);
+                      emitRpcError(service, method, "validation_error", err.message, emitErrors);
                       setStatus("error", err);
                       return;
                     }
@@ -695,7 +708,7 @@ function createSSEStream<T>(
                     setStatus("error", e);
                     return;
                   }
-                  emitRpcError(service, method, "transport_error", "Failed to parse SSE event");
+                  emitRpcError(service, method, "transport_error", "Failed to parse SSE event", emitErrors);
                   setStatus("error", new TransportError("Failed to parse SSE event", httpStatus, e, data));
                   return;
                 }
@@ -865,7 +878,8 @@ function createAtomClient<T>(
   fetchFn: FetchFunction,
   schemas: SchemaMap | undefined,
   validateRequest: boolean | undefined,
-  validateResponse: boolean | undefined
+  validateResponse: boolean | undefined,
+  emitErrors: boolean
 ): Atom<T> {
   // Combined state
   let currentData: T | undefined = undefined;
@@ -954,7 +968,7 @@ function createAtomClient<T>(
           return;
         }
         const msg = e instanceof Error ? e.message : "Network error";
-        emitRpcError(service, method, "network_error", msg);
+        emitRpcError(service, method, "network_error", msg, emitErrors);
         setStatus("error", new TransportError(msg, 0, e));
         return;
       }
@@ -971,7 +985,7 @@ function createAtomClient<T>(
           if (envelope.error) {
             const code = (envelope.error.code || "internal") as ErrorCode;
             const msg = envelope.error.message || "Unknown error";
-            emitRpcError(service, method, code, msg);
+            emitRpcError(service, method, code, msg, emitErrors);
             setStatus("error", new ServerError(code, msg, httpStatus, envelope.error.details));
             return;
           }
@@ -981,7 +995,7 @@ function createAtomClient<T>(
             return;
           }
           const msg = res.statusText || "Failed to establish atom subscription";
-          emitRpcError(service, method, "transport_error", msg);
+          emitRpcError(service, method, "transport_error", msg, emitErrors);
           setStatus("error", new TransportError(msg, httpStatus, undefined, rawBody.slice(0, 1000)));
           return;
         }
@@ -1024,7 +1038,7 @@ function createAtomClient<T>(
                   if (envelope.error) {
                     const code = (envelope.error.code || "internal") as ErrorCode;
                     const msg = envelope.error.message || "Unknown error";
-                    emitRpcError(service, method, code, msg);
+                    emitRpcError(service, method, code, msg, emitErrors);
                     setStatus("error", new ServerError(code, msg, httpStatus, envelope.error.details));
                     return;
                   }
@@ -1035,7 +1049,7 @@ function createAtomClient<T>(
                     const result = await schema["~standard"].validate(envelope.result);
                     if (result.issues) {
                       const err = new ValidationError(opId, "response", result.issues);
-                      emitRpcError(service, method, "validation_error", err.message);
+                      emitRpcError(service, method, "validation_error", err.message, emitErrors);
                       setStatus("error", err);
                       return;
                     }
@@ -1048,7 +1062,7 @@ function createAtomClient<T>(
                     setStatus("error", e);
                     return;
                   }
-                  emitRpcError(service, method, "transport_error", "Failed to parse atom event");
+                  emitRpcError(service, method, "transport_error", "Failed to parse atom event", emitErrors);
                   setStatus("error", new TransportError("Failed to parse atom event", httpStatus, e, data));
                   return;
                 }

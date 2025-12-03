@@ -67,41 +67,46 @@ export function DevTools() {
   });
 
   // Create client for tygor dev API
-  const devClient = createClient(devserverRegistry, { baseUrl: "/__tygor" });
+  // emitErrors: false prevents devtools' own RPC errors from showing in the UI
+  // (e.g., when vite server shuts down, we handle disconnection separately)
+  const devClient = createClient(devserverRegistry, { baseUrl: "/__tygor", emitErrors: false });
 
   // Subscribe to status stream from server
   createEffect(() => {
-    const unsubscribe = devClient.Devtools.GetStatus({}).data.subscribe(
-      (data) => {
-        setState((prev) => {
-          const next = { ...prev, status: data };
-
-          if (data.status === "ok") {
-            next.disconnectedSince = null;
-          } else if (data.status === "error") {
-            next.disconnectedSince = null;
-            if (prev.status?.status !== "error" || (prev.status?.status === "error" && prev.status.error !== data.error)) {
-              next.errorSince = Date.now();
-            }
-          } else {
-            // reloading, starting, disconnected
-            if (prev.disconnectedSince === null) {
-              next.disconnectedSince = Date.now();
-            }
-          }
-
-          return next;
-        });
-      },
-      () => {
-        // Error handler - server disconnected
+    const unsubscribe = devClient.Devtools.GetStatus({}).subscribe((result) => {
+      if (result.isError || result.isDisconnected) {
+        // Error/disconnected - server disconnected
         setState((prev) => ({
           ...prev,
           status: { status: "vite_disconnected" },
           disconnectedSince: prev.disconnectedSince ?? Date.now(),
         }));
+        return;
       }
-    );
+
+      const data = result.data;
+      if (!data) return;
+
+      setState((prev) => {
+        const next = { ...prev, status: data };
+
+        if (data.status === "ok") {
+          next.disconnectedSince = null;
+        } else if (data.status === "error") {
+          next.disconnectedSince = null;
+          if (prev.status?.status !== "error" || (prev.status?.status === "error" && prev.status.error !== data.error)) {
+            next.errorSince = Date.now();
+          }
+        } else {
+          // reloading, starting, disconnected
+          if (prev.disconnectedSince === null) {
+            next.disconnectedSince = Date.now();
+          }
+        }
+
+        return next;
+      });
+    });
 
     onCleanup(unsubscribe);
   });
