@@ -2,7 +2,7 @@ import { spawn, ChildProcess, exec } from "node:child_process";
 import { resolve, dirname } from "node:path";
 import { mkdirSync, readFileSync, existsSync } from "node:fs";
 import { createServer } from "node:net";
-import { request as httpRequest } from "node:http";
+import { request as httpRequest, ClientRequest } from "node:http";
 import { watch } from "chokidar";
 import type { Plugin, ViteDevServer } from "vite";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -548,6 +548,9 @@ export function tygor(options: TygorDevOptions): Plugin {
       log(pc.green(`Switched to port ${currentServer.port}`));
       await updateDevServerStatus("running");
 
+      // Close any active SSE connections to the old server so clients reconnect to new one
+      closeConnectionsForPort(oldServer.port);
+
       // Give the proxy time to route to new server before killing old one
       setTimeout(() => {
         log(`Killing old server on port ${oldServer.port}`);
@@ -606,6 +609,35 @@ export function tygor(options: TygorDevOptions): Plugin {
   }
 
   let proxyPaths = loadProxyPaths();
+
+  // Track active proxy connections per port so we can close them on server swap
+  // This is needed because SSE connections stay open indefinitely
+  const activeConnections = new Map<number, Set<{ req: ClientRequest; res: ServerResponse }>>();
+
+  function trackConnection(port: number, req: ClientRequest, res: ServerResponse) {
+    if (!activeConnections.has(port)) {
+      activeConnections.set(port, new Set());
+    }
+    const conn = { req, res };
+    activeConnections.get(port)!.add(conn);
+    return () => {
+      activeConnections.get(port)?.delete(conn);
+    };
+  }
+
+  function closeConnectionsForPort(port: number) {
+    const conns = activeConnections.get(port);
+    if (conns && conns.size > 0) {
+      log(`Closing ${conns.size} active connection(s) to port ${port}`);
+      for (const { req, res } of conns) {
+        req.destroy();
+        if (!res.writableEnded) {
+          res.end();
+        }
+      }
+      conns.clear();
+    }
+  }
 
   // Extract service names for mismatch detection (computed once, updated on reload)
   function getServiceNames(): string[] {
@@ -671,14 +703,60 @@ export function tygor(options: TygorDevOptions): Plugin {
         headers: req.headers,
       },
       (proxyRes) => {
+        // For SSE streams, disable buffering
         res.writeHead(proxyRes.statusCode ?? 500, proxyRes.headers);
-        proxyRes.pipe(res);
+
+        // Manual piping for better control over SSE/streaming responses
+        proxyRes.on("data", (chunk) => {
+          res.write(chunk);
+          // Flush immediately for SSE - don't let Node buffer
+          if (typeof (res as any).flush === "function") {
+            (res as any).flush();
+          }
+        });
+
+        proxyRes.on("end", () => {
+          untrack();
+          res.end();
+        });
+
+        proxyRes.on("close", () => {
+          untrack();
+          if (!res.writableEnded) {
+            res.end();
+          }
+        });
+
+        proxyRes.on("error", () => {
+          untrack();
+          if (!res.writableEnded) {
+            res.end();
+          }
+        });
       }
     );
 
+    // Track this connection so we can close it on server swap
+    const untrack = trackConnection(port, proxyReq, res);
+
     proxyReq.on("error", () => {
-      res.writeHead(503, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: { code: "server_unavailable", message: "Go server is starting..." } }));
+      untrack();
+      if (!res.headersSent) {
+        res.writeHead(503, { "Content-Type": "application/json" });
+      }
+      if (!res.writableEnded) {
+        res.end(JSON.stringify({ error: { code: "server_unavailable", message: "Go server is starting..." } }));
+      }
+    });
+
+    // Handle client disconnect - abort upstream request
+    // Note: For POST requests, 'close' fires when request body is fully received,
+    // not when client disconnects. We use res.on("close") to detect actual disconnect.
+    res.on("close", () => {
+      untrack();
+      if (!proxyReq.destroyed) {
+        proxyReq.destroy();
+      }
     });
 
     req.pipe(proxyReq);

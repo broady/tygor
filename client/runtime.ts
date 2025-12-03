@@ -188,79 +188,89 @@ export interface StreamOptions {
 
 /**
  * Stream represents a server-sent event stream.
- * It provides both data values and connection state as subscribables.
+ * It provides subscription to the latest value plus AsyncIterable for consuming all events.
  *
  * @example
- * // React
- * const stream = client.System.InfoStream({});
- * useEffect(() => stream.data.subscribe(setInfo), []);
- * useEffect(() => stream.state.subscribe(setConnectionState), []);
+ * // React - subscribe to latest value (same as Atom)
+ * const result = useSyncExternalStore(
+ *   stream.subscribe,
+ *   stream.getSnapshot,
+ *   stream.getSnapshot
+ * );
  *
- * // For await (data only)
- * for await (const info of stream) {
- *   console.log(info);
+ * // For await - consume each event
+ * for await (const event of stream) {
+ *   console.log(event);
  * }
  */
 export interface Stream<T> extends AsyncIterable<T> {
-  /** Subscribe to the stream's data values */
-  data: Subscribable<T>;
-  /** Subscribe to the connection state */
-  state: Subscribable<StreamState>;
+  /** Subscribe to state changes. Returns unsubscribe function. */
+  subscribe(listener: (result: SubscriptionResult<T>) => void): () => void;
+  /** Get the current snapshot synchronously. */
+  getSnapshot(): SubscriptionResult<T>;
 }
 
 /**
- * Subscribable represents a value that can be subscribed to.
- * This is the common interface for both data and state subscriptions.
+ * SubscriptionStatus represents the connection state of a subscription.
  */
-export interface Subscribable<T> {
-  /**
-   * Subscribe to value changes. Returns an unsubscribe function.
-   *
-   * @param onValue - Called with current value immediately, then on each update
-   * @param onError - Optional error handler. AbortErrors from cleanup are automatically ignored.
-   * @returns Unsubscribe function that cancels the subscription
-   */
-  subscribe(onValue: (value: T) => void, onError?: (error: Error) => void): () => void;
+export type SubscriptionStatus = "connecting" | "connected" | "error" | "disconnected";
+
+/**
+ * SubscriptionResult is the combined state of a subscription (Atom or Stream).
+ * Follows a similar pattern to TanStack Query's QueryObserverResult.
+ */
+export interface SubscriptionResult<T> {
+  /** The current data value, if available */
+  data: T | undefined;
+  /** Connection status */
+  status: SubscriptionStatus;
+  /** Error if status is 'error' */
+  error: Error | undefined;
+  /** Timestamp when status last changed */
+  statusUpdatedAt: number;
+  /** Timestamp when data was last updated */
+  dataUpdatedAt: number | undefined;
+  /** Convenience: true if status === 'connecting' */
+  isConnecting: boolean;
+  /** Convenience: true if status === 'connected' */
+  isConnected: boolean;
+  /** Convenience: true if status === 'error' */
+  isError: boolean;
+  /** Convenience: true if status === 'disconnected' */
+  isDisconnected: boolean;
 }
 
 /**
- * StreamState represents the connection state of a stream or atom subscription.
- * Each state includes a timestamp indicating when the state changed.
- */
-export type StreamState =
-  | { status: "connecting"; since: number }
-  | { status: "connected"; since: number }
-  | { status: "reconnecting"; since: number; attempt: number }
-  | { status: "disconnected"; since: number }
-  | { status: "error"; since: number; error: Error };
-
-/**
- * Atom represents a synchronized state value.
- * Unlike streams which emit events, atoms represent current state.
- * The callback is called immediately with the current value,
- * then again whenever the value changes on the server.
+ * Atom represents a server-side state that syncs to clients in real-time.
+ *
+ * The subscribe method follows the external store contract expected by
+ * React's useSyncExternalStore and similar patterns in other frameworks.
  *
  * @example
- * // React
- * const { data, state } = client.Status.Current;
- * useEffect(() => data.subscribe(setStatus), []);
- * useEffect(() => state.subscribe(setConnectionState), []);
+ * // Vanilla JS
+ * const unsubscribe = client.Message.State.subscribe((result) => {
+ *   console.log(result.status, result.data);
+ * });
  *
- * // Vanilla
- * const { data, state } = client.Status.Current;
- * const unsubData = data.subscribe(
- *   (status) => console.log("Status:", status),
- *   (error) => console.error("Error:", error)
+ * // React with useSyncExternalStore
+ * const result = useSyncExternalStore(
+ *   atom.subscribe,
+ *   atom.getSnapshot,
+ *   atom.getSnapshot
  * );
- * const unsubState = state.subscribe(
- *   (s) => console.log(`Connection: ${s.status} since ${new Date(s.since).toISOString()}`)
+ *
+ * // Or use a selector for granular updates
+ * const data = useSyncExternalStore(
+ *   atom.subscribe,
+ *   () => atom.getSnapshot().data,
+ *   () => atom.getSnapshot().data
  * );
  */
 export interface Atom<T> {
-  /** Subscribe to the atom's data values */
-  data: Subscribable<T>;
-  /** Subscribe to the connection state */
-  state: Subscribable<StreamState>;
+  /** Subscribe to all atom state changes. Returns unsubscribe function. */
+  subscribe(listener: (result: SubscriptionResult<T>) => void): () => void;
+  /** Get the current snapshot synchronously. */
+  getSnapshot(): SubscriptionResult<T>;
 }
 
 export function createClient<Manifest extends Record<string, any>>(
@@ -450,7 +460,7 @@ export function createClient<Manifest extends Record<string, any>>(
 
 /**
  * Creates a Stream that emits SSE events from the server.
- * Returns { data, state } where both are subscribable, plus AsyncIterable support.
+ * Supports both subscribe/getSnapshot (for reactive frameworks) and AsyncIterable (for await).
  */
 function createSSEStream<T>(
   opId: string,
@@ -465,21 +475,65 @@ function createSSEStream<T>(
   validateRequest: boolean | undefined,
   validateResponse: boolean | undefined
 ): Stream<T> {
-  // State management
-  let currentState: StreamState = { status: "disconnected", since: Date.now() };
-  const stateListeners = new Set<(state: StreamState) => void>();
+  // Combined state (same pattern as Atom)
+  let currentData: T | undefined = undefined;
+  let currentStatus: SubscriptionStatus = "disconnected";
+  let currentError: Error | undefined = undefined;
+  let statusUpdatedAt = Date.now();
+  let dataUpdatedAt: number | undefined = undefined;
 
-  const setState = (state: StreamState) => {
-    currentState = state;
-    stateListeners.forEach((listener) => listener(state));
+  // Listeners get notified on any state change
+  const listeners = new Set<(result: SubscriptionResult<T>) => void>();
+  // Separate data listeners for AsyncIterator
+  const dataListeners = new Set<(value: T) => void>();
+
+  const getSnapshot = (): SubscriptionResult<T> => {
+    return makeSubscriptionResult(currentStatus, currentData, currentError, statusUpdatedAt, dataUpdatedAt);
   };
 
-  // Data subscribers
-  const dataListeners = new Set<{ onValue: (value: T) => void; onError?: (error: Error) => void }>();
+  const notify = () => {
+    const result = getSnapshot();
+    listeners.forEach((listener) => listener(result));
+  };
+
+  const setStatus = (status: SubscriptionStatus, error?: Error) => {
+    currentStatus = status;
+    currentError = error;
+    statusUpdatedAt = Date.now();
+    notify();
+  };
+
+  const setData = (data: T) => {
+    currentData = data;
+    dataUpdatedAt = Date.now();
+    // Notify data listeners for AsyncIterator
+    dataListeners.forEach((listener) => listener(data));
+    notify();
+  };
 
   // Connection state
   let controller: AbortController | null = null;
   let connectionPromise: Promise<void> | null = null;
+  let reconnectAttempt = 0;
+  let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+  // Track if we were intentionally aborted (user-provided signal)
+  let userAborted = false;
+
+  const scheduleReconnect = () => {
+    // Don't reconnect if user aborted or no listeners
+    if (userAborted || (listeners.size === 0 && dataListeners.size === 0)) return;
+
+    reconnectAttempt++;
+    // Exponential backoff: 100ms, 200ms, 400ms, 800ms, 1600ms, max 3000ms
+    const delay = Math.min(100 * Math.pow(2, reconnectAttempt - 1), 3000);
+
+    reconnectTimeout = setTimeout(() => {
+      reconnectTimeout = null;
+      if (listeners.size > 0 || dataListeners.size > 0) {
+        connect();
+      }
+    }, delay);
+  };
 
   const connect = () => {
     if (connectionPromise) return connectionPromise;
@@ -487,10 +541,18 @@ function createSSEStream<T>(
     controller = new AbortController();
     // Combine with options signal if provided
     if (options?.signal) {
-      options.signal.addEventListener("abort", () => controller?.abort());
+      if (options.signal.aborted) {
+        userAborted = true;
+        setStatus("disconnected");
+        return Promise.resolve();
+      }
+      options.signal.addEventListener("abort", () => {
+        userAborted = true;
+        controller?.abort();
+      });
     }
 
-    setState({ status: "connecting", since: Date.now() });
+    setStatus("connecting");
 
     connectionPromise = (async () => {
       // Request validation (before sending)
@@ -500,8 +562,7 @@ function createSSEStream<T>(
         if (result.issues) {
           const err = new ValidationError(opId, "request", result.issues);
           emitRpcError(service, method, "validation_error", err.message);
-          setState({ status: "error", since: Date.now(), error: err });
-          dataListeners.forEach((l) => l.onError?.(err));
+          setStatus("error", err);
           return;
         }
       }
@@ -524,14 +585,12 @@ function createSSEStream<T>(
         res = await fetchFn(url, fetchOptions);
       } catch (e) {
         if ((e as Error).name === "AbortError") {
-          setState({ status: "disconnected", since: Date.now() });
+          setStatus("disconnected");
           return;
         }
         const msg = e instanceof Error ? e.message : "Network error";
         emitRpcError(service, method, "network_error", msg);
-        const err = new TransportError(msg, 0, e);
-        setState({ status: "error", since: Date.now(), error: err });
-        dataListeners.forEach((l) => l.onError?.(err));
+        setStatus("error", new TransportError(msg, 0, e));
         return;
       }
 
@@ -548,34 +607,28 @@ function createSSEStream<T>(
             const code = (envelope.error.code || "internal") as ErrorCode;
             const msg = envelope.error.message || "Unknown error";
             emitRpcError(service, method, code, msg);
-            const err = new ServerError(code, msg, httpStatus, envelope.error.details);
-            setState({ status: "error", since: Date.now(), error: err });
-            dataListeners.forEach((l) => l.onError?.(err));
+            setStatus("error", new ServerError(code, msg, httpStatus, envelope.error.details));
             return;
           }
         } catch (e) {
           if (e instanceof ServerError) {
-            setState({ status: "error", since: Date.now(), error: e });
-            dataListeners.forEach((l) => l.onError?.(e));
+            setStatus("error", e);
             return;
           }
           const msg = res.statusText || "Failed to establish stream";
           emitRpcError(service, method, "transport_error", msg);
-          const err = new TransportError(msg, httpStatus, undefined, rawBody.slice(0, 1000));
-          setState({ status: "error", since: Date.now(), error: err });
-          dataListeners.forEach((l) => l.onError?.(err));
+          setStatus("error", new TransportError(msg, httpStatus, undefined, rawBody.slice(0, 1000)));
           return;
         }
       }
 
       if (!res.body) {
-        const err = new TransportError("Response body is null", httpStatus);
-        setState({ status: "error", since: Date.now(), error: err });
-        dataListeners.forEach((l) => l.onError?.(err));
+        setStatus("error", new TransportError("Response body is null", httpStatus));
         return;
       }
 
-      setState({ status: "connected", since: Date.now() });
+      setStatus("connected");
+      reconnectAttempt = 0; // Reset on successful connection
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -606,9 +659,7 @@ function createSSEStream<T>(
                     const code = (envelope.error.code || "internal") as ErrorCode;
                     const msg = envelope.error.message || "Unknown error";
                     emitRpcError(service, method, code, msg);
-                    const err = new ServerError(code, msg, httpStatus, envelope.error.details);
-                    setState({ status: "error", since: Date.now(), error: err });
-                    dataListeners.forEach((l) => l.onError?.(err));
+                    setStatus("error", new ServerError(code, msg, httpStatus, envelope.error.details));
                     return;
                   }
 
@@ -619,24 +670,20 @@ function createSSEStream<T>(
                     if (result.issues) {
                       const err = new ValidationError(opId, "response", result.issues);
                       emitRpcError(service, method, "validation_error", err.message);
-                      setState({ status: "error", since: Date.now(), error: err });
-                      dataListeners.forEach((l) => l.onError?.(err));
+                      setStatus("error", err);
                       return;
                     }
                   }
 
-                  // Broadcast to all data listeners
-                  dataListeners.forEach((l) => l.onValue(envelope.result as T));
+                  // Update data (notifies both listeners and dataListeners)
+                  setData(envelope.result as T);
                 } catch (e) {
                   if (e instanceof ServerError || e instanceof ValidationError) {
-                    setState({ status: "error", since: Date.now(), error: e });
-                    dataListeners.forEach((l) => l.onError?.(e));
+                    setStatus("error", e);
                     return;
                   }
                   emitRpcError(service, method, "transport_error", "Failed to parse SSE event");
-                  const err = new TransportError("Failed to parse SSE event", httpStatus, e, data);
-                  setState({ status: "error", since: Date.now(), error: err });
-                  dataListeners.forEach((l) => l.onError?.(err));
+                  setStatus("error", new TransportError("Failed to parse SSE event", httpStatus, e, data));
                   return;
                 }
               }
@@ -647,14 +694,16 @@ function createSSEStream<T>(
         reader.releaseLock();
       }
 
-      setState({ status: "disconnected", since: Date.now() });
+      setStatus("disconnected");
+      scheduleReconnect();
     })().catch((err) => {
+      // Silently ignore AbortError from cleanup (intentional disconnect)
       if (err.name === "AbortError") {
-        setState({ status: "disconnected", since: Date.now() });
+        setStatus("disconnected");
         return;
       }
-      setState({ status: "error", since: Date.now(), error: err });
-      dataListeners.forEach((l) => l.onError?.(err));
+      setStatus("error", err);
+      scheduleReconnect();
     }).finally(() => {
       connectionPromise = null;
       controller = null;
@@ -664,6 +713,12 @@ function createSSEStream<T>(
   };
 
   const disconnect = () => {
+    // Cancel any pending reconnect
+    if (reconnectTimeout) {
+      clearTimeout(reconnectTimeout);
+      reconnectTimeout = null;
+    }
+    reconnectAttempt = 0;
     if (controller) {
       controller.abort();
       controller = null;
@@ -677,27 +732,29 @@ function createSSEStream<T>(
     let resolveNext: ((result: IteratorResult<T>) => void) | null = null;
     let iteratorDone = false;
 
-    const listener = {
-      onValue: (value: T) => {
-        if (resolveNext) {
-          resolveNext({ done: false, value });
-          resolveNext = null;
-        } else {
-          values.push(value);
-        }
-      },
-      onError: (error: Error) => {
+    const onData = (value: T) => {
+      if (resolveNext) {
+        resolveNext({ done: false, value });
+        resolveNext = null;
+      } else {
+        values.push(value);
+      }
+    };
+
+    // Also listen for errors/completion via status changes
+    const onStatus = (result: SubscriptionResult<T>) => {
+      if (result.status === "error" || result.status === "disconnected") {
         iteratorDone = true;
         if (resolveNext) {
-          // Reject would require a different approach; for now complete
           resolveNext({ done: true, value: undefined as any });
           resolveNext = null;
         }
-      },
+      }
     };
 
-    dataListeners.add(listener);
-    if (dataListeners.size === 1) {
+    dataListeners.add(onData);
+    listeners.add(onStatus);
+    if (dataListeners.size === 1 && listeners.size === 1) {
       connect();
     }
 
@@ -714,8 +771,9 @@ function createSSEStream<T>(
         });
       },
       async return(): Promise<IteratorResult<T>> {
-        dataListeners.delete(listener);
-        if (dataListeners.size === 0) {
+        dataListeners.delete(onData);
+        listeners.delete(onStatus);
+        if (dataListeners.size === 0 && listeners.size === 0) {
           disconnect();
         }
         return { done: true, value: undefined as any };
@@ -728,34 +786,49 @@ function createSSEStream<T>(
       return createAsyncIterator();
     },
 
-    data: {
-      subscribe(onValue: (value: T) => void, onError?: (error: Error) => void): () => void {
-        const listener = { onValue, onError };
-        dataListeners.add(listener);
+    subscribe(listener: (result: SubscriptionResult<T>) => void): () => void {
+      listeners.add(listener);
 
-        if (dataListeners.size === 1) {
-          connect();
+      // Start connection if this is the first subscriber
+      if (listeners.size === 1 && dataListeners.size === 0) {
+        connect();
+      }
+
+      // Immediately emit current state
+      listener(getSnapshot());
+
+      return () => {
+        listeners.delete(listener);
+        if (listeners.size === 0 && dataListeners.size === 0) {
+          disconnect();
         }
-
-        return () => {
-          dataListeners.delete(listener);
-          if (dataListeners.size === 0) {
-            disconnect();
-          }
-        };
-      },
+      };
     },
 
-    state: {
-      subscribe(onState: (state: StreamState) => void): () => void {
-        stateListeners.add(onState);
-        onState(currentState);
+    getSnapshot,
+  };
+}
 
-        return () => {
-          stateListeners.delete(onState);
-        };
-      },
-    },
+/**
+ * Helper to create a SubscriptionResult from current state.
+ */
+function makeSubscriptionResult<T>(
+  status: SubscriptionStatus,
+  data: T | undefined,
+  error: Error | undefined,
+  statusUpdatedAt: number,
+  dataUpdatedAt: number | undefined
+): SubscriptionResult<T> {
+  return {
+    data,
+    status,
+    error,
+    statusUpdatedAt,
+    dataUpdatedAt,
+    isConnecting: status === "connecting",
+    isConnected: status === "connected",
+    isError: status === "error",
+    isDisconnected: status === "disconnected",
   };
 }
 
@@ -764,9 +837,8 @@ function createSSEStream<T>(
  * Unlike streams, atoms represent current state - subscribers get the
  * current value immediately, then updates as they occur.
  *
- * Returns { data, state } where both are subscribable:
- * - data: the actual values from the server
- * - state: the connection state (connecting, connected, error, etc.)
+ * Follows the external store contract (subscribe + getSnapshot) for
+ * compatibility with React's useSyncExternalStore and similar patterns.
  */
 function createAtomClient<T>(
   opId: string,
@@ -779,27 +851,65 @@ function createAtomClient<T>(
   validateRequest: boolean | undefined,
   validateResponse: boolean | undefined
 ): Atom<T> {
-  // State management - shared across all subscribers
-  let currentState: StreamState = { status: "disconnected", since: Date.now() };
-  const stateListeners = new Set<(state: StreamState) => void>();
+  // Combined state
+  let currentData: T | undefined = undefined;
+  let currentStatus: SubscriptionStatus = "disconnected";
+  let currentError: Error | undefined = undefined;
+  let statusUpdatedAt = Date.now();
+  let dataUpdatedAt: number | undefined = undefined;
 
-  const setState = (state: StreamState) => {
-    currentState = state;
-    stateListeners.forEach((listener) => listener(state));
+  // Listeners get notified on any state change
+  const listeners = new Set<(result: SubscriptionResult<T>) => void>();
+
+  const getSnapshot = (): SubscriptionResult<T> => {
+    return makeSubscriptionResult(currentStatus, currentData, currentError, statusUpdatedAt, dataUpdatedAt);
   };
 
-  // Data subscribers
-  const dataListeners = new Set<{ onValue: (value: T) => void; onError?: (error: Error) => void }>();
+  const notify = () => {
+    const result = getSnapshot();
+    listeners.forEach((listener) => listener(result));
+  };
+
+  const setStatus = (status: SubscriptionStatus, error?: Error) => {
+    currentStatus = status;
+    currentError = error;
+    statusUpdatedAt = Date.now();
+    notify();
+  };
+
+  const setData = (data: T) => {
+    currentData = data;
+    dataUpdatedAt = Date.now();
+    notify();
+  };
 
   // Single shared connection
   let controller: AbortController | null = null;
   let connectionPromise: Promise<void> | null = null;
+  let reconnectAttempt = 0;
+  let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  const scheduleReconnect = () => {
+    // Only reconnect if we still have listeners
+    if (listeners.size === 0) return;
+
+    reconnectAttempt++;
+    // Exponential backoff: 100ms, 200ms, 400ms, 800ms, 1600ms, max 3000ms
+    const delay = Math.min(100 * Math.pow(2, reconnectAttempt - 1), 3000);
+
+    reconnectTimeout = setTimeout(() => {
+      reconnectTimeout = null;
+      if (listeners.size > 0) {
+        connect();
+      }
+    }, delay);
+  };
 
   const connect = () => {
     if (connectionPromise) return connectionPromise;
 
     controller = new AbortController();
-    setState({ status: "connecting", since: Date.now() });
+    setStatus("connecting");
 
     connectionPromise = (async () => {
       const req = {};
@@ -822,14 +932,12 @@ function createAtomClient<T>(
         res = await fetchFn(url, fetchOptions);
       } catch (e) {
         if ((e as Error).name === "AbortError") {
-          setState({ status: "disconnected", since: Date.now() });
+          setStatus("disconnected");
           return;
         }
         const msg = e instanceof Error ? e.message : "Network error";
         emitRpcError(service, method, "network_error", msg);
-        const err = new TransportError(msg, 0, e);
-        setState({ status: "error", since: Date.now(), error: err });
-        dataListeners.forEach((l) => l.onError?.(err));
+        setStatus("error", new TransportError(msg, 0, e));
         return;
       }
 
@@ -846,34 +954,28 @@ function createAtomClient<T>(
             const code = (envelope.error.code || "internal") as ErrorCode;
             const msg = envelope.error.message || "Unknown error";
             emitRpcError(service, method, code, msg);
-            const err = new ServerError(code, msg, httpStatus, envelope.error.details);
-            setState({ status: "error", since: Date.now(), error: err });
-            dataListeners.forEach((l) => l.onError?.(err));
+            setStatus("error", new ServerError(code, msg, httpStatus, envelope.error.details));
             return;
           }
         } catch (e) {
           if (e instanceof ServerError) {
-            setState({ status: "error", since: Date.now(), error: e });
-            dataListeners.forEach((l) => l.onError?.(e));
+            setStatus("error", e);
             return;
           }
           const msg = res.statusText || "Failed to establish atom subscription";
           emitRpcError(service, method, "transport_error", msg);
-          const err = new TransportError(msg, httpStatus, undefined, rawBody.slice(0, 1000));
-          setState({ status: "error", since: Date.now(), error: err });
-          dataListeners.forEach((l) => l.onError?.(err));
+          setStatus("error", new TransportError(msg, httpStatus, undefined, rawBody.slice(0, 1000)));
           return;
         }
       }
 
       if (!res.body) {
-        const err = new TransportError("Response body is null", httpStatus);
-        setState({ status: "error", since: Date.now(), error: err });
-        dataListeners.forEach((l) => l.onError?.(err));
+        setStatus("error", new TransportError("Response body is null", httpStatus));
         return;
       }
 
-      setState({ status: "connected", since: Date.now() });
+      setStatus("connected");
+      reconnectAttempt = 0; // Reset on successful connection
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -904,9 +1006,7 @@ function createAtomClient<T>(
                     const code = (envelope.error.code || "internal") as ErrorCode;
                     const msg = envelope.error.message || "Unknown error";
                     emitRpcError(service, method, code, msg);
-                    const err = new ServerError(code, msg, httpStatus, envelope.error.details);
-                    setState({ status: "error", since: Date.now(), error: err });
-                    dataListeners.forEach((l) => l.onError?.(err));
+                    setStatus("error", new ServerError(code, msg, httpStatus, envelope.error.details));
                     return;
                   }
 
@@ -917,24 +1017,20 @@ function createAtomClient<T>(
                     if (result.issues) {
                       const err = new ValidationError(opId, "response", result.issues);
                       emitRpcError(service, method, "validation_error", err.message);
-                      setState({ status: "error", since: Date.now(), error: err });
-                      dataListeners.forEach((l) => l.onError?.(err));
+                      setStatus("error", err);
                       return;
                     }
                   }
 
-                  // Broadcast to all data listeners
-                  dataListeners.forEach((l) => l.onValue(envelope.result as T));
+                  // Update data
+                  setData(envelope.result as T);
                 } catch (e) {
                   if (e instanceof ServerError || e instanceof ValidationError) {
-                    setState({ status: "error", since: Date.now(), error: e });
-                    dataListeners.forEach((l) => l.onError?.(e));
+                    setStatus("error", e);
                     return;
                   }
                   emitRpcError(service, method, "transport_error", "Failed to parse atom event");
-                  const err = new TransportError("Failed to parse atom event", httpStatus, e, data);
-                  setState({ status: "error", since: Date.now(), error: err });
-                  dataListeners.forEach((l) => l.onError?.(err));
+                  setStatus("error", new TransportError("Failed to parse atom event", httpStatus, e, data));
                   return;
                 }
               }
@@ -945,15 +1041,16 @@ function createAtomClient<T>(
         reader.releaseLock();
       }
 
-      setState({ status: "disconnected", since: Date.now() });
+      setStatus("disconnected");
+      scheduleReconnect();
     })().catch((err) => {
-      // Silently ignore AbortError from cleanup
+      // Silently ignore AbortError from cleanup (intentional disconnect)
       if (err.name === "AbortError") {
-        setState({ status: "disconnected", since: Date.now() });
+        setStatus("disconnected");
         return;
       }
-      setState({ status: "error", since: Date.now(), error: err });
-      dataListeners.forEach((l) => l.onError?.(err));
+      setStatus("error", err);
+      scheduleReconnect();
     }).finally(() => {
       connectionPromise = null;
       controller = null;
@@ -963,6 +1060,12 @@ function createAtomClient<T>(
   };
 
   const disconnect = () => {
+    // Cancel any pending reconnect
+    if (reconnectTimeout) {
+      clearTimeout(reconnectTimeout);
+      reconnectTimeout = null;
+    }
+    reconnectAttempt = 0;
     if (controller) {
       controller.abort();
       controller = null;
@@ -971,36 +1074,26 @@ function createAtomClient<T>(
   };
 
   return {
-    data: {
-      subscribe(onValue: (value: T) => void, onError?: (error: Error) => void): () => void {
-        const listener = { onValue, onError };
-        dataListeners.add(listener);
+    subscribe(listener: (result: SubscriptionResult<T>) => void): () => void {
+      listeners.add(listener);
 
-        // Start connection if this is the first subscriber
-        if (dataListeners.size === 1) {
-          connect();
+      // Start connection if this is the first subscriber
+      if (listeners.size === 1) {
+        connect();
+      }
+
+      // Immediately emit current state (required by useSyncExternalStore contract)
+      listener(getSnapshot());
+
+      return () => {
+        listeners.delete(listener);
+        // Disconnect if no more subscribers
+        if (listeners.size === 0) {
+          disconnect();
         }
-
-        return () => {
-          dataListeners.delete(listener);
-          // Disconnect if no more subscribers
-          if (dataListeners.size === 0) {
-            disconnect();
-          }
-        };
-      },
+      };
     },
-    state: {
-      subscribe(onState: (state: StreamState) => void): () => void {
-        stateListeners.add(onState);
-        // Immediately emit current state
-        onState(currentState);
-
-        return () => {
-          stateListeners.delete(onState);
-        };
-      },
-    },
+    getSnapshot,
   };
 }
 
