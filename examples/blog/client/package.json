@@ -8,7 +8,7 @@
     "typecheck": "bun x tsc --noEmit"
   },
   "dependencies": {
-    "@tygor/client": "^0.8.1"
+    "@tygor/client": "^0.8.2"
   },
   "devDependencies": {
     "@types/bun": "latest",
