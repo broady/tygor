@@ -104,7 +104,7 @@ done
 echo ""
 echo "Running dry-run builds..."
 (cd client && bun publish --dry-run)
-(cd vite-plugin && bun install && bun publish --dry-run)
+(cd vite-plugin && bun install --ignore-scripts && bun publish --dry-run)
 echo "Dry-run builds passed."
 
 # Confirmation
@@ -131,7 +131,7 @@ cd ..
 echo ""
 echo "Publishing @tygor/vite-plugin..."
 cd vite-plugin
-bun install
+bun install --ignore-scripts
 bun publish
 cd ..
 
