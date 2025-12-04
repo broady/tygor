@@ -39,6 +39,7 @@ case "${VERSION_TYPE}" in
   major) NEW_VERSION="$((MAJOR + 1)).0.0" ;;
   minor) NEW_VERSION="${MAJOR}.$((MINOR + 1)).0" ;;
   patch) NEW_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))" ;;
+  *) echo "Error: unexpected version type"; exit 1 ;;
 esac
 
 TAG="v${NEW_VERSION}"
@@ -69,36 +70,46 @@ jq --arg v "${NEW_VERSION}" '.version = $v' \
 mv vite-plugin/package.json.tmp vite-plugin/package.json
 echo "  Updated vite-plugin/package.json"
 
-# Update example package.json files
-echo "Updating example package.json files..."
-for example_pkg in examples/*/client/package.json; do
-  if [[ -f "${example_pkg}" ]]; then
-    updated=false
-    tmp_file="${example_pkg}.tmp"
-    cp "${example_pkg}" "${tmp_file}"
+# Update all package.json files that depend on @tygor packages
+echo "Updating dependent package.json files..."
+# shellcheck disable=SC2312
+while IFS= read -r pkg_file; do
+  # Skip the source packages themselves
+  [[ "${pkg_file}" == "client/package.json" ]] && continue
+  [[ "${pkg_file}" == "vite-plugin/package.json" ]] && continue
 
-    # Update @tygor/client if present (and not a file: reference)
-    if jq -e '.dependencies["@tygor/client"] // empty | startswith("^")' "${example_pkg}" > /dev/null 2>&1; then
-      jq --arg v "^${NEW_VERSION}" '.dependencies["@tygor/client"] = $v' "${tmp_file}" > "${tmp_file}.2"
-      mv "${tmp_file}.2" "${tmp_file}"
-      updated=true
-    fi
+  updated=false
+  tmp_file="${pkg_file}.tmp"
+  cp "${pkg_file}" "${tmp_file}"
 
-    # Update @tygor/vite-plugin if present (and not a file: reference)
-    if jq -e '.devDependencies["@tygor/vite-plugin"] // empty | startswith("^")' "${example_pkg}" > /dev/null 2>&1; then
-      jq --arg v "^${NEW_VERSION}" '.devDependencies["@tygor/vite-plugin"] = $v' "${tmp_file}" > "${tmp_file}.2"
-      mv "${tmp_file}.2" "${tmp_file}"
-      updated=true
-    fi
-
-    if [[ "${updated}" == "true" ]]; then
-      mv "${tmp_file}" "${example_pkg}"
-      echo "  Updated ${example_pkg}"
-    else
-      rm "${tmp_file}"
-    fi
+  # Update @tygor/client if present with ^ prefix (not file: or workspace:)
+  if jq -e '.dependencies["@tygor/client"] // empty | startswith("^")' "${pkg_file}" > /dev/null 2>&1; then
+    jq --arg v "^${NEW_VERSION}" '.dependencies["@tygor/client"] = $v' "${tmp_file}" > "${tmp_file}.2"
+    mv "${tmp_file}.2" "${tmp_file}"
+    updated=true
   fi
-done
+
+  # Update @tygor/vite-plugin in devDependencies if present with ^ prefix
+  if jq -e '.devDependencies["@tygor/vite-plugin"] // empty | startswith("^")' "${pkg_file}" > /dev/null 2>&1; then
+    jq --arg v "^${NEW_VERSION}" '.devDependencies["@tygor/vite-plugin"] = $v' "${tmp_file}" > "${tmp_file}.2"
+    mv "${tmp_file}.2" "${tmp_file}"
+    updated=true
+  fi
+
+  # Also check dependencies (some examples use it there)
+  if jq -e '.dependencies["@tygor/vite-plugin"] // empty | startswith("^")' "${pkg_file}" > /dev/null 2>&1; then
+    jq --arg v "^${NEW_VERSION}" '.dependencies["@tygor/vite-plugin"] = $v' "${tmp_file}" > "${tmp_file}.2"
+    mv "${tmp_file}.2" "${tmp_file}"
+    updated=true
+  fi
+
+  if [[ "${updated}" == "true" ]]; then
+    mv "${tmp_file}" "${pkg_file}"
+    echo "  Updated ${pkg_file}"
+  else
+    rm "${tmp_file}"
+  fi
+done < <(find . -name 'package.json' -not -path '*/node_modules/*' | sed 's|^\./||')
 
 # Dry-run builds to catch errors before committing
 echo ""
