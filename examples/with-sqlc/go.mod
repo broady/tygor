@@ -3,7 +3,7 @@ module github.com/broady/tygor/examples/with-sqlc
 go 1.25.3
 
 require (
-	github.com/broady/tygor v0.8.2
+	github.com/broady/tygor v0.8.3
 	modernc.org/sqlite v1.40.1
 )
 

@@ -7,7 +7,7 @@
     },
     "client": {
       "name": "@tygor/client",
-      "version": "0.8.1",
+      "version": "0.8.3",
       "devDependencies": {
         "typescript": "^5.0.0",
       },
@@ -16,12 +16,12 @@
       "name": "tygor-devtools-example",
       "version": "0.0.0",
       "dependencies": {
-        "@tygor/client": "^0.8.1",
+        "@tygor/client": "^0.8.3",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
       },
       "devDependencies": {
-        "@tygor/vite-plugin": "^0.8.1",
+        "@tygor/vite-plugin": "^0.8.3",
         "@types/react": "^19.0.0",
         "@types/react-dom": "^19.0.0",
         "@vitejs/plugin-react": "^4.3.0",
@@ -33,13 +33,13 @@
       "name": "tygor-example-react",
       "version": "0.0.0",
       "dependencies": {
-        "@tygor/client": "^0.8.1",
+        "@tygor/client": "^0.8.3",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
         "zod": "^3.24.0",
       },
       "devDependencies": {
-        "@tygor/vite-plugin": "^0.8.1",
+        "@tygor/vite-plugin": "^0.8.3",
         "@types/react": "^19.0.0",
         "@types/react-dom": "^19.0.0",
         "@vitejs/plugin-react": "^4.3.0",
@@ -51,12 +51,12 @@
       "name": "tygor-starter-solid",
       "version": "0.0.0",
       "dependencies": {
-        "@tygor/client": "^0.8.1",
+        "@tygor/client": "^0.8.3",
         "solid-js": "^1.9.0",
         "zod": "^3.24.0",
       },
       "devDependencies": {
-        "@tygor/vite-plugin": "^0.8.1",
+        "@tygor/vite-plugin": "^0.8.3",
         "typescript": "^5.0.0",
         "vite": "^6.0.0",
         "vite-plugin-solid": "^2.11.0",
@@ -70,12 +70,12 @@
       "name": "tygor-with-sqlc",
       "version": "0.0.0",
       "dependencies": {
-        "@tygor/client": "^0.8.1",
+        "@tygor/client": "^0.8.3",
         "solid-js": "^1.9.0",
         "zod": "^3.24.0",
       },
       "devDependencies": {
-        "@tygor/vite-plugin": "^0.8.1",
+        "@tygor/vite-plugin": "^0.8.3",
         "typescript": "^5.0.0",
         "vite": "^6.0.0",
         "vite-plugin-solid": "^2.11.0",
@@ -83,7 +83,7 @@
     },
     "vite-plugin": {
       "name": "@tygor/vite-plugin",
-      "version": "0.8.1",
+      "version": "0.8.3",
       "dependencies": {
         "@tygor/client": "workspace:*",
         "chokidar": "^3.6.0",

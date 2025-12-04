@@ -2,7 +2,7 @@ module github.com/broady/tygor/examples/react
 
 go 1.25.3
 
-require github.com/broady/tygor v0.8.2
+require github.com/broady/tygor v0.8.3
 
 require (
 	github.com/gabriel-vasile/mimetype v1.4.10 // indirect

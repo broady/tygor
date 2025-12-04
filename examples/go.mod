@@ -3,7 +3,7 @@ module github.com/broady/tygor/examples
 go 1.25.3
 
 require (
-	github.com/broady/tygor v0.8.2
+	github.com/broady/tygor v0.8.3
 	github.com/jackc/pgx/v5 v5.7.6
 	google.golang.org/protobuf v1.36.10
 	modernc.org/sqlite v1.40.1
