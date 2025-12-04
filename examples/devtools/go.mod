@@ -2,7 +2,7 @@ module github.com/broady/tygor/examples/devtools
 
 go 1.25.3
 
-require github.com/broady/tygor v0.8.1
+require github.com/broady/tygor v0.8.2
 
 require (
 	github.com/gabriel-vasile/mimetype v1.4.10 // indirect

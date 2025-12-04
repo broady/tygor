@@ -111,6 +111,17 @@ while IFS= read -r pkg_file; do
   fi
 done < <(find . -name 'package.json' -not -path '*/node_modules/*' | sed 's|^\./||')
 
+# Update example go.mod files to use the new version
+echo ""
+echo "Updating example go.mod files..."
+# shellcheck disable=SC2312
+while IFS= read -r modfile; do
+  if grep -q "github.com/broady/tygor v" "${modfile}"; then
+    sed -i "s|github.com/broady/tygor v[0-9.]*|github.com/broady/tygor v${NEW_VERSION}|g" "${modfile}"
+    echo "  Updated ${modfile}"
+  fi
+done < <(find examples -name 'go.mod')
+
 # Dry-run builds to catch errors before committing
 echo ""
 echo "Running dry-run builds..."
