@@ -1,5 +1,6 @@
 import { useState, useEffect, FormEvent, Component, ReactNode } from "react";
-import { createClient, ServerError, TransportError, StreamState } from "@tygor/client";
+import { createClient, ServerError, TransportError } from "@tygor/client";
+import type { SubscriptionResult } from "@tygor/client";
 import { registry } from "./rpc/manifest";
 import type { Task, TimeUpdate } from "./rpc/types";
 
@@ -61,16 +62,23 @@ export default function App() {
   const [newTask, setNewTask] = useState("");
   const [error, setError] = useState<AppError | null>(null);
   const [time, setTime] = useState<TimeUpdate | null>(null);
-  const [tasksState, setTasksState] = useState<StreamState | null>(null);
+  const [tasksState, setTasksState] = useState<SubscriptionResult<(Task | null)[]> | null>(null);
 
   // Subscribe to synced task list - automatically updates across all browser windows
-  const { data: tasksData, state: tasksStateAtom } = client.Tasks.SyncedList;
-  useEffect(() => tasksData.subscribe(setTasks), []);
-  useEffect(() => tasksStateAtom.subscribe(setTasksState), []);
+  useEffect(() => {
+    return client.Tasks.SyncedList.subscribe((result) => {
+      setTasks(result.data ?? []);
+      setTasksState(result);
+    });
+  }, []);
 
   // Subscribe to time stream
-  const timeStream = client.Tasks.Time({});
-  useEffect(() => timeStream.data.subscribe(setTime), []);
+  useEffect(() => {
+    const stream = client.Tasks.Time({});
+    return stream.subscribe((result) => {
+      if (result.data) setTime(result.data);
+    });
+  }, []);
 
 
   const handleCreate = async (e: FormEvent) => {

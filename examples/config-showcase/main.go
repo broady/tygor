@@ -1,7 +1,7 @@
 // Example: config-showcase demonstrates different TypeScript generation configurations.
 //
 // This example generates the same Go types with different config options to show
-// how each setting affects the output. Run with -gen to generate all variants.
+// how each setting affects the output. Run `go run . gen` to generate all variants.
 //
 // Generated outputs:
 //   - client/src/union/       - EnumStyle: "union" (default, cleanest for most uses)
@@ -13,25 +13,23 @@
 //   - client/src/opt-undef/   - OptionalType: "undefined" (all optional fields use ?:)
 //   - client/src/no-comments/ - PreserveComments: "none" (no JSDoc comments)
 //
-// Run: go run . -gen
+// Run: go run . gen
 package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/broady/tygor"
 	"github.com/broady/tygor/examples/config-showcase/api"
 	"github.com/broady/tygor/tygorgen"
 )
 
-func main() {
-	gen := flag.Bool("gen", false, "Generate TypeScript types with different configs")
-	flag.Parse()
-
+// SetupApp configures the tygor application.
+func SetupApp() *tygor.App {
 	app := tygor.NewApp()
 
 	// Register handlers
@@ -43,13 +41,18 @@ func main() {
 		return nil, nil
 	}))
 
-	if *gen {
-		generateAll(app)
+	return app
+}
+
+func main() {
+	if len(os.Args) > 1 && os.Args[1] == "gen" {
+		generateAll(SetupApp())
 		return
 	}
 
 	fmt.Println("Starting server on :8080")
-	log.Fatal(http.ListenAndServe(":8080", app.Handler()))
+	fmt.Println("Run 'go run . gen' to generate TypeScript type variants")
+	log.Fatal(http.ListenAndServe(":8080", SetupApp().Handler()))
 }
 
 func generateAll(app *tygor.App) {

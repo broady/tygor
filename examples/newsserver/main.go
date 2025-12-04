@@ -49,14 +49,8 @@ func CreateNews(ctx context.Context, req *api.CreateNewsParams) (*api.News, erro
 
 // [/snippet:error-handling]
 
-// --- Main ---
-
-func main() {
-	port := flag.String("port", "8080", "Server port")
-	genFlag := flag.Bool("gen", false, "Generate TypeScript types and manifest")
-	outDir := flag.String("out", "./client/src/rpc", "Output directory for generation")
-	flag.Parse()
-
+// SetupApp returns the configured tygor application.
+func SetupApp() *tygor.App {
 	// Configure structured logging
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
@@ -108,17 +102,16 @@ func main() {
 
 	// [/snippet:handler-interceptor]
 
-	// 3. Generation Mode
-	if *genFlag {
-		fmt.Printf("Generating types to %s...\n", *outDir)
-		if err := os.MkdirAll(*outDir, 0755); err != nil {
-			log.Fatal(err)
-		}
-		_, err := tygorgen.FromApp(app).
-			PreserveComments("default").
-			EnumStyle("union").
-			OptionalType("undefined").
-			Frontmatter(`// Branded types for enhanced type safety
+	return app
+}
+
+// TygorConfig configures TypeScript generation options.
+func TygorConfig(g *tygorgen.Generator) *tygorgen.Generator {
+	return g.
+		PreserveComments("default").
+		EnumStyle("union").
+		OptionalType("undefined").
+		Frontmatter(`// Branded types for enhanced type safety
 export type DateTime = string & { readonly __brand: 'DateTime' };
 
 // DateTime helper functions
@@ -138,19 +131,20 @@ export const DateTime = {
   },
 };
 `).
-			TypeMapping("time.Time", "DateTime").
-			ToDir(*outDir)
-		if err != nil {
-			log.Fatalf("Generation failed: %v", err)
-		}
-		fmt.Println("Done.")
-		return
+		TypeMapping("time.Time", "DateTime")
+}
+
+func main() {
+	port := flag.String("port", "8080", "Server port")
+	flag.Parse()
+
+	if p := os.Getenv("PORT"); p != "" {
+		*port = p
 	}
 
-	// 4. Start Server
 	addr := ":" + *port
 	fmt.Printf("Server listening on %s\n", addr)
-	if err := http.ListenAndServe(addr, app.Handler()); err != nil {
+	if err := http.ListenAndServe(addr, SetupApp().Handler()); err != nil {
 		log.Fatal(err)
 	}
 }

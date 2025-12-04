@@ -18,9 +18,9 @@ export interface Manifest {
 }
 
 const metadata = {
-  "Migration.Migrate": { method: "POST", path: "/Migration/Migrate" },
-  "V1Users.Get": { method: "GET", path: "/V1Users/Get" },
-  "V2Users.Get": { method: "GET", path: "/V2Users/Get" },
+  "Migration.Migrate": { path: "/Migration/Migrate", primitive: "exec" },
+  "V1Users.Get": { path: "/V1Users/Get", primitive: "query" },
+  "V2Users.Get": { path: "/V2Users/Get", primitive: "query" },
 } as const;
 
 export const registry = {

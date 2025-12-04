@@ -1,7 +1,5 @@
 package api
 
-//go:generate go run ../ -gen -out ../client/src/rpc
-
 // [snippet:generic-types]
 
 // PagedResponse wraps paginated data with metadata.

@@ -24,7 +24,7 @@ Or manually:
 
 ```bash
 go run main.go                    # Start server
-go run main.go -gen               # Generate types
+tygor gen ./client/src/rpc        # Generate types
 curl http://localhost:8080/News/List?limit=10
 ```
 

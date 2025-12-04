@@ -6,4 +6,5 @@ use (
 	./examples/devtools
 	./examples/react
 	./examples/starter-solid
+	./examples/with-sqlc
 )

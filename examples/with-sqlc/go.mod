@@ -1,6 +1,6 @@
 module github.com/broady/tygor/examples/with-sqlc
 
-go 1.25.4
+go 1.25.3
 
 require (
 	github.com/broady/tygor v0.8.1

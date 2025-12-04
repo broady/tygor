@@ -1,11 +1,11 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import { tygorDev } from "@tygor/vite-plugin";
+import { tygor } from "@tygor/vite-plugin";
 
 export default defineConfig({
   plugins: [
     react(),
-    tygorDev({
+    tygor({
       proxyPrefix: "/api",
       build: "go build -o ./.tygor/server .",
       buildOutput: "./.tygor/server",

@@ -42,15 +42,15 @@ export interface Manifest {
 }
 
 const metadata = {
-  "Comments.Create": { method: "POST", path: "/Comments/Create" },
-  "Comments.List": { method: "GET", path: "/Comments/List" },
-  "Posts.Create": { method: "POST", path: "/Posts/Create" },
-  "Posts.Get": { method: "GET", path: "/Posts/Get" },
-  "Posts.List": { method: "GET", path: "/Posts/List" },
-  "Posts.Publish": { method: "POST", path: "/Posts/Publish" },
-  "Posts.Update": { method: "POST", path: "/Posts/Update" },
-  "Users.Create": { method: "POST", path: "/Users/Create" },
-  "Users.Login": { method: "POST", path: "/Users/Login" },
+  "Comments.Create": { path: "/Comments/Create", primitive: "exec" },
+  "Comments.List": { path: "/Comments/List", primitive: "query" },
+  "Posts.Create": { path: "/Posts/Create", primitive: "exec" },
+  "Posts.Get": { path: "/Posts/Get", primitive: "query" },
+  "Posts.List": { path: "/Posts/List", primitive: "query" },
+  "Posts.Publish": { path: "/Posts/Publish", primitive: "exec" },
+  "Posts.Update": { path: "/Posts/Update", primitive: "exec" },
+  "Users.Create": { path: "/Users/Create", primitive: "exec" },
+  "Users.Login": { path: "/Users/Login", primitive: "exec" },
 } as const;
 
 export const registry = {

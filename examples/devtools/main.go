@@ -16,12 +16,9 @@ import (
 	"github.com/broady/tygor/examples/devtools/api"
 )
 
-func app() *tygor.App {
-	// No CORS needed - Vite proxies API requests in dev, same-origin in prod
+// SetupApp returns the tygor app for type generation.
+func SetupApp() *tygor.App {
 	app := tygor.NewApp()
-
-	// Note: Devtools functionality is now provided by `tygor dev` - no need to
-	// register anything in the user's app! Discovery is served by tygor dev.
 
 	system := app.Service("System")
 	system.Register("Kill", tygor.Exec(Kill))
@@ -37,10 +34,17 @@ func app() *tygor.App {
 	return app
 }
 
+// TygorConfig configures TypeScript generation options.
+func TygorConfig(g *tygorgen.Generator) *tygorgen.Generator {
+	return g.
+		EnumStyle("union").
+		OptionalType("undefined").
+		WithDiscovery()
+}
+
 // Task list as an Atom - subscribers get current list and updates
 var tasksAtom = tygor.NewAtom([]*api.Task{})
 var nextID int32 = 1
-var serverPort string
 
 func Kill(ctx context.Context, req tygor.Empty) (tygor.Empty, error) {
 	fmt.Println("Kill requested, shutting down...")
@@ -124,32 +128,27 @@ func CurrentTime(_ context.Context, req tygor.Empty, stream tygor.StreamWriter[*
 }
 
 func main() {
-	portFlag := flag.String("port", "8080", "Server port")
+	port := flag.String("port", "8080", "Server port")
 	flag.Parse()
 
-	serverPort = *portFlag
 	if p := os.Getenv("PORT"); p != "" {
-		serverPort = p
+		*port = p
 	}
 
 	// Simulate slow startup for testing blue/green deployment
 	if delay := os.Getenv("STARTUP_DELAY"); delay != "" {
 		d, err := time.ParseDuration(delay)
 		if err == nil {
-			fmt.Printf(" Simulating slow startup: %s\n", delay)
+			fmt.Printf("Simulating slow startup: %s\n", delay)
 			time.Sleep(d)
 		}
 	}
-	addr := ":" + serverPort
+
+	app := SetupApp()
+
+	addr := ":" + *port
 	fmt.Printf("Server listening on %s\n", addr)
-	if err := http.ListenAndServe(addr, app().Handler()); err != nil {
+	if err := http.ListenAndServe(addr, app.Handler()); err != nil {
 		log.Fatal(err)
 	}
-}
-
-func GenConfig(g *tygorgen.Generator) *tygorgen.Generator {
-	return g.
-		EnumStyle("union").
-		OptionalType("undefined").
-		WithDiscovery().
 }

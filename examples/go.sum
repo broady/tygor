@@ -1,3 +1,5 @@
+github.com/broady/tygor v0.8.1 h1:CeaCdwiTa6jvXzcpbt3Gnkur0AYfshuO2uEpZjv6/ic=
+github.com/broady/tygor v0.8.1/go.mod h1:S5yNTZEtvA8kQChyNvredQV48TXVYO2//5YhkaFXMzY=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

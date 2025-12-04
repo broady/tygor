@@ -1,7 +1,5 @@
 package api
 
-//go:generate go run ../ -gen -out ../client/src/rpc
-
 import "time"
 
 // [snippet:enum-type]

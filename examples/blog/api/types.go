@@ -1,7 +1,5 @@
 package api
 
-//go:generate go run ../ -gen -out ../client/src/rpc
-
 import "time"
 
 // User represents a user in the system.

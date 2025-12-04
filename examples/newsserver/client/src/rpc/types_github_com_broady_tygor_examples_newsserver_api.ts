@@ -20,20 +20,29 @@ export const DateTime = {
   },
 };
 
-/** CreateNewsParams contains the parameters for creating a new news article. */
+/**
+ * CreateNewsParams contains the parameters for creating a new news article.
+ * @see github.com/broady/tygor/examples/newsserver/api/types.go#CreateNewsParams
+ */
 export interface CreateNewsParams {
   title: string;
   body?: string;
 }
-/** ListNewsParams contains pagination parameters for listing news articles. */
+/**
+ * ListNewsParams contains pagination parameters for listing news articles.
+ * @see github.com/broady/tygor/examples/newsserver/api/types.go#ListNewsParams
+ */
 export interface ListNewsParams {
-  limit?: number;
-  offset?: number;
+  limit?: number /* int32 */;
+  offset?: number /* int32 */;
 }
-/** News represents a news article in the system. */
+/**
+ * News represents a news article in the system.
+ * @see github.com/broady/tygor/examples/newsserver/api/types.go#News
+ */
 export interface News {
   /** ID is the unique identifier for the article. */
-  id: number;
+  id: number /* int32 */;
   /** Title is the article headline. */
   title: string;
   /** Body is the optional article content. */
@@ -43,5 +52,8 @@ export interface News {
   /** CreatedAt is the timestamp when the article was created. */
   created_at?: DateTime;
 }
-/** NewsStatus represents the publication status of a news article. */
+/**
+ * NewsStatus represents the publication status of a news article.
+ * @see github.com/broady/tygor/examples/newsserver/api/types.go#NewsStatus
+ */
 export type NewsStatus = "archived" | "draft" | "published";

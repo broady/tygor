@@ -105,12 +105,9 @@ func CreatePost(ctx context.Context, req *api.CreatePostParams) (*api.Result[api
 
 // --- Main ---
 
-func main() {
-	port := flag.String("port", "8080", "Server port")
-	genFlag := flag.Bool("gen", false, "Generate TypeScript types using reflection provider")
-	outDir := flag.String("out", "./client/src/rpc", "Output directory for generation")
-	flag.Parse()
-
+// SetupApp configures the tygor application.
+// This export is used by `tygor gen` for type generation.
+func SetupApp() *tygor.App {
 	app := tygor.NewApp()
 
 	users := app.Service("Users")
@@ -120,35 +117,35 @@ func main() {
 	posts := app.Service("Posts")
 	posts.Register("Create", tygor.Exec(CreatePost))
 
-	// Generation Mode
-	if *genFlag {
-		fmt.Printf("Generating types to %s...\n", *outDir)
-		if err := os.MkdirAll(*outDir, 0755); err != nil {
-			log.Fatal(err)
-		}
+	return app
+}
 
-		// [snippet:reflection-generation]
+// TygorConfig configures the TypeScript generator.
+func TygorConfig(g *tygorgen.Generator) *tygorgen.Generator {
+	// [snippet:reflection-generation]
 
-		// The reflection provider extracts types from registered handlers
-		// and automatically handles generic type instantiation.
-		_, err := tygorgen.FromApp(app).
-			Provider("reflection").
-			PreserveComments("default").
-			EnumStyle("union").
-			OptionalType("undefined").
-			StripPackagePrefix("github.com/broady/tygor/examples/reflection/").
-			ToDir(*outDir)
-		if err != nil {
-			log.Fatalf("Generation failed: %v", err)
-		}
+	// The reflection provider extracts types from registered handlers
+	// and automatically handles generic type instantiation.
+	return g.
+		Provider("reflection").
+		PreserveComments("default").
+		EnumStyle("union").
+		OptionalType("undefined").
+		StripPackagePrefix("github.com/broady/tygor/examples/reflection/")
 
-		// [/snippet:reflection-generation]
+	// [/snippet:reflection-generation]
+}
 
-		fmt.Println("Done.")
-		return
+func main() {
+	port := flag.String("port", "8080", "Server port")
+	flag.Parse()
+
+	if p := os.Getenv("PORT"); p != "" {
+		*port = p
 	}
 
-	// Start Server
+	app := SetupApp()
+
 	addr := ":" + *port
 	fmt.Printf("Server listening on %s\n", addr)
 	if err := http.ListenAndServe(addr, app.Handler()); err != nil {

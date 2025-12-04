@@ -1,11 +1,11 @@
 import { defineConfig } from "vite";
 import solid from "vite-plugin-solid";
-import { tygorDev } from "@tygor/vite-plugin";
+import { tygor } from "@tygor/vite-plugin";
 
 export default defineConfig({
   plugins: [
     solid(),
-    tygorDev({
+    tygor({
       proxyPrefix: "/api",
       // gen: true (default) - runs `tygor gen` to generate TypeScript types
       build: "go build -o ./.tygor/server .",

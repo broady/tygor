@@ -18,9 +18,9 @@ export interface Manifest {
 }
 
 const metadata = {
-  "Posts.Create": { method: "POST", path: "/Posts/Create" },
-  "Users.Get": { method: "GET", path: "/Users/Get" },
-  "Users.List": { method: "GET", path: "/Users/List" },
+  "Posts.Create": { path: "/Posts/Create", primitive: "exec" },
+  "Users.Get": { path: "/Users/Get", primitive: "query" },
+  "Users.List": { path: "/Users/List", primitive: "query" },
 } as const;
 
 export const registry = {

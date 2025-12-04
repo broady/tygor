@@ -52,32 +52,19 @@ export interface User {
 
 <!-- [snippet:main] -->
 ```go title="main.go"
-func main() {
-	gen := flag.Bool("gen", false, "generate TypeScript types")
-	out := flag.String("out", "./client/src/types", "output directory")
-	flag.Parse()
-
-	if *gen {
-		generate(*out)
-		return
-	}
-
-	log.Println("Run with -gen to generate TypeScript types")
-}
-
-func generate(dir string) {
+// TygorConfig configures the TypeScript generator for types-only generation.
+// This export is used by `tygor gen` for type generation.
+func TygorConfig() *tygorgen.Generator {
 	// Pass root types - referenced types are followed automatically.
-	_, err := tygorgen.FromTypes(
+	return tygorgen.FromTypes(
 		api.User{},
 		api.Page[api.User]{}, // generic instantiation
-	).ToDir(dir)
+	)
+}
 
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	log.Println("Generated types to", dir)
-	os.Exit(0)
+func main() {
+	fmt.Println("This is a types-only example. To generate TypeScript types, run:")
+	fmt.Println("  tygor gen ./client/src/types")
 }
 
 ```

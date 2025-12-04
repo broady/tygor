@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "gen": "go run . -gen -out ./src/rpc",
+    "gen": "go run github.com/broady/tygor/cmd/tygor@latest gen ./src/rpc",
     "postinstall": "npm run gen",
     "dev": "vite --clearScreen false",
     "build": "vite build",
@@ -12,7 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@tygor/client": "file:../../client",
+    "@tygor/client": "^0.8.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

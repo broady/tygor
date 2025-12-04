@@ -14,8 +14,8 @@ export interface Manifest {
 }
 
 const metadata = {
-  "News.Create": { method: "POST", path: "/News/Create" },
-  "News.List": { method: "GET", path: "/News/List" },
+  "News.Create": { path: "/News/Create", primitive: "exec" },
+  "News.List": { path: "/News/List", primitive: "query" },
 } as const;
 
 export const registry = {

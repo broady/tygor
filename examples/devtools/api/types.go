@@ -2,8 +2,6 @@ package api
 
 import "time"
 
-//go:generate go run ../ -gen -out ../src/rpc
-
 // Task represents a todo item.
 type Task struct {
 	// ID is the unique identifier.

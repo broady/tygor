@@ -7,19 +7,16 @@ export default defineConfig({
     react(),
     tygor({
       proxyPrefix: "/api",
-      prebuild: "go run . -gen -out ./src/rpc",
-      build: "go build -o ./tmp/server .",
-      buildOutput: "./tmp/server",
+      build: "go build -o ./.tygor/server .",
+      buildOutput: "./.tygor/server",
       start: (port) => ({
-        cmd: ["./tmp/server"],
+        cmd: ["./.tygor/server"],
         env: { PORT: String(port) },
       }),
       rpcDir: "./src/rpc",
     }),
   ],
   optimizeDeps: {
-    // Exclude from pre-bundling so local file: linked changes are picked up immediately.
-    // This can be removed when using a published @tygor/client from npm.
     exclude: ["@tygor/client"],
   },
 });

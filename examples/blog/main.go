@@ -17,7 +17,6 @@ import (
 	"github.com/broady/tygor"
 	"github.com/broady/tygor/examples/blog/api"
 	"github.com/broady/tygor/middleware"
-	"github.com/broady/tygor/tygorgen"
 )
 
 // In-memory database (for demo purposes)
@@ -431,12 +430,9 @@ func ListComments(ctx context.Context, req *api.ListCommentsParams) ([]*api.Comm
 
 // --- Main ---
 
-func main() {
-	port := flag.String("port", "8080", "Server port")
-	genFlag := flag.Bool("gen", false, "Generate TypeScript types and manifest")
-	outDir := flag.String("out", "./api/client/src/rpc", "Output directory for generation")
-	flag.Parse()
-
+// SetupApp configures the tygor application.
+// This export is used by `tygor gen` for type generation.
+func SetupApp() *tygor.App {
 	// Configure structured logging
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
@@ -478,33 +474,21 @@ func main() {
 	commentService.Register("List", tygor.Query(ListComments))
 	// [/snippet:mixed-endpoints]
 
-	// Generation Mode
-	if *genFlag {
-		fmt.Printf("Generating types to %s...\n", *outDir)
-		if err := os.MkdirAll(*outDir, 0755); err != nil {
-			log.Fatal(err)
-		}
-		if _, err := tygorgen.FromApp(app).ToDir(*outDir); err != nil {
-			log.Fatalf("Generation failed: %v", err)
-		}
-		fmt.Println("Done.")
-		return
+	return app
+}
+
+func main() {
+	port := flag.String("port", "8080", "Server port")
+	flag.Parse()
+
+	if p := os.Getenv("PORT"); p != "" {
+		*port = p
 	}
 
-	// Start server
-	addr := ":" + *port
-	fmt.Printf("Blog server listening on %s\n", addr)
-	fmt.Println("\nExample requests:")
-	fmt.Println("  # Create user:")
-	fmt.Printf("  curl -X POST http://localhost:%s/Users/Create -H 'Content-Type: application/json' -d '{\"username\":\"bob\",\"email\":\"bob@example.com\",\"password\":\"password123\"}'\n", *port)
-	fmt.Println("\n  # Login:")
-	fmt.Printf("  curl -X POST http://localhost:%s/Users/Login -H 'Content-Type: application/json' -d '{\"email\":\"alice@example.com\",\"password\":\"anything\"}'\n", *port)
-	fmt.Println("\n  # List posts:")
-	fmt.Printf("  curl http://localhost:%s/Posts/List?limit=10\n", *port)
-	fmt.Println("\n  # Create post (requires auth):")
-	fmt.Printf("  curl -X POST http://localhost:%s/Posts/Create -H 'Authorization: Bearer demo-token-alice' -H 'Content-Type: application/json' -d '{\"title\":\"My New Post\",\"content\":\"This is the content of my post.\"}'\n", *port)
-	fmt.Println()
+	app := SetupApp()
 
+	addr := ":" + *port
+	fmt.Printf("Server listening on %s\n", addr)
 	if err := http.ListenAndServe(addr, app.Handler()); err != nil {
 		log.Fatal(err)
 	}

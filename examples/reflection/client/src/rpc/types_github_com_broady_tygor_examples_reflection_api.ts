@@ -3,28 +3,28 @@
 export interface api_CreatePostParams {
   title: string;
   content: string;
-  author_id: number;
+  author_id: number /* int32 */;
 }
 export interface api_GetUserParams {
-  id: number;
+  id: number /* int32 */;
 }
 export interface api_ListUsersParams {
-  page: number;
-  page_size: number;
+  page: number /* int */;
+  page_size: number /* int */;
   role?: string;
 }
 export interface api_PagedResponse_github_com_broady_tygor_examples_reflection_api_User {
   data?: api_User[];
-  total: number;
-  page: number;
-  page_size: number;
+  total: number /* int */;
+  page: number /* int */;
+  page_size: number /* int */;
   has_more: boolean;
 }
 export interface api_Post {
-  id: number;
+  id: number /* int32 */;
   title: string;
   content: string;
-  author_id: number;
+  author_id: number /* int32 */;
 }
 export interface api_Result_github_com_broady_tygor_examples_reflection_api_Post {
   success: boolean;
@@ -37,7 +37,7 @@ export interface api_Result_github_com_broady_tygor_examples_reflection_api_User
   error?: string;
 }
 export interface api_User {
-  id: number;
+  id: number /* int32 */;
   username: string;
   email: string;
   role: string;

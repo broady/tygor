@@ -4,7 +4,7 @@
 //   - v1.User becomes v1_User in TypeScript
 //   - v2.User becomes v2_User in TypeScript
 //
-// Run: go run . -gen -out ./client/src/rpc
+// Run: tygor gen ./client/src/rpc
 package main
 
 import (
@@ -22,11 +22,8 @@ import (
 	"github.com/broady/tygor/tygorgen"
 )
 
-func main() {
-	gen := flag.Bool("gen", false, "Generate TypeScript types")
-	out := flag.String("out", "./client/src/rpc", "Output directory for generated files")
-	flag.Parse()
-
+// SetupApp configures the tygor application.
+func SetupApp() *tygor.App {
 	app := tygor.NewApp()
 
 	// Register v1 endpoints
@@ -48,28 +45,32 @@ func main() {
 		}, nil
 	}))
 
-	// [snippet:config]
+	return app
+}
 
-	if *gen {
-		fmt.Println("Generating types to", *out)
-		// SingleFile is required when using StripPackagePrefix with cross-package
-		// references, as types from different packages end up in the same output file.
-		// StripPackagePrefix disambiguates same-named types from different packages.
-		// Without this, both v1.User and v2.User would become "User" (collision!).
-		// With this, they become "v1_User" and "v2_User".
-		_, err := tygorgen.FromApp(app).
-			SingleFile().
-			StripPackagePrefix("github.com/broady/tygor/examples/multipackage/api").
-			ToDir(*out)
-		if err != nil {
-			log.Fatal(err)
-		}
-		fmt.Println("Done.")
-		os.Exit(0)
+// TygorConfig configures the TypeScript generator.
+// SingleFile is required when using StripPackagePrefix with cross-package
+// references, as types from different packages end up in the same output file.
+// StripPackagePrefix disambiguates same-named types from different packages.
+// Without this, both v1.User and v2.User would become "User" (collision!).
+// With this, they become "v1_User" and "v2_User".
+func TygorConfig(g *tygorgen.Generator) *tygorgen.Generator {
+	return g.
+		SingleFile().
+		StripPackagePrefix("github.com/broady/tygor/examples/multipackage/api")
+}
+
+func main() {
+	port := flag.String("port", "8080", "Server port")
+	flag.Parse()
+
+	if p := os.Getenv("PORT"); p != "" {
+		*port = p
 	}
 
-	// [/snippet:config]
-
-	fmt.Println("Starting server on :8080")
-	log.Fatal(http.ListenAndServe(":8080", app.Handler()))
+	addr := ":" + *port
+	fmt.Printf("Server listening on %s\n", addr)
+	if err := http.ListenAndServe(addr, SetupApp().Handler()); err != nil {
+		log.Fatal(err)
+	}
 }

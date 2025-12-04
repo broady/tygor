@@ -182,12 +182,9 @@ func ListTasks(ctx context.Context, req *api.ListParams) ([]*api.Task, error) {
 	return result[start:end], nil
 }
 
-func main() {
-	port := flag.String("port", "8080", "Server port")
-	genFlag := flag.Bool("gen", false, "Generate TypeScript types and Zod schemas")
-	outDir := flag.String("out", "./client/src/rpc", "Output directory for generation")
-	flag.Parse()
-
+// SetupApp configures the tygor application.
+// This export is used by `tygor gen` for type generation.
+func SetupApp() *tygor.App {
 	app := tygor.NewApp()
 
 	// User Service
@@ -202,35 +199,30 @@ func main() {
 	taskService.Register("Update", tygor.Exec(UpdateTask))
 	taskService.Register("List", tygor.Query(ListTasks))
 
-	// Generation Mode
-	if *genFlag {
-		fmt.Printf("Generating types and Zod schemas to %s...\n", *outDir)
-		if err := os.MkdirAll(*outDir, 0755); err != nil {
-			log.Fatal(err)
-		}
+	return app
+}
 
-		// [snippet:zod-generation]
-		_, err := tygorgen.FromApp(app).
-			WithFlavor(tygorgen.FlavorZod).
-			WithFlavor(tygorgen.FlavorZodMini).
-			ToDir(*outDir)
-		// [/snippet:zod-generation]
+// TygorConfig configures the TypeScript generator.
+func TygorConfig(g *tygorgen.Generator) *tygorgen.Generator {
+	// [snippet:zod-generation]
+	return g.
+		WithFlavor(tygorgen.FlavorZod).
+		WithFlavor(tygorgen.FlavorZodMini)
+	// [/snippet:zod-generation]
+}
 
-		if err != nil {
-			log.Fatalf("Generation failed: %v", err)
-		}
-		fmt.Println("Done.")
-		return
+func main() {
+	port := flag.String("port", "8080", "Server port")
+	flag.Parse()
+
+	if p := os.Getenv("PORT"); p != "" {
+		*port = p
 	}
 
-	// Start server
-	addr := ":" + *port
-	fmt.Printf("Zod example server listening on %s\n", addr)
-	fmt.Println("\nExample requests:")
-	fmt.Printf("  curl -X POST http://localhost:%s/Users/Create -H 'Content-Type: application/json' -d '{\"username\":\"bob\",\"email\":\"bob@example.com\",\"password\":\"password123\"}'\n", *port)
-	fmt.Printf("  curl http://localhost:%s/Tasks/List?limit=10&offset=0\n", *port)
-	fmt.Println()
+	app := SetupApp()
 
+	addr := ":" + *port
+	fmt.Printf("Server listening on %s\n", addr)
 	if err := http.ListenAndServe(addr, app.Handler()); err != nil {
 		log.Fatal(err)
 	}

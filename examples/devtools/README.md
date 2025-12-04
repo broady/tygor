@@ -66,13 +66,13 @@ See `vite.config.js` for the plugin configuration:
 
 ```javascript
 tygor({
-  manifest: registry,
-  prebuild: "go run . -gen -out ./src/rpc",
-  build: "go build -o ./tmp/server .",
-  buildOutput: "./tmp/server",
+  proxyPrefix: "/api",
+  build: "go build -o ./.tygor/server .",
+  buildOutput: "./.tygor/server",
   start: (port) => ({
-    cmd: ["./tmp/server"],
+    cmd: ["./.tygor/server"],
     env: { PORT: String(port) },
   }),
+  rpcDir: "./src/rpc",
 })
 ```

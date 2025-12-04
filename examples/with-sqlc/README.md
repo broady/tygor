@@ -144,29 +144,50 @@ func SetupApp() *tygor.App {
 	app := tygor.NewApp()
 	tasks := app.Service("Tasks")
 
-	// sqlc queries with struct params mount directly
-	tasks.Register("List", tygor.Query(db.ListTasks))
-	tasks.Register("Create", tygor.Exec(db.CreateTask))
-	tasks.Register("Update", tygor.Exec(db.UpdateTask))
-
-	// Wrappers for non-struct params
+	// Query endpoints
+	tasks.Register("List", tygor.Query(ListTasks))
 	tasks.Register("Get", tygor.Query(GetTask))
-	tasks.Register("Delete", tygor.Exec(DeleteTask))
 	tasks.Register("ListIncomplete", tygor.Query(ListIncomplete))
+
+	// Mutation endpoints - bump version after success
+	bumpVersion := func(ctx tygor.Context, req any, next tygor.HandlerFunc) (any, error) {
+		res, err := next(ctx, req)
+		if err == nil {
+			versionAtom.Update(func(v *Version) *Version {
+				return &Version{Value: v.Value + 1}
+			})
+		}
+		return res, err
+	}
+	tasks.Register("Create", tygor.Exec(CreateTask).WithUnaryInterceptor(bumpVersion))
+	tasks.Register("Update", tygor.Exec(db.UpdateTask).WithUnaryInterceptor(bumpVersion))
+	tasks.Register("Delete", tygor.Exec(DeleteTask).WithUnaryInterceptor(bumpVersion))
+
+	// Version stream - clients subscribe and refetch when it changes
+	tasks.Register("Version", versionAtom.Handler())
 
 	return app
 }
 ```
 <!-- [/snippet:app-setup] -->
 
-Wrappers for sqlc queries with non-struct parameters:
+Wrappers for sqlc queries with non-struct or int64 parameters:
 
 <!-- [snippet:wrappers] -->
 ```go title="main.go"
-// Wrappers for sqlc methods with non-struct params
+// Wrappers for sqlc methods with non-struct or int64 params
+
+type ListTasksParams struct {
+	Limit  int `json:"limit"`
+	Offset int `json:"offset"`
+}
+
+func ListTasks(ctx context.Context, p ListTasksParams) ([]sqlc.Task, error) {
+	return db.ListTasks(ctx, sqlc.ListTasksParams{Limit: int64(p.Limit), Offset: int64(p.Offset)})
+}
 
 type GetTaskParams struct {
-	ID int64 `json:"id"`
+	ID int `json:"id"`
 }
 
 func GetTask(ctx context.Context, p GetTaskParams) (sqlc.Task, error) {
@@ -174,7 +195,7 @@ func GetTask(ctx context.Context, p GetTaskParams) (sqlc.Task, error) {
 }
 
 type DeleteTaskParams struct {
-	ID int64 `json:"id"`
+	ID int `json:"id"`
 }
 
 func DeleteTask(ctx context.Context, p DeleteTaskParams) (tygor.Empty, error) {
@@ -183,6 +204,18 @@ func DeleteTask(ctx context.Context, p DeleteTaskParams) (tygor.Empty, error) {
 
 func ListIncomplete(ctx context.Context, _ tygor.Empty) ([]sqlc.Task, error) {
 	return db.ListIncompleteTasks(ctx)
+}
+
+type CreateTaskParams struct {
+	Title       string  `json:"title" validate:"min=3"`
+	Description *string `json:"description"`
+}
+
+func CreateTask(ctx context.Context, p CreateTaskParams) (sqlc.Task, error) {
+	return db.CreateTask(ctx, sqlc.CreateTaskParams{
+		Title:       p.Title,
+		Description: p.Description,
+	})
 }
 ```
 <!-- [/snippet:wrappers] -->
@@ -289,13 +322,15 @@ export default defineConfig({
     solid(),
     tygor({
       proxyPrefix: "/api",
-      // Prebuild: generate Go code from SQL before building
-      prebuild: "sqlc generate",
+      // Pregen: generate Go code from SQL before tygor gen parses it
+      pregen: "sqlc generate",
+      // Watch SQL files and sqlc config in addition to Go files
+      watch: ["**/*.go", "**/*.sql", "sqlc.yaml"],
       // gen: true (default) - runs `tygor gen` to generate TypeScript types
-      build: "go build -o ./tmp/server .",
-      buildOutput: "./tmp/server",
+      build: "go build -o ./.tygor/server .",
+      buildOutput: "./.tygor/server",
       start: (port) => ({
-        cmd: ["./tmp/server"],
+        cmd: ["./.tygor/server"],
         env: { PORT: String(port) },
       }),
       rpcDir: "./src/rpc",

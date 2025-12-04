@@ -92,13 +92,9 @@ func GetItem(ctx context.Context, req *api.GetItemRequest) (*api.Item, error) {
 
 // --- Main ---
 
-func main() {
-	port := flag.String("port", "8080", "Server port")
-	genFlag := flag.Bool("gen", false, "Generate TypeScript types and manifest")
-	outDir := flag.String("out", "./client/src/rpc", "Output directory for generation")
-	flag.Parse()
-
-	// Create App
+// SetupApp configures the tygor application.
+// This export is used by `tygor gen` for type generation.
+func SetupApp() *tygor.App {
 	app := tygor.NewApp()
 
 	// Register handlers
@@ -107,20 +103,28 @@ func main() {
 	items.Register("List", tygor.Query(ListItems))
 	items.Register("Get", tygor.Query(GetItem))
 
-	// Generation Mode
-	if *genFlag {
-		fmt.Printf("Generating types to %s...\n", *outDir)
-		if err := os.MkdirAll(*outDir, 0755); err != nil {
-			log.Fatal(err)
-		}
-		if _, err := tygorgen.FromApp(app).ToDir(*outDir); err != nil {
-			log.Fatalf("Generation failed: %v", err)
-		}
-		fmt.Println("Done.")
-		return
+	return app
+}
+
+// TygorConfig configures the TypeScript generator.
+func TygorConfig(g *tygorgen.Generator) *tygorgen.Generator {
+	return g.
+		EnumStyle("union").
+		OptionalType("undefined").
+		WithDiscovery().
+		WithFlavor(tygorgen.FlavorZod)
+}
+
+func main() {
+	port := flag.String("port", "8080", "Server port")
+	flag.Parse()
+
+	if p := os.Getenv("PORT"); p != "" {
+		*port = p
 	}
 
-	// Start Server
+	app := SetupApp()
+
 	addr := ":" + *port
 	fmt.Printf("Server listening on %s\n", addr)
 	if err := http.ListenAndServe(addr, app.Handler()); err != nil {

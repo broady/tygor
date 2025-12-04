@@ -4,10 +4,14 @@
 # Snippet tool
 SNIPPET_TOOL := go run ../cmd/snippet
 
+# Tygor CLI (use local version for development)
+TYGOR := go run ../../cmd/tygor
+
 # Default targets (can be overridden in example Makefile)
 GO_FILES ?= main.go $(wildcard api/*.go)
 TS_FILES ?= $(wildcard client/*.ts client/src/*.ts client/src/rpc/*.ts)
 GEN_DIR ?= ./client/src/rpc
+PREGEN ?=
 
 .PHONY: all test test-quiet gen run clean check check-quiet fmt snippet-go snippet-ts snippets readme lint-readme help
 
@@ -45,8 +49,9 @@ test-quiet:
 
 # Generate TypeScript types
 gen:
+	$(if $(PREGEN),$(PREGEN))
 	@mkdir -p $(GEN_DIR)
-	go run . -gen -out $(GEN_DIR)
+	$(TYGOR) gen $(GEN_DIR)
 
 # Run the server
 run:
@@ -71,8 +76,9 @@ check: gen readme
 
 # Check quietly (output only on failure)
 check-quiet:
+	$(if $(PREGEN),@output=$$($(PREGEN) 2>&1) || (echo "$$output"; exit 1))
 	@mkdir -p $(GEN_DIR)
-	@output=$$(go run . -gen -out $(GEN_DIR) 2>&1) || (echo "$$output"; exit 1)
+	@output=$$($(TYGOR) gen $(GEN_DIR) 2>&1) || (echo "$$output"; exit 1)
 	@output=$$($(SNIPPET_TOOL) -inject README.md $(GO_FILES) $(TS_FILES) 2>&1) || (echo "$$output"; exit 1)
 	@if [ -n "$$(git diff --name-only $(GEN_DIR) README.md 2>/dev/null)" ]; then \
 		echo ""; \
