@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "gen": "go run github.com/broady/tygor/cmd/tygor@latest gen ./src/rpc",
+    "gen": "go mod download && go run github.com/broady/tygor/cmd/tygor@latest gen ./src/rpc",
     "postinstall": "npm run gen",
     "dev": "vite --clearScreen false",
     "build": "vite build",

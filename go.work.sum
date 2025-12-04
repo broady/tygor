@@ -1,3 +1,5 @@
+github.com/broady/tygor v0.6.1/go.mod h1:iJMyIgQKqZaLHLVhKUehTvzPMPb4n3e93nTacW+0Jp0=
+github.com/broady/tygor v0.8.1/go.mod h1:S5yNTZEtvA8kQChyNvredQV48TXVYO2//5YhkaFXMzY=
 github.com/golang/protobuf v1.5.0/go.mod h1:FsONVRAS9T7sI+LIUmWTfcYkHO4aIWwzhcaSAoJOfIk=
 github.com/google/pprof v0.0.0-20250317173921-a4b03ec1a45e/go.mod h1:boTsfXsheKC2y+lKOCMpSfarhxDeIzfZG1jqGcPl3cA=
 github.com/kr/pretty v0.3.0 h1:WgNl7dwNpEZ6jJ9k1snq4pZsg7DOEN8hP9Xw0Tsjwk0=
