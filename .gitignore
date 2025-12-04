@@ -9,6 +9,12 @@ client/runtime.d.ts.map
 
 # Example build artifacts
 examples/*/server
+examples/blog/blog
+examples/starter-solid/starter-solid
+examples/multipackage/tygor
+
+# CLI binary
+/tygor
 
 # Generated RPC files (machine-specific paths)
 **/discovery.json
