@@ -3,10 +3,14 @@
 import { useState, useEffect, FormEvent } from "react";
 import { createClient } from "@tygor/client";
 import { registry } from "./rpc/manifest";
+import { schemaMap } from "./rpc/schemas.map.zod";
 import type { Task, RuntimeInfo } from "./rpc/types";
 
-// No baseUrl needed - uses current origin (works with Vite proxy in dev, same-origin in prod)
-const client = createClient(registry);
+const client = createClient(registry, {
+  baseUrl: "/api",
+  schemas: schemaMap,
+  validate: { request: true },
+});
 
 // [/snippet:client-setup]
 

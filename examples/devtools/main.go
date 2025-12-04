@@ -16,6 +16,27 @@ import (
 	"github.com/broady/tygor/examples/devtools/api"
 )
 
+func app() *tygor.App {
+	// No CORS needed - Vite proxies API requests in dev, same-origin in prod
+	app := tygor.NewApp()
+
+	// Note: Devtools functionality is now provided by `tygor dev` - no need to
+	// register anything in the user's app! Discovery is served by tygor dev.
+
+	system := app.Service("System")
+	system.Register("Kill", tygor.Exec(Kill))
+
+	tasksvc := app.Service("Tasks")
+	tasksvc.Register("List", tygor.Query(ListTasks))
+	tasksvc.Register("SyncedList", tasksAtom.Handler())
+	tasksvc.Register("Time", tygor.Stream(CurrentTime))
+	tasksvc.Register("Create", tygor.Exec(CreateTask))
+	tasksvc.Register("Toggle", tygor.Exec(ToggleTask))
+	tasksvc.Register("MakeError", tygor.Exec(MakeError))
+
+	return app
+}
+
 // Task list as an Atom - subscribers get current list and updates
 var tasksAtom = tygor.NewAtom([]*api.Task{})
 var nextID int32 = 1
@@ -104,8 +125,6 @@ func CurrentTime(_ context.Context, req tygor.Empty, stream tygor.StreamWriter[*
 
 func main() {
 	portFlag := flag.String("port", "8080", "Server port")
-	genFlag := flag.Bool("gen", false, "Generate TypeScript types")
-	outDir := flag.String("out", "./src/rpc", "Output directory")
 	flag.Parse()
 
 	serverPort = *portFlag
@@ -121,44 +140,16 @@ func main() {
 			time.Sleep(d)
 		}
 	}
-
-	// No CORS needed - Vite proxies API requests in dev, same-origin in prod
-	app := tygor.NewApp()
-
-	// Note: Devtools functionality is now provided by `tygor dev` - no need to
-	// register anything in the user's app! Discovery is served by tygor dev.
-
-	system := app.Service("System")
-	system.Register("Kill", tygor.Exec(Kill))
-
-	tasksvc := app.Service("Tasks")
-	tasksvc.Register("List", tygor.Query(ListTasks))
-	tasksvc.Register("SyncedList", tasksAtom.Handler())
-	tasksvc.Register("Time", tygor.Stream(CurrentTime))
-	tasksvc.Register("Create", tygor.Exec(CreateTask))
-	tasksvc.Register("Toggle", tygor.Exec(ToggleTask))
-	tasksvc.Register("MakeError", tygor.Exec(MakeError))
-
-	if *genFlag {
-		fmt.Printf("Generating types to %s...\n", *outDir)
-		if err := os.MkdirAll(*outDir, 0755); err != nil {
-			log.Fatal(err)
-		}
-		_, err := tygorgen.FromApp(app).
-			EnumStyle("union").
-			OptionalType("undefined").
-			WithDiscovery().
-			ToDir(*outDir)
-		if err != nil {
-			log.Fatalf("Generation failed: %v", err)
-		}
-		fmt.Println("Done.")
-		return
-	}
-
 	addr := ":" + serverPort
 	fmt.Printf("Server listening on %s\n", addr)
-	if err := http.ListenAndServe(addr, app.Handler()); err != nil {
+	if err := http.ListenAndServe(addr, app().Handler()); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func GenConfig(g *tygorgen.Generator) *tygorgen.Generator {
+	return g.
+		EnumStyle("union").
+		OptionalType("undefined").
+		WithDiscovery().
 }

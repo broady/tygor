@@ -14,7 +14,7 @@ export const schemaMap = {
   },
   "Tasks.List": {
     request: s.ListParamsSchema,
-    response: z.array(s.TaskSchema),
+    response: z.array(s.TaskSchema.nullable()),
   },
   "Tasks.Update": {
     request: s.UpdateTaskRequestSchema,
@@ -26,7 +26,7 @@ export const schemaMap = {
   },
   "Users.List": {
     request: s.ListParamsSchema,
-    response: z.array(s.UserSchema),
+    response: z.array(s.UserSchema.nullable()),
   },
 } as const;
 

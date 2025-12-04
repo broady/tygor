@@ -106,43 +106,41 @@ func ToggleTask(ctx context.Context, req *api.ToggleTaskParams) (*api.Task, erro
 
 // [/snippet:handlers]
 
-func main() {
-	port := flag.String("port", "8080", "Server port")
-	genFlag := flag.Bool("gen", false, "Generate TypeScript types")
-	outDir := flag.String("out", "./src/rpc", "Output directory")
-	flag.Parse()
-
-	// [snippet:app-setup]
-
-	// No CORS needed - Vite proxies API requests in dev, same-origin in prod
+// SetupApp configures the tygor application.
+// This export is used by `tygor gen` for type generation.
+func SetupApp() *tygor.App {
 	app := tygor.NewApp()
 
 	system := app.Service("System")
 	system.Register("Info", tygor.Query(GetRuntimeInfo))
 	system.Register("InfoStream", tygor.Stream(StreamRuntimeInfo))
 
-	tasks := app.Service("Tasks")
-	tasks.Register("List", tygor.Query(ListTasks))
-	tasks.Register("Create", tygor.Exec(CreateTask))
-	tasks.Register("Toggle", tygor.Exec(ToggleTask))
+	tasksSvc := app.Service("Tasks")
+	tasksSvc.Register("List", tygor.Query(ListTasks))
+	tasksSvc.Register("Create", tygor.Exec(CreateTask))
+	tasksSvc.Register("Toggle", tygor.Exec(ToggleTask))
 
-	// [/snippet:app-setup]
+	return app
+}
 
-	if *genFlag {
-		fmt.Printf("Generating types to %s...\n", *outDir)
-		if err := os.MkdirAll(*outDir, 0755); err != nil {
-			log.Fatal(err)
-		}
-		_, err := tygorgen.FromApp(app).
-			EnumStyle("union").
-			OptionalType("undefined").
-			ToDir(*outDir)
-		if err != nil {
-			log.Fatalf("Generation failed: %v", err)
-		}
-		fmt.Println("Done.")
-		return
+// TygorConfig configures the TypeScript generator.
+func TygorConfig(g *tygorgen.Generator) *tygorgen.Generator {
+	return g.
+		EnumStyle("union").
+		OptionalType("undefined").
+		WithDiscovery().
+		WithFlavor(tygorgen.FlavorZod)
+}
+
+func main() {
+	port := flag.String("port", "8080", "Server port")
+	flag.Parse()
+
+	if p := os.Getenv("PORT"); p != "" {
+		*port = p
 	}
+
+	app := SetupApp()
 
 	addr := ":" + *port
 	fmt.Printf("Server listening on %s\n", addr)

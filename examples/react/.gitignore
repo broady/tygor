@@ -1,5 +1,6 @@
-# Air hot-reload build directory
-tmp/
+# Vite plugin build directory
+.tygor/
 
-# Go binary
+# Go binaries
 /react
+/server

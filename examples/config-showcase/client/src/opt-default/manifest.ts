@@ -14,8 +14,8 @@ export interface Manifest {
 }
 
 const metadata = {
-  "Tasks.Create": { method: "POST", path: "/Tasks/Create" },
-  "Tasks.List": { method: "GET", path: "/Tasks/List" },
+  "Tasks.Create": { path: "/Tasks/Create", primitive: "exec" },
+  "Tasks.List": { path: "/Tasks/List", primitive: "query" },
 } as const;
 
 export const registry = {

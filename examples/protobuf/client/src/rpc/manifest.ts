@@ -18,9 +18,9 @@ export interface Manifest {
 }
 
 const metadata = {
-  "Items.Create": { method: "POST", path: "/Items/Create" },
-  "Items.Get": { method: "GET", path: "/Items/Get" },
-  "Items.List": { method: "GET", path: "/Items/List" },
+  "Items.Create": { path: "/Items/Create", primitive: "exec" },
+  "Items.Get": { path: "/Items/Get", primitive: "query" },
+  "Items.List": { path: "/Items/List", primitive: "query" },
 } as const;
 
 export const registry = {

@@ -30,12 +30,12 @@ export interface Manifest {
 }
 
 const metadata = {
-  "Tasks.Create": { method: "POST", path: "/Tasks/Create" },
-  "Tasks.Get": { method: "GET", path: "/Tasks/Get" },
-  "Tasks.List": { method: "GET", path: "/Tasks/List" },
-  "Tasks.Update": { method: "POST", path: "/Tasks/Update" },
-  "Users.Create": { method: "POST", path: "/Users/Create" },
-  "Users.List": { method: "GET", path: "/Users/List" },
+  "Tasks.Create": { path: "/Tasks/Create", primitive: "exec" },
+  "Tasks.Get": { path: "/Tasks/Get", primitive: "query" },
+  "Tasks.List": { path: "/Tasks/List", primitive: "query" },
+  "Tasks.Update": { path: "/Tasks/Update", primitive: "exec" },
+  "Users.Create": { path: "/Users/Create", primitive: "exec" },
+  "Users.List": { path: "/Users/List", primitive: "query" },
 } as const;
 
 export const registry = {

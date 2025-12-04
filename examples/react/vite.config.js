@@ -1,31 +1,22 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import { registry } from "./src/rpc/manifest";
-
-// Derive unique service prefixes from the generated manifest
-const services = [
-  ...new Set(Object.values(registry.metadata).map((m) => m.path.split("/")[1])),
-];
+import { tygorDev } from "@tygor/vite-plugin";
 
 export default defineConfig({
-  plugins: [react()],
-  server: {
-    proxy: Object.fromEntries(
-      services.map((s) => [
-        `/${s}`,
-        {
-          target: "http://localhost:8080",
-          // Suppress noisy errors during Go server startup/restart
-          configure: (proxy) => {
-            proxy.on("error", (err, req, res) => {
-              if (err.code === "ECONNREFUSED") {
-                res.writeHead(503);
-                res.end("Go server starting...");
-              }
-            });
-          },
-        },
-      ])
-    ),
+  plugins: [
+    react(),
+    tygorDev({
+      proxyPrefix: "/api",
+      build: "go build -o ./.tygor/server .",
+      buildOutput: "./.tygor/server",
+      start: (port) => ({
+        cmd: ["./.tygor/server"],
+        env: { PORT: String(port) },
+      }),
+      rpcDir: "./src/rpc",
+    }),
+  ],
+  optimizeDeps: {
+    exclude: ["@tygor/client"],
   },
 });
