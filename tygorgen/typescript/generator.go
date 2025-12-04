@@ -613,9 +613,11 @@ func toKebabCase(s string) string {
 	return strings.ReplaceAll(toSnakeCase(s), "_", "-")
 }
 
-// typeIdentifierRe matches PascalCase identifiers (user-defined types).
-// Uses word boundaries to avoid matching within other identifiers.
-var typeIdentifierRe = regexp.MustCompile(`\b([A-Z][A-Za-z0-9_]*)\b`)
+// typeIdentifierRe matches type identifiers including version-prefixed ones.
+// Matches:
+// - PascalCase identifiers: User, MigrationRequest
+// - Version-prefixed identifiers: v1_User, v2_GetUserRequest (from StripPackagePrefix)
+var typeIdentifierRe = regexp.MustCompile(`\b((?:[a-z][a-z0-9]*_)?[A-Z][A-Za-z0-9_]*)\b`)
 
 // prefixTypeReferences adds a prefix to type references in a type expression.
 // This is used to add "types." before user-defined types in manifest generation.
@@ -767,17 +769,18 @@ func (g *TypeScriptGenerator) generateSchemaMap(ctx context.Context, schema *ir.
 
 		// Request schema
 		buf.WriteString("    request: ")
+		isMini := flavorName == "zod-mini"
 		if endpoint.Request == nil {
 			buf.WriteString("z.object({})")
 		} else {
-			requestSchema := typeToZodSchema(endpoint.Request)
+			requestSchema := typeToZodSchema(endpoint.Request, isMini)
 			buf.WriteString(requestSchema)
 		}
 		buf.WriteString(",\n")
 
 		// Response schema
 		buf.WriteString("    response: ")
-		responseSchema := typeToZodSchema(endpoint.Response)
+		responseSchema := typeToZodSchema(endpoint.Response, isMini)
 		buf.WriteString(responseSchema)
 		buf.WriteString(",\n")
 
@@ -802,7 +805,8 @@ func (g *TypeScriptGenerator) generateSchemaMap(ctx context.Context, schema *ir.
 
 // typeToZodSchema converts an IR type descriptor to a Zod schema expression.
 // Uses "s." prefix to reference schemas from the schemas.zod.ts import.
-func typeToZodSchema(typ ir.TypeDescriptor) string {
+// The mini parameter indicates whether to generate zod-mini compatible code.
+func typeToZodSchema(typ ir.TypeDescriptor, mini bool) string {
 	if typ == nil {
 		return "z.unknown()"
 	}
@@ -812,15 +816,18 @@ func typeToZodSchema(typ ir.TypeDescriptor) string {
 		return "s." + t.Target.Name + "Schema"
 
 	case *ir.ArrayDescriptor:
-		elem := typeToZodSchema(t.Element)
+		elem := typeToZodSchema(t.Element, mini)
 		return fmt.Sprintf("z.array(%s)", elem)
 
 	case *ir.MapDescriptor:
-		value := typeToZodSchema(t.Value)
+		value := typeToZodSchema(t.Value, mini)
 		return fmt.Sprintf("z.record(z.string(), %s)", value)
 
 	case *ir.PtrDescriptor:
-		elem := typeToZodSchema(t.Element)
+		elem := typeToZodSchema(t.Element, mini)
+		if mini {
+			return fmt.Sprintf("z.nullable(%s)", elem)
+		}
 		return elem + ".nullable()"
 
 	case *ir.PrimitiveDescriptor:
