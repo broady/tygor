@@ -7,7 +7,7 @@
     },
     "client": {
       "name": "@tygor/client",
-      "version": "0.8.0",
+      "version": "0.8.1",
       "devDependencies": {
         "typescript": "^5.0.0",
       },
@@ -82,7 +82,7 @@
     },
     "vite-plugin": {
       "name": "@tygor/vite-plugin",
-      "version": "0.8.0",
+      "version": "0.8.1",
       "dependencies": {
         "@tygor/client": "workspace:*",
         "chokidar": "^3.6.0",
@@ -482,9 +482,7 @@
 
     "readdirp/picomatch": ["picomatch@2.3.1", "", {}, "sha512-JU3teHTNjmE2VCGFzuY8EXzCDVwEqB2a8fsIvwaStHhAWJEeVd1o1QD80CU6+ZdEXXSLbSsuLwJjkCBWqRQUVA=="],
 
-    "tinyglobby/fdir": ["fdir@6.5.0", "", { "peerDependencies": { "picomatch": "^3 || ^4" } }, "sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg=="],
-
-    "tinyglobby/picomatch": ["picomatch@4.0.3", "", {}, "sha512-5gTmgEY/sqK6gFXLIsQNH19lWb4ebPDLA4SdLP7dsWkIXHWlG66oPuVvXSGFPppYZz8ZDZq0dYYrbHfBCVUb1Q=="],
+    "tygor-devtools-example/@tygor/client": ["@tygor/client@file:client", { "devDependencies": { "typescript": "^5.0.0" } }],
 
     "tygor-devtools-example/@tygor/vite-plugin": ["@tygor/vite-plugin@0.7.4", "", { "dependencies": { "@tygor/client": "0.7.4", "chokidar": "^3.6.0", "picocolors": "^1.0.0", "solid-js": "^1.9.0" }, "peerDependencies": { "vite": "^5.0.0 || ^6.0.0" } }, "sha512-1hRy/xxzCqRxw1r1G1alA1Yv22JOA4gu+RPX9ZGY/YRjwQk37wO8Ik4S9+RXlSQd8QgKYVZW5Pdv6UFN/Aaabg=="],
 
