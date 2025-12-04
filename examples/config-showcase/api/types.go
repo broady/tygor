@@ -3,6 +3,8 @@ package api
 
 import "time"
 
+// [snippet:status-enum]
+
 // Status represents the state of a task.
 type Status string
 
@@ -17,6 +19,8 @@ const (
 	StatusCancelled Status = "cancelled"
 )
 
+// [/snippet:status-enum]
+
 // Priority represents task urgency levels.
 type Priority int
 
@@ -30,6 +34,8 @@ const (
 	// PriorityCritical is for immediate attention.
 	PriorityCritical Priority = 4
 )
+
+// [snippet:task-struct]
 
 // Task represents a work item in the system.
 type Task struct {
@@ -52,6 +58,8 @@ type Task struct {
 	// CreatedAt is when the task was created.
 	CreatedAt time.Time `json:"created_at"`
 }
+
+// [/snippet:task-struct]
 
 // CreateTaskRequest contains the data needed to create a new task.
 type CreateTaskRequest struct {

@@ -4,8 +4,8 @@
 # Snippet tool
 SNIPPET_TOOL := go run ../cmd/snippet
 
-# Tygor CLI (use local version for development)
-TYGOR := go run ../../cmd/tygor
+# Tygor CLI (use local version for development, can be overridden)
+TYGOR ?= go run ../../cmd/tygor
 
 # Default targets (can be overridden in example Makefile)
 GO_FILES ?= main.go $(wildcard api/*.go)

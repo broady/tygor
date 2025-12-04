@@ -7,6 +7,7 @@ This directory contains example applications demonstrating tygor features. Each 
 | Example | Description |
 |---------|-------------|
 | [newsserver](./newsserver) | Simple CRUD API with branded types, enums, caching |
+| [config-showcase](./config-showcase) | Side-by-side comparison of TypeScript generation options |
 | [blog](./blog) | Multi-service app with authentication and authorization |
 | [protobuf](./protobuf) | Using protobuf-generated types with tygor |
 | [react](./react) | React + Vite app with type-safe RPC client |
