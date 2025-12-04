@@ -845,7 +845,7 @@ if (import.meta.hot) {
   import.meta.hot.on("tygor:devtools-update", async () => {
     console.log("[tygor] HMR update received");
     document.getElementById("tygor-devtools")?.remove();
-    await import("/@tygor/client.js?t=" + Date.now());
+    await import(/* @vite-ignore */ "/@tygor/client.js?t=" + Date.now());
   });
   console.log("[tygor] HMR listener registered");
 }
