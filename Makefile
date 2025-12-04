@@ -109,7 +109,7 @@ typecheck-vite-plugin:
 	@cd vite-plugin && bun run --silent typecheck
 
 # Precommit sub-targets (for parallel execution, all depend on fmt-check)
-.PHONY: precommit-test precommit-lint precommit-check precommit-examples precommit-typecheck precommit-vite-plugin precommit-devserver precommit-client-bundle precommit-readme-version precommit-version-sync precommit-client-gen
+.PHONY: precommit-test precommit-lint precommit-check precommit-examples precommit-typecheck precommit-vite-plugin precommit-devserver precommit-client-bundle precommit-readme-version precommit-version-sync precommit-client-gen precommit-example-replaces
 precommit-test: fmt-check ; @$(MAKE) --no-print-directory test-quiet
 precommit-lint: fmt-check ; @$(MAKE) --no-print-directory lint-quiet
 precommit-check: fmt-check ; @$(MAKE) --no-print-directory check-quiet
@@ -150,9 +150,11 @@ precommit-client-bundle: fmt-check
 		echo ""; \
 		exit 1; \
 	fi
+precommit-example-replaces: fmt-check
+	@./scripts/check-example-replaces.sh
 
 # Run all precommit checks in parallel (fmt-check runs first)
-precommit: precommit-test precommit-lint precommit-check precommit-examples precommit-typecheck precommit-vite-plugin precommit-devserver precommit-client-bundle precommit-readme-version precommit-version-sync precommit-client-gen
+precommit: precommit-test precommit-lint precommit-check precommit-examples precommit-typecheck precommit-vite-plugin precommit-devserver precommit-client-bundle precommit-readme-version precommit-version-sync precommit-client-gen precommit-example-replaces
 	@echo "All precommit checks passed."
 
 # Run CI locally using act (https://github.com/nektos/act)
