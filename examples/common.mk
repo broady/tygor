@@ -31,6 +31,10 @@ test:
 		(cd client && bun run typecheck) && \
 		echo "Running integration tests..." && \
 		(cd client && bun test); \
+	elif [ -f package.json ] && grep -q '"typecheck"' package.json; then \
+		bun install --silent && \
+		echo "Type-checking TypeScript..." && \
+		bun run typecheck; \
 	fi
 
 # Run tests quietly (output only on failure)
@@ -45,6 +49,8 @@ test-quiet:
 			(cd client && bun run typecheck) && \
 			(cd client && bun test) 2>&1 \
 		) || (echo "$$output"; exit 1); \
+	elif [ -f package.json ] && grep -q '"typecheck"' package.json; then \
+		output=$$(bun install --silent && bun run typecheck 2>&1) || (echo "$$output"; exit 1); \
 	fi
 
 # Generate TypeScript types

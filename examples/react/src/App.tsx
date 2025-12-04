@@ -29,7 +29,10 @@ export default function App() {
     fetchTasks();
   }, []);
 
-  useEffect(() => client.System.InfoStream().subscribe(setInfo), []);
+  useEffect(
+    () => client.System.InfoStream().subscribe((r) => setInfo(r.data ?? null)),
+    []
+  );
 
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
