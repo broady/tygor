@@ -1,6 +1,0 @@
-# Vite plugin build directory
-.tygor/
-
-# Go binaries
-/react
-/server

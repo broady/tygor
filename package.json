@@ -1,8 +1,0 @@
-{
-  "name": "tygor-monorepo",
-  "private": true,
-  "workspaces": ["client", "vite-plugin", "examples/*"],
-  "scripts": {
-    "build:client": "cd client && bun run build"
-  }
-}

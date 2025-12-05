@@ -1,6 +1,0 @@
-node_modules/
-dist/
-.tygor/
-*.log
-data.sqlite.db
-with-sqlc
